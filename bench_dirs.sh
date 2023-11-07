@@ -33,11 +33,11 @@ echo "benching $samples samples $0.csv"
 if [[ "$samples" -gt 0 ]]
 then
     ./scripts/bench.py -j -Gnor -o"$0.csv" \
-        -B bench_btree \
+        -B bench_dirs \
         -DSEED="range($samples)" \
         $([[ "$cmp_bs" ]] && echo "\
             -DORDER=2 \
-            -DBLOCK_SIZE=1024,2048,4096,8192,16384") \
+            -DBLOCK_SIZE=2048,4096,8192,16384") \
         ${args[@]}
 fi
 
@@ -65,7 +65,7 @@ echo "plotting $0.svg"
     -bORDER \
     -bBLOCK_SIZE \
     -bbench_agg \
-    -Dcase=bench_btree \
+    -Dcase=bench_dirs \
     $([[ "$cmp_bs" ]] \
         && awk -F, '
             NR==1 {for (i=1;i<=NF;i++) {if ($i == "BLOCK_SIZE") break}}
@@ -100,51 +100,67 @@ echo "plotting $0.svg"
             -L==2,4096,bnd,bench_proged
             -L==2,4096,bnd,bench_erased') \
     --y2 --yunits=B \
-    --title="btree operations" \
+    --title="directory operations" \
     --subplot=" \
-            -Dbench_meas=commit \
+            -Dbench_meas=mkdir \
             -ybench_readed \
             --ylabel=bench_readed \
-            --title=commit \
+            --title='mkdir' \
             --xticklabels=" \
         --subplot-below=" \
-            -Dbench_meas=commit \
+            -Dbench_meas=mkdir \
             -ybench_proged \
             --ylabel=bench_proged
             -H0.5 " \
         --subplot-below=" \
-            -Dbench_meas=commit \
+            -Dbench_meas=mkdir \
             -ybench_erased \
             --ylabel=bench_erased \
             -H0.33" \
     --subplot-right=" \
-            -Dbench_meas=commit+amor \
+            -Dbench_meas=mkdir+amor \
             -ybench_readed \
-            --title='commit (amortized)' \
+            --title='mkdir (amortized)' \
             --xticklabels= \
             -W0.5 \
         --subplot-below=\" \
-            -Dbench_meas=commit+amor \
+            -Dbench_meas=mkdir+amor \
             -ybench_proged \
             -H0.5 \" \
         --subplot-below=\" \
-            -Dbench_meas=commit+amor \
+            -Dbench_meas=mkdir+amor \
             -ybench_erased \
-            -Y0,512 \
+            -Y0,2048 \
             -H0.33\"" \
     --subplot-right=" \
-            -Dbench_meas=lookup \
+            -Dbench_meas=stat \
             -ybench_readed \
-            --title='lookup' \
+            --title='stat' \
             --xticklabels= \
             -W0.33 \
         --subplot-below=\" \
-            -Dbench_meas=lookup \
+            -Dbench_meas=stat \
             -ybench_proged \
             -Y0,1 \
             -H0.5 \" \
         --subplot-below=\" \
-            -Dbench_meas=lookup \
+            -Dbench_meas=stat \
+            -ybench_erased \
+            -Y0,1 \
+            -H0.33\"" \
+    --subplot-right=" \
+            -Dbench_meas=read+per \
+            -ybench_readed \
+            --title='read (per-dir)' \
+            --xticklabels= \
+            -W0.25 \
+        --subplot-below=\" \
+            -Dbench_meas=read+per \
+            -ybench_proged \
+            -Y0,1 \
+            -H0.5 \" \
+        --subplot-below=\" \
+            -Dbench_meas=read+per \
             -ybench_erased \
             -Y0,1 \
             -H0.33\"" \
@@ -154,8 +170,8 @@ echo "plotting $0.svg"
             --ylabel=bench_usage \
             --title='usage (per-entry)' \
             --xticklabels= \
-            -Y0,512 \
-            -W0.25 \
+            -Y0,2048 \
+            -W0.20 \
         --subplot-below=\" \
             -Dbench_meas=usage \
             -ybench_readed \
@@ -184,6 +200,7 @@ echo "plotting $0.svg"
         #ccb9743f,#ccb9743f,#ccb9743f, \
         #64b5cdbf,#64b5cdbf,#64b5cdbf, \
         #64b5cd3f,#64b5cd3f,#64b5cd3f"
+
 
 # a simple webpage for easy viewing
 echo "generating $0.html"
