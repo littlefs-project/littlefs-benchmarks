@@ -1,11 +1,9 @@
-# Intermediate CSV files
-*.amor.csv
-*.avg.csv
+# Build stuff
+build/
 
-# There's not much value to pushing html files atm
-*.html
+# Intermediate csv files
+results/*.amor.csv
+results/*.per.csv
 
-# Compilation output
-*.o
-*.d
-*.b.*
+# Mist
+tags
