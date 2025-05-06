@@ -3,7 +3,7 @@
 defines.FRAGMENT_SIZE = 64
 defines.CRYSTAL_SIZE = 512
 
-[cases.bench_files]
+[cases.bench_fwrite]
 # 0 = in-order
 # 1 = reversed-order
 # 2 = random-order
