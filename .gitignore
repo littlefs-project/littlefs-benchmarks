@@ -2,9 +2,11 @@
 build/
 
 # Intermediate csv files
-results/*.amor.csv
-results/*.per.csv
+*.avg.csv
+*.amor.csv
+*.per.csv
 
 # Misc
 tags
 clip
+.gdb_history

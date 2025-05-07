@@ -4,6 +4,7 @@
 # large rbyd trees, we don't really care about block sizes at this
 # abstraction level
 defines.BLOCK_SIZE = 'DISK_SIZE'
+defines.BLOCK_COUNT = 1
 
 [cases.bench_rbyd_attr_append]
 # 0 = in-order
@@ -14,20 +15,20 @@ defines.N = 256
 defines.STEP = 1
 defines.SEED = 42
 defines.SIZE = 4
-in = 'lfs.c'
+in = 'littlefs3/lfs.c'
 code = '''
     lfs_t lfs;
-    lfs_init(&lfs, CFG) => 0;
+    lfs_init(&lfs, LFS_M_RDWR, CFG) => 0;
 
     for (lfs_size_t n = 0; n < N; n += STEP) {
         lfsr_rbyd_t rbyd = {
-            .block = 0,
+            .blocks[0] = 0,
             .eoff = 0,
             .cksum = 0,
             .trunk = 0,
             .weight = 0,
         };
-        lfs_bd_erase(&lfs, rbyd.block) => 0;
+        lfsr_bd_erase(&lfs, rbyd.blocks[0]) => 0;
 
         // create N attrs
         //
@@ -41,26 +42,30 @@ code = '''
                     : BENCH_PRNG(&prng) % n;
             uint8_t wbuf[SIZE];
             memset(wbuf, 'a'+(BENCH_PRNG(&prng) % 26), SIZE);
-            lfsr_rbyd_commit(&lfs, &rbyd, LFSR_ATTRS(
-                    LFSR_ATTR(-1,
-                        UATTR(i_ & 0xff), 0, BUF(wbuf, SIZE)))) => 0;
+            lfsr_rbyd_commit(&lfs, &rbyd, -1, LFSR_RATTRS(
+                    LFSR_RATTR_BUF(
+                        LFSR_TAG_ATTR(i_ & 0xff), 0,
+                        wbuf, SIZE))) => 0;
         }
 
         // append an attr
-        BENCH_START("append", n, STEP);
+        BENCH_START("append", n+STEP);
         lfs_off_t i_ = BENCH_PRNG(&prng) % (n+1);
         uint8_t wbuf[SIZE];
         memset(wbuf, 'a'+(BENCH_PRNG(&prng) % 26), SIZE);
-        lfsr_rbyd_commit(&lfs, &rbyd, LFSR_ATTRS(
-                LFSR_ATTR(-1,
-                    UATTR(i_ & 0xff), 0, BUF(wbuf, SIZE)))) => 0;
+        lfsr_rbyd_commit(&lfs, &rbyd, -1, LFSR_RATTRS(
+                LFSR_RATTR_BUF(
+                    LFSR_TAG_ATTR(i_ & 0xff), 0,
+                    wbuf, SIZE))) => 0;
         BENCH_STOP("append");
 
         // test that our append worked
+        lfsr_tag_t tag_;
         lfsr_data_t data_;
-        lfsr_rbyd_lookup(&lfs, &rbyd, -1, LFSR_TAG_UATTR(i_ & 0xff),
-                NULL, &data_) => 0;
-        assert(lfsr_data_size(&data_) == SIZE);
+        lfsr_rbyd_lookup(&lfs, &rbyd, -1, LFSR_TAG_ATTR(i_ & 0xff),
+                &tag_, &data_) => 0;
+        assert(tag_ == LFSR_TAG_ATTR(i_ & 0xff));
+        assert(lfsr_data_size(data_) == SIZE);
         uint8_t rbuf[SIZE];
         lfsr_data_read(&lfs, &data_, rbuf, SIZE) => SIZE;
         assert(memcmp(rbuf, wbuf, SIZE) == 0);
@@ -76,20 +81,20 @@ defines.N = 256
 defines.STEP = 1
 defines.SEED = 42
 defines.SIZE = 4
-in = 'lfs.c'
+in = 'littlefs3/lfs.c'
 code = '''
     lfs_t lfs;
-    lfs_init(&lfs, CFG) => 0;
+    lfs_init(&lfs, LFS_M_RDWR, CFG) => 0;
 
     for (lfs_size_t n = 0; n < N; n += STEP) {
         lfsr_rbyd_t rbyd = {
-            .block = 0,
+            .blocks[0] = 0,
             .eoff = 0,
             .cksum = 0,
             .trunk = 0,
             .weight = 0,
         };
-        lfs_bd_erase(&lfs, rbyd.block) => 0;
+        lfsr_bd_erase(&lfs, rbyd.blocks[0]) => 0;
 
         // create N attrs
         //
@@ -103,26 +108,28 @@ code = '''
                     : BENCH_PRNG(&prng) % n;
             uint8_t wbuf[SIZE];
             memset(wbuf, 'a'+(BENCH_PRNG(&prng) % 26), SIZE);
-            lfsr_rbyd_commit(&lfs, &rbyd, LFSR_ATTRS(
-                    LFSR_ATTR(-1,
-                        UATTR(i_ & 0xff), 0, BUF(wbuf, SIZE)))) => 0;
+            lfsr_rbyd_commit(&lfs, &rbyd, -1, LFSR_RATTRS(
+                    LFSR_RATTR_BUF(
+                        LFSR_TAG_ATTR(i_ & 0xff), 0,
+                        wbuf, SIZE))) => 0;
         }
 
         // remove an attr
-        BENCH_START("remove", n, STEP);
+        BENCH_START("remove", n+STEP);
         lfs_off_t i_ = 0;
         if (n > 0) {
             i_ = BENCH_PRNG(&prng) % n;
-            lfsr_rbyd_commit(&lfs, &rbyd, LFSR_ATTRS(
-                    LFSR_ATTR(-1,
-                        RM(UATTR(i_ & 0xff)), 0, NULL))) => 0;
+            lfsr_rbyd_commit(&lfs, &rbyd, -1, LFSR_RATTRS(
+                    LFSR_RATTR(
+                        LFSR_TAG_RM | LFSR_TAG_ATTR(i_ & 0xff), 0))) => 0;
         }
         BENCH_STOP("remove");
 
         // test that our remove worked
+        lfsr_tag_t tag_;
         lfsr_data_t data_;
-        lfsr_rbyd_lookup(&lfs, &rbyd, -1, LFSR_TAG_UATTR(i_ & 0xff),
-                NULL, &data_) => LFS_ERR_NOENT;
+        lfsr_rbyd_lookup(&lfs, &rbyd, -1, LFSR_TAG_ATTR(i_ & 0xff),
+                &tag_, &data_) => LFS_ERR_NOENT;
     }
 '''
 
@@ -135,19 +142,19 @@ defines.N = 256
 defines.STEP = 1
 defines.SEED = 42
 defines.SIZE = 4
-in = 'lfs.c'
+in = 'littlefs3/lfs.c'
 code = '''
     lfs_t lfs;
-    lfs_init(&lfs, CFG) => 0;
+    lfs_init(&lfs, LFS_M_RDWR, CFG) => 0;
 
     lfsr_rbyd_t rbyd = {
-        .block = 0,
+        .blocks[0] = 0,
         .eoff = 0,
         .cksum = 0,
         .trunk = 0,
         .weight = 0,
     };
-    lfs_bd_erase(&lfs, rbyd.block) => 0;
+    lfsr_bd_erase(&lfs, rbyd.blocks[0]) => 0;
 
     // create N attrs
     //
@@ -161,15 +168,16 @@ code = '''
                 : BENCH_PRNG(&prng) % N;
         uint8_t wbuf[SIZE];
         memset(wbuf, 'a'+(BENCH_PRNG(&prng) % 26), SIZE);
-        lfsr_rbyd_commit(&lfs, &rbyd, LFSR_ATTRS(
-                LFSR_ATTR(-1,
-                    UATTR(i_ & 0xff), 0, BUF(wbuf, SIZE)))) => 0;
+        lfsr_rbyd_commit(&lfs, &rbyd, -1, LFSR_RATTRS(
+                LFSR_RATTR_BUF(
+                    LFSR_TAG_ATTR(i_ & 0xff), 0,
+                    wbuf, SIZE))) => 0;
 
         if (i % STEP == 0) {
             // fetch the rbyd
-            BENCH_START("fetch", i, STEP);
+            BENCH_START("fetch", i+STEP);
             lfsr_rbyd_t rbyd_;
-            lfsr_rbyd_fetch(&lfs, &rbyd_, rbyd.block, CFG->block_size) => 0;
+            lfsr_rbyd_fetch(&lfs, &rbyd_, rbyd.blocks[0], 0) => 0;
             BENCH_STOP("fetch");
         }
     }
@@ -184,19 +192,19 @@ defines.N = 256
 defines.STEP = 1
 defines.SEED = 42
 defines.SIZE = 4
-in = 'lfs.c'
+in = 'littlefs3/lfs.c'
 code = '''
     lfs_t lfs;
-    lfs_init(&lfs, CFG) => 0;
+    lfs_init(&lfs, LFS_M_RDWR, CFG) => 0;
 
     lfsr_rbyd_t rbyd = {
-        .block = 0,
+        .blocks[0] = 0,
         .eoff = 0,
         .cksum = 0,
         .trunk = 0,
         .weight = 0,
     };
-    lfs_bd_erase(&lfs, rbyd.block) => 0;
+    lfsr_bd_erase(&lfs, rbyd.blocks[0]) => 0;
 
     // create N attrs
     //
@@ -210,18 +218,20 @@ code = '''
                 : BENCH_PRNG(&prng) % N;
         uint8_t wbuf[SIZE];
         memset(wbuf, 'a'+(BENCH_PRNG(&prng) % 26), SIZE);
-        lfsr_rbyd_commit(&lfs, &rbyd, LFSR_ATTRS(
-                LFSR_ATTR(-1,
-                    UATTR(i_ & 0xff), 0, BUF(wbuf, SIZE)))) => 0;
+        lfsr_rbyd_commit(&lfs, &rbyd, -1, LFSR_RATTRS(
+                LFSR_RATTR_BUF(
+                    LFSR_TAG_ATTR(i_ & 0xff), 0,
+                    wbuf, SIZE))) => 0;
 
-        if (i % STEP == 0) {
+        if ((i+1) % STEP == 0) {
             // lookup an attr
-            BENCH_START("lookup", i, STEP);
+            BENCH_START("lookup", i+1);
             i_ = BENCH_PRNG(&prng) % N;
+            lfsr_tag_t tag_;
             lfsr_data_t data_;
             int err = lfsr_rbyd_lookup(&lfs, &rbyd,
-                    -1, LFSR_TAG_UATTR(i_ & 0xff),
-                    NULL, &data_);
+                    -1, LFSR_TAG_ATTR(i_ & 0xff),
+                    &tag_, &data_);
             // note that random order may have some collisions
             assert(!err || err == LFS_ERR_NOENT);
             BENCH_STOP("lookup");
@@ -238,19 +248,19 @@ defines.N = 256
 defines.STEP = 1
 defines.SEED = 42
 defines.SIZE = 4
-in = 'lfs.c'
+in = 'littlefs3/lfs.c'
 code = '''
     lfs_t lfs;
-    lfs_init(&lfs, CFG) => 0;
+    lfs_init(&lfs, LFS_M_RDWR, CFG) => 0;
 
     lfsr_rbyd_t rbyd = {
-        .block = 0,
+        .blocks[0] = 0,
         .eoff = 0,
         .cksum = 0,
         .trunk = 0,
         .weight = 0,
     };
-    lfs_bd_erase(&lfs, rbyd.block) => 0;
+    lfsr_bd_erase(&lfs, rbyd.blocks[0]) => 0;
 
     // create N attrs
     //
@@ -264,13 +274,14 @@ code = '''
                 : BENCH_PRNG(&prng) % N;
         uint8_t wbuf[SIZE];
         memset(wbuf, 'a'+(BENCH_PRNG(&prng) % 26), SIZE);
-        lfsr_rbyd_commit(&lfs, &rbyd, LFSR_ATTRS(
-                LFSR_ATTR(-1,
-                    UATTR(i_ & 0xff), 0, BUF(wbuf, SIZE)))) => 0;
+        lfsr_rbyd_commit(&lfs, &rbyd, -1, LFSR_RATTRS(
+                LFSR_RATTR_BUF(
+                    LFSR_TAG_ATTR(i_ & 0xff), 0,
+                    wbuf, SIZE))) => 0;
 
-        if (i % STEP == 0) {
+        if ((i+1) % STEP == 0) {
             // measure the disk usage
-            BENCH_RESULT("usage", i, STEP, rbyd.eoff);
+            BENCH_RESULT("usage", i+1, lfsr_rbyd_eoff(&rbyd));
         }
     }
 '''
@@ -284,20 +295,20 @@ defines.N = 4096
 defines.STEP = 8
 defines.SEED = 42
 defines.SIZE = 4
-in = 'lfs.c'
+in = 'littlefs3/lfs.c'
 code = '''
     lfs_t lfs;
-    lfs_init(&lfs, CFG) => 0;
+    lfs_init(&lfs, LFS_M_RDWR, CFG) => 0;
 
     for (lfs_size_t n = 0; n < N; n += STEP) {
         lfsr_rbyd_t rbyd = {
-            .block = 0,
+            .blocks[0] = 0,
             .eoff = 0,
             .cksum = 0,
             .trunk = 0,
             .weight = 0,
         };
-        lfs_bd_erase(&lfs, rbyd.block) => 0;
+        lfsr_bd_erase(&lfs, rbyd.blocks[0]) => 0;
 
         // create commits, note we need to take care to generate
         // indexes within a valid range as the rbyd grows
@@ -309,24 +320,30 @@ code = '''
                     : BENCH_PRNG(&prng) % (rbyd.weight+1);
             uint8_t wbuf[SIZE];
             memset(wbuf, 'a'+(BENCH_PRNG(&prng) % 26), SIZE);
-            lfsr_rbyd_commit(&lfs, &rbyd, LFSR_ATTRS(
-                    LFSR_ATTR(i_, REG, +1, BUF(wbuf, SIZE)))) => 0;
+            lfsr_rbyd_commit(&lfs, &rbyd, i_, LFSR_RATTRS(
+                    LFSR_RATTR_BUF(
+                        LFSR_TAG_DATA, +1,
+                        wbuf, SIZE))) => 0;
         }
 
         // create an attr
-        BENCH_START("create", n, STEP);
+        BENCH_START("create", n+STEP);
         lfs_off_t i_ = BENCH_PRNG(&prng) % (n+1);
         uint8_t wbuf[SIZE];
         memset(wbuf, 'a'+(BENCH_PRNG(&prng) % 26), SIZE);
-        lfsr_rbyd_commit(&lfs, &rbyd, LFSR_ATTRS(
-                LFSR_ATTR(i_, REG, +1, BUF(wbuf, SIZE)))) => 0;
+        lfsr_rbyd_commit(&lfs, &rbyd, i_, LFSR_RATTRS(
+                LFSR_RATTR_BUF(
+                    LFSR_TAG_DATA, +1,
+                    wbuf, SIZE))) => 0;
         BENCH_STOP("create");
 
         // test that our create worked
+        lfsr_tag_t tag_;
         lfsr_data_t data_;
-        lfsr_rbyd_lookup(&lfs, &rbyd, i_, LFSR_TAG_REG,
-                NULL, &data_) => 0;
-        assert(lfsr_data_size(&data_) == SIZE);
+        lfsr_rbyd_lookup(&lfs, &rbyd, i_, LFSR_TAG_DATA,
+                &tag_, &data_) => 0;
+        assert(tag_ == LFSR_TAG_DATA);
+        assert(lfsr_data_size(data_) == SIZE);
         uint8_t rbuf[SIZE];
         lfsr_data_read(&lfs, &data_, rbuf, SIZE) => SIZE;
         assert(memcmp(rbuf, wbuf, SIZE) == 0);
@@ -342,20 +359,20 @@ defines.N = 4096
 defines.STEP = 8
 defines.SEED = 42
 defines.SIZE = 4
-in = 'lfs.c'
+in = 'littlefs3/lfs.c'
 code = '''
     lfs_t lfs;
-    lfs_init(&lfs, CFG) => 0;
+    lfs_init(&lfs, LFS_M_RDWR, CFG) => 0;
 
     for (lfs_size_t n = 0; n < N; n += STEP) {
         lfsr_rbyd_t rbyd = {
-            .block = 0,
+            .blocks[0] = 0,
             .eoff = 0,
             .cksum = 0,
             .trunk = 0,
             .weight = 0,
         };
-        lfs_bd_erase(&lfs, rbyd.block) => 0;
+        lfsr_bd_erase(&lfs, rbyd.blocks[0]) => 0;
 
         // create commits, note we need to take care to generate
         // indexes within a valid range as the rbyd grows
@@ -367,22 +384,24 @@ code = '''
                     : BENCH_PRNG(&prng) % (rbyd.weight+1);
             uint8_t wbuf[SIZE];
             memset(wbuf, 'a'+(BENCH_PRNG(&prng) % 26), SIZE);
-            lfsr_rbyd_commit(&lfs, &rbyd, LFSR_ATTRS(
-                    LFSR_ATTR(i_, REG, +1, BUF(wbuf, SIZE)))) => 0;
+            lfsr_rbyd_commit(&lfs, &rbyd, i_, LFSR_RATTRS(
+                    LFSR_RATTR_BUF(
+                        LFSR_TAG_DATA, +1,
+                        wbuf, SIZE))) => 0;
         }
 
         // delete an attr
-        BENCH_START("delete", n, STEP);
+        BENCH_START("delete", n+STEP);
         lfs_off_t i_ = 0;
         if (n > 0) {
             i_ = BENCH_PRNG(&prng) % n;
-            lfsr_rbyd_commit(&lfs, &rbyd, LFSR_ATTRS(
-                    LFSR_ATTR(i_, RM, -1, NULL))) => 0;
+            lfsr_rbyd_commit(&lfs, &rbyd, i_, LFSR_RATTRS(
+                    LFSR_RATTR(LFSR_TAG_RM, -1))) => 0;
         }
         BENCH_STOP("delete");
 
         // test that our delete worked
-        assert(rbyd.weight == lfs_smax32(n-1, 0));
+        assert(rbyd.weight == lfs_smax(n-1, 0));
     }
 '''
 
@@ -395,19 +414,19 @@ defines.N = 4096
 defines.STEP = 8
 defines.SEED = 42
 defines.SIZE = 4
-in = 'lfs.c'
+in = 'littlefs3/lfs.c'
 code = '''
     lfs_t lfs;
-    lfs_init(&lfs, CFG) => 0;
+    lfs_init(&lfs, LFS_M_RDWR, CFG) => 0;
 
     lfsr_rbyd_t rbyd = {
-        .block = 0,
+        .blocks[0] = 0,
         .eoff = 0,
         .cksum = 0,
         .trunk = 0,
         .weight = 0,
     };
-    lfs_bd_erase(&lfs, rbyd.block) => 0;
+    lfsr_bd_erase(&lfs, rbyd.blocks[0]) => 0;
 
     // create commits, note we need to take care to generate
     // indexes within a valid range as the rbyd grows
@@ -419,14 +438,16 @@ code = '''
                 : BENCH_PRNG(&prng) % (rbyd.weight+1);
         uint8_t wbuf[SIZE];
         memset(wbuf, 'a'+(BENCH_PRNG(&prng) % 26), SIZE);
-        lfsr_rbyd_commit(&lfs, &rbyd, LFSR_ATTRS(
-                LFSR_ATTR(i_, REG, +1, BUF(wbuf, SIZE)))) => 0;
+        lfsr_rbyd_commit(&lfs, &rbyd, i_, LFSR_RATTRS(
+                LFSR_RATTR_BUF(
+                    LFSR_TAG_DATA, +1,
+                    wbuf, SIZE))) => 0;
 
-        if (i % STEP == 0) {
+        if ((i+1) % STEP == 0) {
             // fetch the rbyd
-            BENCH_START("fetch", i, STEP);
+            BENCH_START("fetch", i+1);
             lfsr_rbyd_t rbyd_;
-            lfsr_rbyd_fetch(&lfs, &rbyd_, rbyd.block, CFG->block_size) => 0;
+            lfsr_rbyd_fetch(&lfs, &rbyd_, rbyd.blocks[0], 0) => 0;
             BENCH_STOP("fetch");
         }
     }
@@ -441,19 +462,19 @@ defines.N = 4096
 defines.STEP = 8
 defines.SEED = 42
 defines.SIZE = 4
-in = 'lfs.c'
+in = 'littlefs3/lfs.c'
 code = '''
     lfs_t lfs;
-    lfs_init(&lfs, CFG) => 0;
+    lfs_init(&lfs, LFS_M_RDWR, CFG) => 0;
 
     lfsr_rbyd_t rbyd = {
-        .block = 0,
+        .blocks[0] = 0,
         .eoff = 0,
         .cksum = 0,
         .trunk = 0,
         .weight = 0,
     };
-    lfs_bd_erase(&lfs, rbyd.block) => 0;
+    lfsr_bd_erase(&lfs, rbyd.blocks[0]) => 0;
 
     // create commits, note we need to take care to generate
     // indexes within a valid range as the rbyd grows
@@ -465,16 +486,19 @@ code = '''
                 : BENCH_PRNG(&prng) % (rbyd.weight+1);
         uint8_t wbuf[SIZE];
         memset(wbuf, 'a'+(BENCH_PRNG(&prng) % 26), SIZE);
-        lfsr_rbyd_commit(&lfs, &rbyd, LFSR_ATTRS(
-                LFSR_ATTR(i_, REG, +1, BUF(wbuf, SIZE)))) => 0;
+        lfsr_rbyd_commit(&lfs, &rbyd, i_, LFSR_RATTRS(
+                LFSR_RATTR_BUF(
+                    LFSR_TAG_DATA, +1,
+                    wbuf, SIZE))) => 0;
 
-        if (i % STEP == 0) {
+        if ((i+1) % STEP == 0) {
             // lookup an attr
-            BENCH_START("lookup", i, STEP);
+            BENCH_START("lookup", i+1);
             i_ = BENCH_PRNG(&prng) % (i+1);
+            lfsr_tag_t tag_;
             lfsr_data_t data_;
-            lfsr_rbyd_lookup(&lfs, &rbyd, i_, LFSR_TAG_REG,
-                    NULL, &data_) => 0;
+            lfsr_rbyd_lookup(&lfs, &rbyd, i_, LFSR_TAG_DATA,
+                    &tag_, &data_) => 0;
             BENCH_STOP("lookup");
         }
     }
@@ -489,19 +513,19 @@ defines.N = 4096
 defines.STEP = 8
 defines.SEED = 42
 defines.SIZE = 4
-in = 'lfs.c'
+in = 'littlefs3/lfs.c'
 code = '''
     lfs_t lfs;
-    lfs_init(&lfs, CFG) => 0;
+    lfs_init(&lfs, LFS_M_RDWR, CFG) => 0;
 
     lfsr_rbyd_t rbyd = {
-        .block = 0,
+        .blocks[0] = 0,
         .eoff = 0,
         .cksum = 0,
         .trunk = 0,
         .weight = 0,
     };
-    lfs_bd_erase(&lfs, rbyd.block) => 0;
+    lfsr_bd_erase(&lfs, rbyd.blocks[0]) => 0;
 
     // create commits, note we need to take care to generate
     // indexes within a valid range as the rbyd grows
@@ -513,12 +537,14 @@ code = '''
                 : BENCH_PRNG(&prng) % (rbyd.weight+1);
         uint8_t wbuf[SIZE];
         memset(wbuf, 'a'+(BENCH_PRNG(&prng) % 26), SIZE);
-        lfsr_rbyd_commit(&lfs, &rbyd, LFSR_ATTRS(
-                LFSR_ATTR(i_, REG, +1, BUF(wbuf, SIZE)))) => 0;
+        lfsr_rbyd_commit(&lfs, &rbyd, i_, LFSR_RATTRS(
+                LFSR_RATTR_BUF(
+                    LFSR_TAG_DATA, +1,
+                    wbuf, SIZE))) => 0;
 
-        if (i % STEP == 0) {
+        if ((i+1) % STEP == 0) {
             // measure the disk usage
-            BENCH_RESULT("usage", i, STEP, rbyd.eoff);
+            BENCH_RESULT("usage", i+1, lfsr_rbyd_eoff(&rbyd));
         }
     }
 '''

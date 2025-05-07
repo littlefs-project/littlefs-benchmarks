@@ -238,13 +238,18 @@ BENCH_TUNE_CT ?= 0,8,64,512,4096
 ## Run all benchmarks!
 .PHONY: bench bench-all
 bench bench-all: \
+		bench-internal \
 		bench-fwrite \
 		bench-fwrite-tune
 
-### Run benchmarks over internal data structures
-#.PHONY: bench-internal
-#bench-internal: \
-#		bench-fwrite
+## Run benchmarks over internal data structures
+.PHONY: bench-internal
+bench-internal: \
+		bench-rbyd
+
+## Run benchmarks over rbyd operations
+.PHONY: bench-rbyd
+bench-rbyd: $(RESULTSDIR)/bench_rbyd.avg.csv
 
 ## Run benchmarks over file writes
 .PHONY: bench-fwrite
@@ -273,6 +278,25 @@ bench-fwrite-tune-fs: $(RESULTSDIR)/bench_fwrite_tune_fs.avg.csv
 ## Run file write benchmarks with different crystal_threshs
 .PHONY: bench-fwrite-tune-ct
 bench-fwrite-tune-ct: $(RESULTSDIR)/bench_fwrite_tune_ct.avg.csv
+
+# run the benches!
+$(RESULTSDIR)/bench_rbyd.csv: $(BENCH_LFS3_RUNNER)
+	$(strip ./scripts/bench.py -R$< -B bench_rbyd \
+		-DSEED="range($(SAMPLES))" \
+		$(BENCHFLAGS) \
+		-o$@)
+
+# per-attr results
+$(RESULTSDIR)/bench_rby%.per.csv: $(RESULTSDIR)/bench_rby%.csv
+	$(strip ./scripts/csv.py $^ \
+		-Bn -Bm='%(m)s+per' \
+		-Dbench_creaded='*' \
+		-Dbench_cproged='*' \
+		-Dbench_cerased='*' \
+		-fbench_readed='float(bench_readed) / float(n)' \
+		-fbench_proged='float(bench_proged) / float(n)' \
+		-fbench_erased='float(bench_erased) / float(n)' \
+		-o$@)
 
 # run the benches!
 $(RESULTSDIR)/bench_fwrite.csv: $(BENCH_LFS3_RUNNER)
@@ -314,9 +338,7 @@ $(RESULTSDIR)/bench_fwrite_tune_ct.csv: $(BENCH_LFS3_RUNNER)
 # this breaks if the pattern is empty for some reason?
 $(RESULTSDIR)/bench_fwrit%.amor.csv: $(RESULTSDIR)/bench_fwrit%.csv
 	$(strip ./scripts/csv.py $^ \
-		-bsuite -bcase -bn -bORDER -bREWRITE -bSEED \
-		-bBLOCK_SIZE -bINLINE_SIZE -bFRAGMENT_SIZE -bCRYSTAL_THRESH \
-		-Dm=write -bm='write+amor' \
+		-Bn -Dm=write -Bm='write+amor' \
 		-fbench_readed='float(bench_creaded) / float(n)' \
 		-fbench_proged='float(bench_cproged) / float(n)' \
 		-fbench_erased='float(bench_cerased) / float(n)' \
@@ -325,22 +347,22 @@ $(RESULTSDIR)/bench_fwrit%.amor.csv: $(RESULTSDIR)/bench_fwrit%.csv
 # byte-per-byte usage results
 $(RESULTSDIR)/bench_fwrit%.per.csv: $(RESULTSDIR)/bench_fwrit%.csv
 	$(strip ./scripts/csv.py $^ \
-		-bsuite -bcase -bn -bORDER -bREWRITE -bSEED \
-		-bBLOCK_SIZE -bINLINE_SIZE -bFRAGMENT_SIZE -bCRYSTAL_THRESH \
-		-Dm=usage -bm='usage+per' \
+		-BREWRITE -BSIZE -Bn -Dm=usage -Bm='usage+per' \
+		-Dbench_creaded='*' \
+		-Dbench_cproged='*' \
+		-Dbench_cerased='*' \
 		-fbench_readed='float(bench_readed) / float(REWRITE ? SIZE : n)' \
 		-fbench_proged='float(bench_proged) / float(REWRITE ? SIZE : n)' \
 		-fbench_erased='float(bench_erased) / float(REWRITE ? SIZE : n)' \
 		-o$@)
 
 # averaged results (over SAMPLES)
-$(RESULTSDIR)/bench_fwrit%.avg.csv: \
-		$(RESULTSDIR)/bench_fwrit%.csv \
-		$(RESULTSDIR)/bench_fwrit%.amor.csv \
-		$(RESULTSDIR)/bench_fwrit%.per.csv
+$(RESULTSDIR)/bench_%.avg.csv: $(RESULTSDIR)/bench_%.csv
 	$(strip ./scripts/csv.py $^ \
-		-bsuite -bcase -bm -bn -bORDER -bREWRITE \
-		-bBLOCK_SIZE -bINLINE_SIZE -bFRAGMENT_SIZE -bCRYSTAL_THRESH \
+		-DSEED='*' \
+		-Dbench_creaded='*' \
+		-Dbench_cproged='*' \
+		-Dbench_cerased='*' \
 		-fbench_readed_avg='avg(bench_readed)' \
 		-fbench_proged_avg='avg(bench_proged)' \
 		-fbench_erased_avg='avg(bench_erased)' \
@@ -394,15 +416,233 @@ PLOT_COLORS ?= \
 		\#fffea3bf/\#fffea31f \
 		\#b9f2f0bf/\#b9f2f01f
 endif
-
-PLOTFLAGS += $(foreach C, $(PLOT_COLORS), \
+PLOT_COLORS_1 := $(foreach C, $(PLOT_COLORS), \
+		-C$(word 1,$(subst /, ,$C)) -C$(word 2,$(subst /, ,$C)))
+PLOT_COLORS_2 := $(foreach C, $(PLOT_COLORS), \
+		-C$(word 1,$(subst /, ,$C)) -C$(word 2,$(subst /, ,$C)) \
+		-C$(word 1,$(subst /, ,$C)) -C$(word 2,$(subst /, ,$C)))
+PLOT_COLORS_3 := $(foreach C, $(PLOT_COLORS), \
 		-C$(word 1,$(subst /, ,$C)) -C$(word 2,$(subst /, ,$C)) \
 		-C$(word 1,$(subst /, ,$C)) -C$(word 2,$(subst /, ,$C)) \
 		-C$(word 1,$(subst /, ,$C)) -C$(word 2,$(subst /, ,$C)))
 
+
+## Plot all benchmarks!
+.PHONY: all plot plot-all
+all plot plot-all: \
+		plot-internal \
+		plot-fwrite \
+		plot-fwrite-tune
+
+## Plot benchmarks over internal data structures
+.PHONY: plot-internal
+plot-internal: \
+		plot-rbyd
+
+## Plot benchmarks over rbyds
+.PHONY: plot-rbyd
+plot-rbyd: \
+		$(PLOTSDIR)/bench_rbyd_attr.svg \
+		$(PLOTSDIR)/bench_rbyd_id.svg
+
+## Plot benchmarks over file writes
+.PHONY: plot-fwrite
+plot-fwrite: \
+		$(PLOTSDIR)/bench_fwrite_sparseish.svg \
+		$(PLOTSDIR)/bench_fwrite_rewriting.svg \
+		$(PLOTSDIR)/bench_fwrite_linear.svg \
+		$(PLOTSDIR)/bench_fwrite_random.svg
+
+## Plot file write benchmarks with tuneable configs
+.PHONY: plot-fwrite-tune
+plot-fwrite-tune: \
+		plot-fwrite-tune-bs \
+		plot-fwrite-tune-is \
+		plot-fwrite-tune-fs \
+		plot-fwrite-tune-ct
+
+## Run file write benchmarks with different block_sizes
+.PHONY: plot-fwrite-tune-bs
+plot-fwrite-tune-bs: \
+		$(PLOTSDIR)/bench_fwrite_tune_bs_linear.svg \
+		$(PLOTSDIR)/bench_fwrite_tune_bs_random.svg
+
+## Run file write benchmarks with different inline_sizes
+.PHONY: plot-fwrite-tune-is
+plot-fwrite-tune-is: \
+		$(PLOTSDIR)/bench_fwrite_tune_is_linear.svg \
+		$(PLOTSDIR)/bench_fwrite_tune_is_random.svg
+
+## Run file write benchmarks with different fragment_sizes
+.PHONY: plot-fwrite-tune-fs
+plot-fwrite-tune-fs: \
+		$(PLOTSDIR)/bench_fwrite_tune_fs_linear.svg \
+		$(PLOTSDIR)/bench_fwrite_tune_fs_random.svg
+
+## Run file write benchmarks with different crystal_threshs
+.PHONY: plot-fwrite-tune-ct
+plot-fwrite-tune-ct: \
+		$(PLOTSDIR)/bench_fwrite_tune_ct_linear.svg \
+		$(PLOTSDIR)/bench_fwrite_tune_ct_random.svg
+
+
+# plot rules
+
+# plot bench_rbyd config
+PLOT_RBYD_FLAGS += --y2 --yunits=B
+PLOT_RBYD_FLAGS += \
+		--subplot=" \
+				-Dm=$1 \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--ylabel=bench_readed \
+				--title=$1 \
+				--add-xticklabel=" \
+			--subplot-below=" \
+				-Dm=$1 \
+				-ybench_proged_avg \
+				-ybench_proged_bnd \
+				--ylabel=bench_proged" \
+		--subplot-right=" \
+				-Dm=$2 \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--title=$2 \
+				--add-xticklabel= \
+				-W0.5 \
+			--subplot-below=\" \
+				-Dm=$2 \
+				-ybench_proged_avg \
+				-ybench_proged_bnd\"" \
+		--subplot-right=" \
+				-Dm=fetch+per \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--title='fetch (per-attr)' \
+				--add-xticklabel= \
+				-W0.33 \
+			--subplot-below=\" \
+				-Dm=fetch+per \
+				-ybench_proged_avg \
+				-ybench_proged_bnd \
+				-Y0,1\"" \
+		--subplot-right=" \
+				-Dm=lookup \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--title=lookup \
+				--add-xticklabel= \
+				-W0.25 \
+			--subplot-below=\" \
+				-Dm=lookup \
+				-ybench_proged_avg \
+				-ybench_proged_bnd \
+				-Y0,1\"" \
+		--subplot-right=" \
+				-Dm=usage+per \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--ylabel=bench_usage \
+				--title='usage (per-attr)' \
+				--add-xticklabel= \
+				-W0.20 \
+			--subplot-below=\" \
+				-Dm=usage \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--ylabel=bench_usage \
+				--title='usage (total)'\""
+PLOT_RBYD_FLAGS += $(PLOT_COLORS_2)
+
+# rbyd attr operations
+$(PLOTSDIR)/bench_rbyd_attr.svg: \
+		$(RESULTSDIR)/bench_rbyd.avg.csv \
+		$(RESULTSDIR)/bench_rbyd.per.avg.csv
+	$(strip ./scripts/plotmpl.py \
+		<(./scripts/csv.py $^ \
+			-fbench_readed_avg \
+			-fbench_proged_avg \
+			-fbench_erased_avg \
+			-fbench_readed_bnd=bench_readed_min \
+			-fbench_proged_bnd=bench_proged_min \
+			-fbench_erased_bnd=bench_erased_min \
+			-o-) \
+		<(./scripts/csv.py $^ \
+			-Dbench_readed_avg='*' \
+			-Dbench_proged_avg='*' \
+			-Dbench_erased_avg='*' \
+			-fbench_readed_bnd=bench_readed_max \
+			-fbench_proged_bnd=bench_proged_max \
+			-fbench_erased_bnd=bench_erased_max \
+			-o-) \
+		--title="rbyd attr operations" \
+		-Dcase='bench_rbyd_attr_*' \
+		-bORDER \
+		-xn \
+		--legend \
+		-L0,bench_readed_avg=inorder \
+		-L0,bench_readed_bnd= \
+		-L0,bench_proged_avg= \
+		-L0,bench_proged_bnd= \
+		-L1,bench_readed_avg=reversed \
+		-L1,bench_readed_bnd= \
+		-L1,bench_proged_avg= \
+		-L1,bench_proged_bnd= \
+		-L2,bench_readed_avg=random \
+		-L2,bench_readed_bnd= \
+		-L2,bench_proged_avg= \
+		-L2,bench_proged_bnd= \
+		$(call PLOT_RBYD_FLAGS,append,remove) \
+		$(PLOTFLAGS) \
+		-o$@)
+
+# rbyd id operations
+$(PLOTSDIR)/bench_rbyd_id.svg: \
+		$(RESULTSDIR)/bench_rbyd.avg.csv \
+		$(RESULTSDIR)/bench_rbyd.per.avg.csv
+	$(strip ./scripts/plotmpl.py \
+		<(./scripts/csv.py $^ \
+			-fbench_readed_avg \
+			-fbench_proged_avg \
+			-fbench_erased_avg \
+			-fbench_readed_bnd=bench_readed_min \
+			-fbench_proged_bnd=bench_proged_min \
+			-fbench_erased_bnd=bench_erased_min \
+			-o-) \
+		<(./scripts/csv.py $^ \
+			-Dbench_readed_avg='*' \
+			-Dbench_proged_avg='*' \
+			-Dbench_erased_avg='*' \
+			-fbench_readed_bnd=bench_readed_max \
+			-fbench_proged_bnd=bench_proged_max \
+			-fbench_erased_bnd=bench_erased_max \
+			-o-) \
+		--title="rbyd id operations" \
+		-Dcase='bench_rbyd_id_*' \
+		-bORDER \
+		-xn \
+		--legend \
+		-L0,bench_readed_avg=inorder \
+		-L0,bench_readed_bnd= \
+		-L0,bench_proged_avg= \
+		-L0,bench_proged_bnd= \
+		-L1,bench_readed_avg=reversed \
+		-L1,bench_readed_bnd= \
+		-L1,bench_proged_avg= \
+		-L1,bench_proged_bnd= \
+		-L2,bench_readed_avg=random \
+		-L2,bench_readed_bnd= \
+		-L2,bench_proged_avg= \
+		-L2,bench_proged_bnd= \
+		$(call PLOT_RBYD_FLAGS,create,delete) \
+		$(PLOTFLAGS) \
+		-o$@)
+
+
 # plot bench_fwrite config
 PLOT_FWRITE_FLAGS += --y2 --yunits=B
-PLOT_FWRITE_FLAGS += --subplot=" \
+PLOT_FWRITE_FLAGS += \
+		--subplot=" \
 				-Dm=write \
 				-ybench_readed_avg \
 				-ybench_readed_bnd \
@@ -476,61 +716,13 @@ PLOT_FWRITE_FLAGS += --subplot=" \
 				--ylabel=usage \
 				--title='usage (total)' \
 				-H0.665\""
-
-## Plot all benchmarks!
-.PHONY: all plot plot-all
-all plot plot-all: \
-		plot-fwrite \
-		plot-fwrite-tune
-
-### Plot benchmarks over internal data structures
-#.PHONY: plot-internal
-#plot-internal: $(PLOTSDIR)/bench_fwrite.svg
-
-## Plot benchmarks over file writes
-.PHONY: plot-fwrite
-plot-fwrite: \
-		$(PLOTSDIR)/bench_fwrite_sparseish.svg \
-		$(PLOTSDIR)/bench_fwrite_rewriting.svg \
-		$(PLOTSDIR)/bench_fwrite_linear.svg \
-		$(PLOTSDIR)/bench_fwrite_random.svg
-
-## Plot file write benchmarks with tuneable configs
-.PHONY: plot-fwrite-tune
-plot-fwrite-tune: \
-		plot-fwrite-tune-bs \
-		plot-fwrite-tune-is \
-		plot-fwrite-tune-fs \
-		plot-fwrite-tune-ct
-
-## Run file write benchmarks with different block_sizes
-.PHONY: plot-fwrite-tune-bs
-plot-fwrite-tune-bs: \
-		$(PLOTSDIR)/bench_fwrite_tune_bs_linear.svg \
-		$(PLOTSDIR)/bench_fwrite_tune_bs_random.svg
-
-## Run file write benchmarks with different inline_sizes
-.PHONY: plot-fwrite-tune-is
-plot-fwrite-tune-is: \
-		$(PLOTSDIR)/bench_fwrite_tune_is_linear.svg \
-		$(PLOTSDIR)/bench_fwrite_tune_is_random.svg
-
-## Run file write benchmarks with different fragment_sizes
-.PHONY: plot-fwrite-tune-fs
-plot-fwrite-tune-fs: \
-		$(PLOTSDIR)/bench_fwrite_tune_fs_linear.svg \
-		$(PLOTSDIR)/bench_fwrite_tune_fs_random.svg
-
-## Run file write benchmarks with different crystal_threshs
-.PHONY: plot-fwrite-tune-ct
-plot-fwrite-tune-ct: \
-		$(PLOTSDIR)/bench_fwrite_tune_ct_linear.svg \
-		$(PLOTSDIR)/bench_fwrite_tune_ct_random.svg
-
-# plot rules
+PLOT_FWRITE_FLAGS += $(PLOT_COLORS_3)
 
 # file writes - sparseish
-$(PLOTSDIR)/bench_fwrite_sparseish.svg: $(RESULTSDIR)/bench_fwrite.avg.csv
+$(PLOTSDIR)/bench_fwrite_sparseish.svg: \
+		$(RESULTSDIR)/bench_fwrite.avg.csv \
+		$(RESULTSDIR)/bench_fwrite.amor.avg.csv \
+		$(RESULTSDIR)/bench_fwrite.per.avg.csv
 	$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $^ \
 			-fbench_readed_avg \
@@ -541,9 +733,9 @@ $(PLOTSDIR)/bench_fwrite_sparseish.svg: $(RESULTSDIR)/bench_fwrite.avg.csv
 			-fbench_erased_bnd=bench_erased_min \
 			-o-) \
 		<(./scripts/csv.py $^ \
-			-Fbench_readed_avg \
-			-Fbench_proged_avg \
-			-Fbench_erased_avg \
+			-Dbench_readed_avg='*' \
+			-Dbench_proged_avg='*' \
+			-Dbench_erased_avg='*' \
 			-fbench_readed_bnd=bench_readed_max \
 			-fbench_proged_bnd=bench_proged_max \
 			-fbench_erased_bnd=bench_erased_max \
@@ -577,12 +769,15 @@ $(PLOTSDIR)/bench_fwrite_sparseish.svg: $(RESULTSDIR)/bench_fwrite.avg.csv
 		-L'3,bench_proged_bnd=' \
 		-L'3,bench_erased_avg=' \
 		-L'3,bench_erased_bnd=' \
-		$(PLOTFLAGS) \
 		$(PLOT_FWRITE_FLAGS) \
+		$(PLOTFLAGS) \
 		-o$@)
 
 # file writes - rewriting
-$(PLOTSDIR)/bench_fwrite_rewriting.svg: $(RESULTSDIR)/bench_fwrite.avg.csv
+$(PLOTSDIR)/bench_fwrite_rewriting.svg: \
+		$(RESULTSDIR)/bench_fwrite.avg.csv \
+		$(RESULTSDIR)/bench_fwrite.amor.avg.csv \
+		$(RESULTSDIR)/bench_fwrite.per.avg.csv
 	$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $^ \
 			-fbench_readed_avg \
@@ -593,9 +788,9 @@ $(PLOTSDIR)/bench_fwrite_rewriting.svg: $(RESULTSDIR)/bench_fwrite.avg.csv
 			-fbench_erased_bnd=bench_erased_min \
 			-o-) \
 		<(./scripts/csv.py $^ \
-			-Fbench_readed_avg \
-			-Fbench_proged_avg \
-			-Fbench_erased_avg \
+			-Dbench_readed_avg='*' \
+			-Dbench_proged_avg='*' \
+			-Dbench_erased_avg='*' \
 			-fbench_readed_bnd=bench_readed_max \
 			-fbench_proged_bnd=bench_proged_max \
 			-fbench_erased_bnd=bench_erased_max \
@@ -629,12 +824,15 @@ $(PLOTSDIR)/bench_fwrite_rewriting.svg: $(RESULTSDIR)/bench_fwrite.avg.csv
 		-L'3,bench_proged_bnd=' \
 		-L'3,bench_erased_avg=' \
 		-L'3,bench_erased_bnd=' \
-		$(PLOTFLAGS) \
 		$(PLOT_FWRITE_FLAGS) \
+		$(PLOTFLAGS) \
 		-o$@)
 
 # file writes - linear
-$(PLOTSDIR)/bench_fwrite_linear.svg: $(RESULTSDIR)/bench_fwrite.avg.csv
+$(PLOTSDIR)/bench_fwrite_linear.svg: \
+		$(RESULTSDIR)/bench_fwrite.avg.csv \
+		$(RESULTSDIR)/bench_fwrite.amor.avg.csv \
+		$(RESULTSDIR)/bench_fwrite.per.avg.csv
 	$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $^ \
 			-fbench_readed_avg \
@@ -645,9 +843,9 @@ $(PLOTSDIR)/bench_fwrite_linear.svg: $(RESULTSDIR)/bench_fwrite.avg.csv
 			-fbench_erased_bnd=bench_erased_min \
 			-o-) \
 		<(./scripts/csv.py $^ \
-			-Fbench_readed_avg \
-			-Fbench_proged_avg \
-			-Fbench_erased_avg \
+			-Dbench_readed_avg='*' \
+			-Dbench_proged_avg='*' \
+			-Dbench_erased_avg='*' \
 			-fbench_readed_bnd=bench_readed_max \
 			-fbench_proged_bnd=bench_proged_max \
 			-fbench_erased_bnd=bench_erased_max \
@@ -662,12 +860,15 @@ $(PLOTSDIR)/bench_fwrite_linear.svg: $(RESULTSDIR)/bench_fwrite.avg.csv
 		-L'bench_proged_bnd=' \
 		-L'bench_erased_avg=' \
 		-L'bench_erased_bnd=' \
-		$(PLOTFLAGS) \
 		$(PLOT_FWRITE_FLAGS) \
+		$(PLOTFLAGS) \
 		-o$@)
 
 # file writes - random
-$(PLOTSDIR)/bench_fwrite_random.svg: $(RESULTSDIR)/bench_fwrite.avg.csv
+$(PLOTSDIR)/bench_fwrite_random.svg: \
+		$(RESULTSDIR)/bench_fwrite.avg.csv \
+		$(RESULTSDIR)/bench_fwrite.amor.avg.csv \
+		$(RESULTSDIR)/bench_fwrite.per.avg.csv
 	$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $^ \
 			-fbench_readed_avg \
@@ -678,9 +879,9 @@ $(PLOTSDIR)/bench_fwrite_random.svg: $(RESULTSDIR)/bench_fwrite.avg.csv
 			-fbench_erased_bnd=bench_erased_min \
 			-o-) \
 		<(./scripts/csv.py $^ \
-			-Fbench_readed_avg \
-			-Fbench_proged_avg \
-			-Fbench_erased_avg \
+			-Dbench_readed_avg='*' \
+			-Dbench_proged_avg='*' \
+			-Dbench_erased_avg='*' \
 			-fbench_readed_bnd=bench_readed_max \
 			-fbench_proged_bnd=bench_proged_max \
 			-fbench_erased_bnd=bench_erased_max \
@@ -695,13 +896,15 @@ $(PLOTSDIR)/bench_fwrite_random.svg: $(RESULTSDIR)/bench_fwrite.avg.csv
 		-L'bench_proged_bnd=' \
 		-L'bench_erased_avg=' \
 		-L'bench_erased_bnd=' \
-		$(PLOTFLAGS) \
 		$(PLOT_FWRITE_FLAGS) \
+		$(PLOTFLAGS) \
 		-o$@)
 
 # file writes - block_size - linear
 $(PLOTSDIR)/bench_fwrite_tune_bs_linear.svg: \
-		$(RESULTSDIR)/bench_fwrite_tune_bs.avg.csv
+		$(RESULTSDIR)/bench_fwrite_tune_bs.avg.csv \
+		$(RESULTSDIR)/bench_fwrite_tune_bs.amor.avg.csv \
+		$(RESULTSDIR)/bench_fwrite_tune_bs.per.avg.csv
 	$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $^ \
 			-fbench_readed_avg \
@@ -712,9 +915,9 @@ $(PLOTSDIR)/bench_fwrite_tune_bs_linear.svg: \
 			-fbench_erased_bnd=bench_erased_min \
 			-o-) \
 		<(./scripts/csv.py $^ \
-			-Fbench_readed_avg \
-			-Fbench_proged_avg \
-			-Fbench_erased_avg \
+			-Dbench_readed_avg='*' \
+			-Dbench_proged_avg='*' \
+			-Dbench_erased_avg='*' \
 			-fbench_readed_bnd=bench_readed_max \
 			-fbench_proged_bnd=bench_proged_max \
 			-fbench_erased_bnd=bench_erased_max \
@@ -732,13 +935,15 @@ $(PLOTSDIR)/bench_fwrite_tune_bs_linear.svg: \
 		-L'*,bench_readed_bnd=' \
 		-L'*,bench_proged_bnd=' \
 		-L'*,bench_erased_bnd=' \
-		$(PLOTFLAGS) \
 		$(PLOT_FWRITE_FLAGS) \
+		$(PLOTFLAGS) \
 		-o$@)
 
 # file writes - block_size - random
 $(PLOTSDIR)/bench_fwrite_tune_bs_random.svg: \
-		$(RESULTSDIR)/bench_fwrite_tune_bs.avg.csv
+		$(RESULTSDIR)/bench_fwrite_tune_bs.avg.csv \
+		$(RESULTSDIR)/bench_fwrite_tune_bs.amor.avg.csv \
+		$(RESULTSDIR)/bench_fwrite_tune_bs.per.avg.csv
 	$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $^ \
 			-fbench_readed_avg \
@@ -749,9 +954,9 @@ $(PLOTSDIR)/bench_fwrite_tune_bs_random.svg: \
 			-fbench_erased_bnd=bench_erased_min \
 			-o-) \
 		<(./scripts/csv.py $^ \
-			-Fbench_readed_avg \
-			-Fbench_proged_avg \
-			-Fbench_erased_avg \
+			-Dbench_readed_avg='*' \
+			-Dbench_proged_avg='*' \
+			-Dbench_erased_avg='*' \
 			-fbench_readed_bnd=bench_readed_max \
 			-fbench_proged_bnd=bench_proged_max \
 			-fbench_erased_bnd=bench_erased_max \
@@ -769,13 +974,15 @@ $(PLOTSDIR)/bench_fwrite_tune_bs_random.svg: \
 		-L'*,bench_readed_bnd=' \
 		-L'*,bench_proged_bnd=' \
 		-L'*,bench_erased_bnd=' \
-		$(PLOTFLAGS) \
 		$(PLOT_FWRITE_FLAGS) \
+		$(PLOTFLAGS) \
 		-o$@)
 
 # file writes - inline_size - linear
 $(PLOTSDIR)/bench_fwrite_tune_is_linear.svg: \
-		$(RESULTSDIR)/bench_fwrite_tune_is.avg.csv
+		$(RESULTSDIR)/bench_fwrite_tune_is.avg.csv \
+		$(RESULTSDIR)/bench_fwrite_tune_is.amor.avg.csv \
+		$(RESULTSDIR)/bench_fwrite_tune_is.per.avg.csv
 	$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $^ \
 			-fbench_readed_avg \
@@ -786,9 +993,9 @@ $(PLOTSDIR)/bench_fwrite_tune_is_linear.svg: \
 			-fbench_erased_bnd=bench_erased_min \
 			-o-) \
 		<(./scripts/csv.py $^ \
-			-Fbench_readed_avg \
-			-Fbench_proged_avg \
-			-Fbench_erased_avg \
+			-Dbench_readed_avg='*' \
+			-Dbench_proged_avg='*' \
+			-Dbench_erased_avg='*' \
 			-fbench_readed_bnd=bench_readed_max \
 			-fbench_proged_bnd=bench_proged_max \
 			-fbench_erased_bnd=bench_erased_max \
@@ -806,13 +1013,15 @@ $(PLOTSDIR)/bench_fwrite_tune_is_linear.svg: \
 		-L'*,bench_readed_bnd=' \
 		-L'*,bench_proged_bnd=' \
 		-L'*,bench_erased_bnd=' \
-		$(PLOTFLAGS) \
 		$(PLOT_FWRITE_FLAGS) \
+		$(PLOTFLAGS) \
 		-o$@)
 
 # file writes - inline_size - random
 $(PLOTSDIR)/bench_fwrite_tune_is_random.svg: \
-		$(RESULTSDIR)/bench_fwrite_tune_is.avg.csv
+		$(RESULTSDIR)/bench_fwrite_tune_is.avg.csv \
+		$(RESULTSDIR)/bench_fwrite_tune_is.amor.avg.csv \
+		$(RESULTSDIR)/bench_fwrite_tune_is.per.avg.csv
 	$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $^ \
 			-fbench_readed_avg \
@@ -823,9 +1032,9 @@ $(PLOTSDIR)/bench_fwrite_tune_is_random.svg: \
 			-fbench_erased_bnd=bench_erased_min \
 			-o-) \
 		<(./scripts/csv.py $^ \
-			-Fbench_readed_avg \
-			-Fbench_proged_avg \
-			-Fbench_erased_avg \
+			-Dbench_readed_avg='*' \
+			-Dbench_proged_avg='*' \
+			-Dbench_erased_avg='*' \
 			-fbench_readed_bnd=bench_readed_max \
 			-fbench_proged_bnd=bench_proged_max \
 			-fbench_erased_bnd=bench_erased_max \
@@ -843,13 +1052,15 @@ $(PLOTSDIR)/bench_fwrite_tune_is_random.svg: \
 		-L'*,bench_readed_bnd=' \
 		-L'*,bench_proged_bnd=' \
 		-L'*,bench_erased_bnd=' \
-		$(PLOTFLAGS) \
 		$(PLOT_FWRITE_FLAGS) \
+		$(PLOTFLAGS) \
 		-o$@)
 
 # file writes - fragment_size - linear
 $(PLOTSDIR)/bench_fwrite_tune_fs_linear.svg: \
-		$(RESULTSDIR)/bench_fwrite_tune_fs.avg.csv
+		$(RESULTSDIR)/bench_fwrite_tune_fs.avg.csv \
+		$(RESULTSDIR)/bench_fwrite_tune_fs.amor.avg.csv \
+		$(RESULTSDIR)/bench_fwrite_tune_fs.per.avg.csv
 	$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $^ \
 			-fbench_readed_avg \
@@ -860,9 +1071,9 @@ $(PLOTSDIR)/bench_fwrite_tune_fs_linear.svg: \
 			-fbench_erased_bnd=bench_erased_min \
 			-o-) \
 		<(./scripts/csv.py $^ \
-			-Fbench_readed_avg \
-			-Fbench_proged_avg \
-			-Fbench_erased_avg \
+			-Dbench_readed_avg='*' \
+			-Dbench_proged_avg='*' \
+			-Dbench_erased_avg='*' \
 			-fbench_readed_bnd=bench_readed_max \
 			-fbench_proged_bnd=bench_proged_max \
 			-fbench_erased_bnd=bench_erased_max \
@@ -880,13 +1091,15 @@ $(PLOTSDIR)/bench_fwrite_tune_fs_linear.svg: \
 		-L'*,bench_readed_bnd=' \
 		-L'*,bench_proged_bnd=' \
 		-L'*,bench_erased_bnd=' \
-		$(PLOTFLAGS) \
 		$(PLOT_FWRITE_FLAGS) \
+		$(PLOTFLAGS) \
 		-o$@)
 
 # file writes - fragment_size - random
 $(PLOTSDIR)/bench_fwrite_tune_fs_random.svg: \
-		$(RESULTSDIR)/bench_fwrite_tune_fs.avg.csv
+		$(RESULTSDIR)/bench_fwrite_tune_fs.avg.csv \
+		$(RESULTSDIR)/bench_fwrite_tune_fs.amor.avg.csv \
+		$(RESULTSDIR)/bench_fwrite_tune_fs.per.avg.csv
 	$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $^ \
 			-fbench_readed_avg \
@@ -897,9 +1110,9 @@ $(PLOTSDIR)/bench_fwrite_tune_fs_random.svg: \
 			-fbench_erased_bnd=bench_erased_min \
 			-o-) \
 		<(./scripts/csv.py $^ \
-			-Fbench_readed_avg \
-			-Fbench_proged_avg \
-			-Fbench_erased_avg \
+			-Dbench_readed_avg='*' \
+			-Dbench_proged_avg='*' \
+			-Dbench_erased_avg='*' \
 			-fbench_readed_bnd=bench_readed_max \
 			-fbench_proged_bnd=bench_proged_max \
 			-fbench_erased_bnd=bench_erased_max \
@@ -917,13 +1130,15 @@ $(PLOTSDIR)/bench_fwrite_tune_fs_random.svg: \
 		-L'*,bench_readed_bnd=' \
 		-L'*,bench_proged_bnd=' \
 		-L'*,bench_erased_bnd=' \
-		$(PLOTFLAGS) \
 		$(PLOT_FWRITE_FLAGS) \
+		$(PLOTFLAGS) \
 		-o$@)
 
 # file writes - crystal_thresh - linear
 $(PLOTSDIR)/bench_fwrite_tune_ct_linear.svg: \
-		$(RESULTSDIR)/bench_fwrite_tune_ct.avg.csv
+		$(RESULTSDIR)/bench_fwrite_tune_ct.avg.csv \
+		$(RESULTSDIR)/bench_fwrite_tune_ct.amor.avg.csv \
+		$(RESULTSDIR)/bench_fwrite_tune_ct.per.avg.csv
 	$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $^ \
 			-fbench_readed_avg \
@@ -934,9 +1149,9 @@ $(PLOTSDIR)/bench_fwrite_tune_ct_linear.svg: \
 			-fbench_erased_bnd=bench_erased_min \
 			-o-) \
 		<(./scripts/csv.py $^ \
-			-Fbench_readed_avg \
-			-Fbench_proged_avg \
-			-Fbench_erased_avg \
+			-Dbench_readed_avg='*' \
+			-Dbench_proged_avg='*' \
+			-Dbench_erased_avg='*' \
 			-fbench_readed_bnd=bench_readed_max \
 			-fbench_proged_bnd=bench_proged_max \
 			-fbench_erased_bnd=bench_erased_max \
@@ -954,13 +1169,15 @@ $(PLOTSDIR)/bench_fwrite_tune_ct_linear.svg: \
 		-L'*,bench_readed_bnd=' \
 		-L'*,bench_proged_bnd=' \
 		-L'*,bench_erased_bnd=' \
-		$(PLOTFLAGS) \
 		$(PLOT_FWRITE_FLAGS) \
+		$(PLOTFLAGS) \
 		-o$@)
 
 # file writes - crystal_thresh - random
 $(PLOTSDIR)/bench_fwrite_tune_ct_random.svg: \
-		$(RESULTSDIR)/bench_fwrite_tune_ct.avg.csv
+		$(RESULTSDIR)/bench_fwrite_tune_ct.avg.csv \
+		$(RESULTSDIR)/bench_fwrite_tune_ct.amor.avg.csv \
+		$(RESULTSDIR)/bench_fwrite_tune_ct.per.avg.csv
 	$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $^ \
 			-fbench_readed_avg \
@@ -971,9 +1188,9 @@ $(PLOTSDIR)/bench_fwrite_tune_ct_random.svg: \
 			-fbench_erased_bnd=bench_erased_min \
 			-o-) \
 		<(./scripts/csv.py $^ \
-			-Fbench_readed_avg \
-			-Fbench_proged_avg \
-			-Fbench_erased_avg \
+			-Dbench_readed_avg='*' \
+			-Dbench_proged_avg='*' \
+			-Dbench_erased_avg='*' \
 			-fbench_readed_bnd=bench_readed_max \
 			-fbench_proged_bnd=bench_proged_max \
 			-fbench_erased_bnd=bench_erased_max \
@@ -991,8 +1208,8 @@ $(PLOTSDIR)/bench_fwrite_tune_ct_random.svg: \
 		-L'*,bench_readed_bnd=' \
 		-L'*,bench_proged_bnd=' \
 		-L'*,bench_erased_bnd=' \
-		$(PLOTFLAGS) \
 		$(PLOT_FWRITE_FLAGS) \
+		$(PLOTFLAGS) \
 		-o$@)
 
 

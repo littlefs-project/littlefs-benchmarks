@@ -1,7 +1,7 @@
 # Bench files
 
 defines.FRAGMENT_SIZE = 64
-defines.CRYSTAL_SIZE = 512
+defines.CRYSTAL_THRESH = 512
 
 [cases.bench_fwrite]
 # 0 = in-order
