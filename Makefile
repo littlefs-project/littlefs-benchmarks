@@ -154,6 +154,7 @@ help:
 -include $(BENCH_LFS3_DEP)
 .SUFFIXES:
 .SECONDARY:
+, := ,
 
 $(BENCH_LFS3_RUNNER): $(BENCH_LFS3_OBJ)
 	$(CC) $(CFLAGS) $^ $(LFLAGS) -o$@
@@ -245,11 +246,16 @@ bench bench-all: \
 ## Run benchmarks over internal data structures
 .PHONY: bench-internal
 bench-internal: \
-		bench-rbyd
+		bench-rbyd \
+		bench-btree
 
 ## Run benchmarks over rbyd operations
 .PHONY: bench-rbyd
 bench-rbyd: $(RESULTSDIR)/bench_rbyd.avg.csv
+
+## Run benchmarks over btree operations
+.PHONY: bench-btree
+bench-btree: $(RESULTSDIR)/bench_btree.avg.csv
 
 ## Run benchmarks over file writes
 .PHONY: bench-fwrite
@@ -287,9 +293,39 @@ $(RESULTSDIR)/bench_rbyd.csv: $(BENCH_LFS3_RUNNER)
 		-o$@)
 
 # per-attr results
+#
+# this breaks if the pattern is empty for some reason?
 $(RESULTSDIR)/bench_rby%.per.csv: $(RESULTSDIR)/bench_rby%.csv
 	$(strip ./scripts/csv.py $^ \
 		-Bn -Bm='%(m)s+per' \
+		-Dbench_creaded='*' \
+		-Dbench_cproged='*' \
+		-Dbench_cerased='*' \
+		-fbench_readed='float(bench_readed) / float(n)' \
+		-fbench_proged='float(bench_proged) / float(n)' \
+		-fbench_erased='float(bench_erased) / float(n)' \
+		-o$@)
+
+# run the benches!
+$(RESULTSDIR)/bench_btree.csv: $(BENCH_LFS3_RUNNER)
+	$(strip ./scripts/bench.py -R$< -B bench_btree \
+		-DSEED="range($(SAMPLES))" \
+		$(BENCHFLAGS) \
+		-o$@)
+
+# amortized results
+$(RESULTSDIR)/bench_btre%.amor.csv: $(RESULTSDIR)/bench_btre%.csv
+	$(strip ./scripts/csv.py $^ \
+		-Bn -Dm=commit -Bm=commit+amor \
+		-fbench_readed='float(bench_creaded) / float(n)' \
+		-fbench_proged='float(bench_cproged) / float(n)' \
+		-fbench_erased='float(bench_cerased) / float(n)' \
+		-o$@)
+
+# byte-per-byte usage results
+$(RESULTSDIR)/bench_btre%.per.csv: $(RESULTSDIR)/bench_btre%.csv
+	$(strip ./scripts/csv.py $^ \
+		-Bn -Dm=usage -Bm=usage+per \
 		-Dbench_creaded='*' \
 		-Dbench_cproged='*' \
 		-Dbench_cerased='*' \
@@ -338,7 +374,7 @@ $(RESULTSDIR)/bench_fwrite_tune_ct.csv: $(BENCH_LFS3_RUNNER)
 # this breaks if the pattern is empty for some reason?
 $(RESULTSDIR)/bench_fwrit%.amor.csv: $(RESULTSDIR)/bench_fwrit%.csv
 	$(strip ./scripts/csv.py $^ \
-		-Bn -Dm=write -Bm='write+amor' \
+		-Bn -Dm=write -Bm=write+amor \
 		-fbench_readed='float(bench_creaded) / float(n)' \
 		-fbench_proged='float(bench_cproged) / float(n)' \
 		-fbench_erased='float(bench_cerased) / float(n)' \
@@ -347,7 +383,7 @@ $(RESULTSDIR)/bench_fwrit%.amor.csv: $(RESULTSDIR)/bench_fwrit%.csv
 # byte-per-byte usage results
 $(RESULTSDIR)/bench_fwrit%.per.csv: $(RESULTSDIR)/bench_fwrit%.csv
 	$(strip ./scripts/csv.py $^ \
-		-BREWRITE -BSIZE -Bn -Dm=usage -Bm='usage+per' \
+		-BREWRITE -BSIZE -Bn -Dm=usage -Bm=usage+per \
 		-Dbench_creaded='*' \
 		-Dbench_cproged='*' \
 		-Dbench_cerased='*' \
@@ -380,7 +416,6 @@ $(RESULTSDIR)/bench_%.avg.csv: $(RESULTSDIR)/bench_%.csv
 #======================================================================#
 
 # plot config
-PLOTFLAGS += -W1750 -H750
 ifndef LIGHT
 PLOTFLAGS += --dark
 endif
@@ -437,13 +472,20 @@ all plot plot-all: \
 ## Plot benchmarks over internal data structures
 .PHONY: plot-internal
 plot-internal: \
-		plot-rbyd
+		plot-rbyd \
+		plot-btree
 
 ## Plot benchmarks over rbyds
 .PHONY: plot-rbyd
 plot-rbyd: \
 		$(PLOTSDIR)/bench_rbyd_attr.svg \
 		$(PLOTSDIR)/bench_rbyd_id.svg
+
+## Plot benchmarks over btrees
+.PHONY: plot-btree
+plot-btree: \
+		$(PLOTSDIR)/bench_btree_btree.svg \
+		$(PLOTSDIR)/bench_btree_namedbtree.svg
 
 ## Plot benchmarks over file writes
 .PHONY: plot-fwrite
@@ -489,6 +531,7 @@ plot-fwrite-tune-ct: \
 # plot rules
 
 # plot bench_rbyd config
+PLOT_RBYD_FLAGS += -W1750 -H750
 PLOT_RBYD_FLAGS += --y2 --yunits=B
 PLOT_RBYD_FLAGS += \
 		--subplot=" \
@@ -639,7 +682,204 @@ $(PLOTSDIR)/bench_rbyd_id.svg: \
 		-o$@)
 
 
+# plot bench_btree config
+PLOT_BTREE_FLAGS += -W1750 -H750
+PLOT_BTREE_FLAGS += --y2 --yunits=B
+PLOT_BTREE_FLAGS += \
+		--subplot=" \
+				-Dm=commit \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--ylabel=bench_readed \
+				--title=commit \
+				--add-xticklabel=" \
+			--subplot-below=" \
+				-Dm=commit \
+				-ybench_proged_avg \
+				-ybench_proged_bnd \
+				--ylabel=bench_proged \
+				-H0.5" \
+			--subplot-below=" \
+				-Dm=commit \
+				-ybench_erased_avg \
+				-ybench_erased_bnd \
+				--ylabel=bench_erased \
+				-H0.33" \
+		--subplot-right=" \
+				-Dm=commit+amor \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--title='commit (amortized)' \
+				--add-xticklabel= \
+				-W0.5 \
+			--subplot-below=\" \
+				-Dm=commit+amor \
+				-ybench_proged_avg \
+				-ybench_proged_bnd \
+				-H0.5\" \
+			--subplot-below=\" \
+				-Dm=commit+amor \
+				-ybench_erased_avg \
+				-ybench_erased_bnd \
+				-H0.33\"" \
+		--subplot-right=" \
+				-Dm=lookup \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--title=lookup \
+				--add-xticklabel= \
+				-W0.33 \
+			--subplot-below=\" \
+				-Dm=lookup \
+				-ybench_proged_avg \
+				-ybench_proged_bnd \
+				-Y0,1 \
+				-H0.5\" \
+			--subplot-below=\" \
+				-Dm=lookup \
+				-ybench_erased_avg \
+				-ybench_erased_bnd \
+				-Y0,1 \
+				-H0.33\"" \
+		$(if $1, \
+		--subplot-right=" \
+				-Dm=namelookup \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--title=namelookup \
+				--add-xticklabel= \
+				-W0.25 \
+			--subplot-below=\" \
+				-Dm=namelookup \
+				-ybench_proged_avg \
+				-ybench_proged_bnd \
+				-Y0$(,)1 \
+				-H0.5\" \
+			--subplot-below=\" \
+				-Dm=namelookup \
+				-ybench_erased_avg \
+				-ybench_erased_bnd \
+				-Y0$(,)1 \
+				-H0.33\"",) \
+		--subplot-right=" \
+				-Dm=usage+per \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--ylabel=bench_usage \
+				--title='usage (per-entry)' \
+				--add-xticklabel= \
+				-Y0,512 \
+				-W$(if $1,0.20,0.25) \
+			--subplot-below=\" \
+				-Dm=usage \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--ylabel=bench_usage \
+				--title='usage (total)' \
+				-H0.665\""
+PLOT_BTREE_FLAGS += $(PLOT_COLORS_3)
+
+# btree operations
+$(PLOTSDIR)/bench_btree_btree.svg: \
+		$(RESULTSDIR)/bench_btree.avg.csv \
+		$(RESULTSDIR)/bench_btree.amor.avg.csv \
+		$(RESULTSDIR)/bench_btree.per.avg.csv
+	$(strip ./scripts/plotmpl.py \
+		<(./scripts/csv.py $^ \
+			-fbench_readed_avg \
+			-fbench_proged_avg \
+			-fbench_erased_avg \
+			-fbench_readed_bnd=bench_readed_min \
+			-fbench_proged_bnd=bench_proged_min \
+			-fbench_erased_bnd=bench_erased_min \
+			-o-) \
+		<(./scripts/csv.py $^ \
+			-Dbench_readed_avg='*' \
+			-Dbench_proged_avg='*' \
+			-Dbench_erased_avg='*' \
+			-fbench_readed_bnd=bench_readed_max \
+			-fbench_proged_bnd=bench_proged_max \
+			-fbench_erased_bnd=bench_erased_max \
+			-o-) \
+		--title="btree operations" \
+		-Dcase=bench_btree_btree \
+		-bORDER \
+		-xn \
+		--legend \
+		-L0,bench_readed_avg=inorder \
+		-L0,bench_readed_bnd= \
+		-L0,bench_proged_avg= \
+		-L0,bench_proged_bnd= \
+		-L0,bench_erased_avg= \
+		-L0,bench_erased_bnd= \
+		-L1,bench_readed_avg=reversed \
+		-L1,bench_readed_bnd= \
+		-L1,bench_proged_avg= \
+		-L1,bench_proged_bnd= \
+		-L1,bench_erased_avg= \
+		-L1,bench_erased_bnd= \
+		-L2,bench_readed_avg=random \
+		-L2,bench_readed_bnd= \
+		-L2,bench_proged_avg= \
+		-L2,bench_proged_bnd= \
+		-L2,bench_erased_avg= \
+		-L2,bench_erased_bnd= \
+		$(call PLOT_BTREE_FLAGS) \
+		$(PLOTFLAGS) \
+		-o$@)
+
+# named btree operations
+$(PLOTSDIR)/bench_btree_namedbtree.svg: \
+		$(RESULTSDIR)/bench_btree.avg.csv \
+		$(RESULTSDIR)/bench_btree.amor.avg.csv \
+		$(RESULTSDIR)/bench_btree.per.avg.csv
+	$(strip ./scripts/plotmpl.py \
+		<(./scripts/csv.py $^ \
+			-fbench_readed_avg \
+			-fbench_proged_avg \
+			-fbench_erased_avg \
+			-fbench_readed_bnd=bench_readed_min \
+			-fbench_proged_bnd=bench_proged_min \
+			-fbench_erased_bnd=bench_erased_min \
+			-o-) \
+		<(./scripts/csv.py $^ \
+			-Dbench_readed_avg='*' \
+			-Dbench_proged_avg='*' \
+			-Dbench_erased_avg='*' \
+			-fbench_readed_bnd=bench_readed_max \
+			-fbench_proged_bnd=bench_proged_max \
+			-fbench_erased_bnd=bench_erased_max \
+			-o-) \
+		--title="named btree operations" \
+		-Dcase=bench_btree_namedbtree \
+		-bORDER \
+		-xn \
+		--legend \
+		-L0,bench_readed_avg=inorder \
+		-L0,bench_readed_bnd= \
+		-L0,bench_proged_avg= \
+		-L0,bench_proged_bnd= \
+		-L0,bench_erased_avg= \
+		-L0,bench_erased_bnd= \
+		-L1,bench_readed_avg=reversed \
+		-L1,bench_readed_bnd= \
+		-L1,bench_proged_avg= \
+		-L1,bench_proged_bnd= \
+		-L1,bench_erased_avg= \
+		-L1,bench_erased_bnd= \
+		-L2,bench_readed_avg=random \
+		-L2,bench_readed_bnd= \
+		-L2,bench_proged_avg= \
+		-L2,bench_proged_bnd= \
+		-L2,bench_erased_avg= \
+		-L2,bench_erased_bnd= \
+		$(call PLOT_BTREE_FLAGS,named) \
+		$(PLOTFLAGS) \
+		-o$@)
+
+
 # plot bench_fwrite config
+PLOT_FWRITE_FLAGS += -W1750 -H750
 PLOT_FWRITE_FLAGS += --y2 --yunits=B
 PLOT_FWRITE_FLAGS += \
 		--subplot=" \
