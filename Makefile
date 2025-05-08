@@ -247,7 +247,8 @@ bench bench-all: \
 .PHONY: bench-internal
 bench-internal: \
 		bench-rbyd \
-		bench-btree
+		bench-btree \
+		bench-mtree
 
 ## Run benchmarks over rbyd operations
 .PHONY: bench-rbyd
@@ -256,6 +257,10 @@ bench-rbyd: $(RESULTSDIR)/bench_rbyd.avg.csv
 ## Run benchmarks over btree operations
 .PHONY: bench-btree
 bench-btree: $(RESULTSDIR)/bench_btree.avg.csv
+
+## Run benchmarks over mtree operations
+.PHONY: bench-mtree
+bench-mtree: $(RESULTSDIR)/bench_mtree.avg.csv
 
 ## Run benchmarks over file writes
 .PHONY: bench-fwrite
@@ -326,6 +331,34 @@ $(RESULTSDIR)/bench_btre%.amor.csv: $(RESULTSDIR)/bench_btre%.csv
 $(RESULTSDIR)/bench_btre%.per.csv: $(RESULTSDIR)/bench_btre%.csv
 	$(strip ./scripts/csv.py $^ \
 		-Bn -Dm=usage -Bm=usage+per \
+		-Dbench_creaded='*' \
+		-Dbench_cproged='*' \
+		-Dbench_cerased='*' \
+		-fbench_readed='float(bench_readed) / float(n)' \
+		-fbench_proged='float(bench_proged) / float(n)' \
+		-fbench_erased='float(bench_erased) / float(n)' \
+		-o$@)
+
+# run the benches!
+$(RESULTSDIR)/bench_mtree.csv: $(BENCH_LFS3_RUNNER)
+	$(strip ./scripts/bench.py -R$< -B bench_mtree \
+		-DSEED="range($(SAMPLES))" \
+		$(BENCHFLAGS) \
+		-o$@)
+
+# amortized results
+$(RESULTSDIR)/bench_mtre%.amor.csv: $(RESULTSDIR)/bench_mtre%.csv
+	$(strip ./scripts/csv.py $^ \
+		-Bn -Dm=commit -Bm=commit+amor \
+		-fbench_readed='float(bench_creaded) / float(n)' \
+		-fbench_proged='float(bench_cproged) / float(n)' \
+		-fbench_erased='float(bench_cerased) / float(n)' \
+		-o$@)
+
+# byte-per-byte usage results
+$(RESULTSDIR)/bench_mtre%.per.csv: $(RESULTSDIR)/bench_mtre%.csv
+	$(strip ./scripts/csv.py $^ \
+		-Bn -Dm=traversal,usage -Bm='%(m)s+per' \
 		-Dbench_creaded='*' \
 		-Dbench_cproged='*' \
 		-Dbench_cerased='*' \
@@ -473,19 +506,25 @@ all plot plot-all: \
 .PHONY: plot-internal
 plot-internal: \
 		plot-rbyd \
-		plot-btree
+		plot-btree \
+		plot-mtree
 
-## Plot benchmarks over rbyds
+## Plot benchmarks over rbyd operations
 .PHONY: plot-rbyd
 plot-rbyd: \
 		$(PLOTSDIR)/bench_rbyd_attr.svg \
 		$(PLOTSDIR)/bench_rbyd_id.svg
 
-## Plot benchmarks over btrees
+## Plot benchmarks over btree operations
 .PHONY: plot-btree
 plot-btree: \
 		$(PLOTSDIR)/bench_btree_btree.svg \
 		$(PLOTSDIR)/bench_btree_namedbtree.svg
+
+## Plot benchmarks over mtree operations
+.PHONY: plot-mtree
+plot-mtree: \
+		$(PLOTSDIR)/bench_mtree.svg
 
 ## Plot benchmarks over file writes
 .PHONY: plot-fwrite
@@ -722,25 +761,6 @@ PLOT_BTREE_FLAGS += \
 				-ybench_erased_avg \
 				-ybench_erased_bnd \
 				-H0.33\"" \
-		--subplot-right=" \
-				-Dm=lookup \
-				-ybench_readed_avg \
-				-ybench_readed_bnd \
-				--title=lookup \
-				--add-xticklabel= \
-				-W0.33 \
-			--subplot-below=\" \
-				-Dm=lookup \
-				-ybench_proged_avg \
-				-ybench_proged_bnd \
-				-Y0,1 \
-				-H0.5\" \
-			--subplot-below=\" \
-				-Dm=lookup \
-				-ybench_erased_avg \
-				-ybench_erased_bnd \
-				-Y0,1 \
-				-H0.33\"" \
 		$(if $1, \
 		--subplot-right=" \
 				-Dm=namelookup \
@@ -748,7 +768,7 @@ PLOT_BTREE_FLAGS += \
 				-ybench_readed_bnd \
 				--title=namelookup \
 				--add-xticklabel= \
-				-W0.25 \
+				-W0.33 \
 			--subplot-below=\" \
 				-Dm=namelookup \
 				-ybench_proged_avg \
@@ -761,6 +781,25 @@ PLOT_BTREE_FLAGS += \
 				-ybench_erased_bnd \
 				-Y0$(,)1 \
 				-H0.33\"",) \
+		--subplot-right=" \
+				-Dm=lookup \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--title=lookup \
+				--add-xticklabel= \
+				-W$(if $1,0.25,0.33) \
+			--subplot-below=\" \
+				-Dm=lookup \
+				-ybench_proged_avg \
+				-ybench_proged_bnd \
+				-Y0,1 \
+				-H0.5\" \
+			--subplot-below=\" \
+				-Dm=lookup \
+				-ybench_erased_avg \
+				-ybench_erased_bnd \
+				-Y0,1 \
+				-H0.33\"" \
 		--subplot-right=" \
 				-Dm=usage+per \
 				-ybench_readed_avg \
@@ -874,6 +913,171 @@ $(PLOTSDIR)/bench_btree_namedbtree.svg: \
 		-L2,bench_erased_avg= \
 		-L2,bench_erased_bnd= \
 		$(call PLOT_BTREE_FLAGS,named) \
+		$(PLOTFLAGS) \
+		-o$@)
+
+
+# plot bench_mtree config
+PLOT_MTREE_FLAGS += -W1750 -H750
+PLOT_MTREE_FLAGS += --y2 --yunits=B
+PLOT_MTREE_FLAGS += \
+		--subplot=" \
+				-Dm=commit \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--ylabel=bench_readed \
+				--title=commit \
+				--add-xticklabel=" \
+			--subplot-below=" \
+				-Dm=commit \
+				-ybench_proged_avg \
+				-ybench_proged_bnd \
+				--ylabel=bench_proged \
+				-H0.5" \
+			--subplot-below=" \
+				-Dm=commit \
+				-ybench_erased_avg \
+				-ybench_erased_bnd \
+				--ylabel=bench_erased \
+				-H0.33" \
+		--subplot-right=" \
+				-Dm=commit+amor \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--title='commit (amortized)' \
+				--add-xticklabel= \
+				-W0.5 \
+			--subplot-below=\" \
+				-Dm=commit+amor \
+				-ybench_proged_avg \
+				-ybench_proged_bnd \
+				-H0.5\" \
+			--subplot-below=\" \
+				-Dm=commit+amor \
+				-ybench_erased_avg \
+				-ybench_erased_bnd \
+				-H0.33\"" \
+		--subplot-right=" \
+				-Dm=namelookup \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--title=namelookup \
+				--add-xticklabel= \
+				-W0.33 \
+			--subplot-below=\" \
+				-Dm=namelookup \
+				-ybench_proged_avg \
+				-ybench_proged_bnd \
+				-Y0,1 \
+				-H0.5\" \
+			--subplot-below=\" \
+				-Dm=namelookup \
+				-ybench_erased_avg \
+				-ybench_erased_bnd \
+				-Y0,1 \
+				-H0.33\"" \
+		--subplot-right=" \
+				-Dm=lookup \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--title=lookup \
+				--add-xticklabel= \
+				-W0.25 \
+			--subplot-below=\" \
+				-Dm=lookup \
+				-ybench_proged_avg \
+				-ybench_proged_bnd \
+				-Y0,1 \
+				-H0.5\" \
+			--subplot-below=\" \
+				-Dm=lookup \
+				-ybench_erased_avg \
+				-ybench_erased_bnd \
+				-Y0,1 \
+				-H0.33\"" \
+		--subplot-right=" \
+				-Dm=traversal+per \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--title='traversal (per-entry)' \
+				--add-xticklabel= \
+				-W0.20 \
+			--subplot-below=\" \
+				-Dm=traversal+per \
+				-ybench_proged_avg \
+				-ybench_proged_bnd \
+				-Y0,1 \
+				-H0.5\" \
+			--subplot-below=\" \
+				-Dm=traversal+per \
+				-ybench_erased_avg \
+				-ybench_erased_bnd \
+				-Y0,1 \
+				-H0.33\"" \
+		--subplot-right=" \
+				-Dm=usage+per \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--ylabel=bench_usage \
+				--title='usage (per-entry)' \
+				--add-xticklabel= \
+				-Y0,1024\
+				-W0.16 \
+			--subplot-below=\" \
+				-Dm=usage \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--ylabel=bench_usage \
+				--title='usage (total)' \
+				-H0.665\""
+PLOT_MTREE_FLAGS += $(PLOT_COLORS_3)
+
+# mtree operations
+$(PLOTSDIR)/bench_mtree.svg: \
+		$(RESULTSDIR)/bench_mtree.avg.csv \
+		$(RESULTSDIR)/bench_mtree.amor.avg.csv \
+		$(RESULTSDIR)/bench_mtree.per.avg.csv
+	$(strip ./scripts/plotmpl.py \
+		<(./scripts/csv.py $^ \
+			-fbench_readed_avg \
+			-fbench_proged_avg \
+			-fbench_erased_avg \
+			-fbench_readed_bnd=bench_readed_min \
+			-fbench_proged_bnd=bench_proged_min \
+			-fbench_erased_bnd=bench_erased_min \
+			-o-) \
+		<(./scripts/csv.py $^ \
+			-Dbench_readed_avg='*' \
+			-Dbench_proged_avg='*' \
+			-Dbench_erased_avg='*' \
+			-fbench_readed_bnd=bench_readed_max \
+			-fbench_proged_bnd=bench_proged_max \
+			-fbench_erased_bnd=bench_erased_max \
+			-o-) \
+		--title="mtree operations" \
+		-Dcase=bench_mtree \
+		-bORDER \
+		-xn \
+		--legend \
+		-L0,bench_readed_avg=inorder \
+		-L0,bench_readed_bnd= \
+		-L0,bench_proged_avg= \
+		-L0,bench_proged_bnd= \
+		-L0,bench_erased_avg= \
+		-L0,bench_erased_bnd= \
+		-L1,bench_readed_avg=reversed \
+		-L1,bench_readed_bnd= \
+		-L1,bench_proged_avg= \
+		-L1,bench_proged_bnd= \
+		-L1,bench_erased_avg= \
+		-L1,bench_erased_bnd= \
+		-L2,bench_readed_avg=random \
+		-L2,bench_readed_bnd= \
+		-L2,bench_proged_avg= \
+		-L2,bench_proged_bnd= \
+		-L2,bench_erased_avg= \
+		-L2,bench_erased_bnd= \
+		$(PLOT_MTREE_FLAGS) \
 		$(PLOTFLAGS) \
 		-o$@)
 
