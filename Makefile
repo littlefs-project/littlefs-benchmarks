@@ -14,6 +14,14 @@ BENCH_TUNE_IS ?= 0,256,512,1024
 BENCH_TUNE_FS ?= 16,32,64,128,256,512,1024
 BENCH_TUNE_CT ?= 0,256,512,1024,2048,4096
 
+# configurations that simulate real-world storage
+# - emmc - TODO
+# - nor  - based on w25q64jv
+# - nand - based on w25n01gv
+BENCH_SIM_EMMC += -DREAD_SIZE=512  -DPROG_SIZE=512  -DBLOCK_SIZE=512
+BENCH_SIM_NOR  += -DREAD_SIZE=1    -DPROG_SIZE=1    -DBLOCK_SIZE=4096
+BENCH_SIM_NAND += -DREAD_SIZE=2048 -DPROG_SIZE=2048 -DBLOCK_SIZE=131072
+
 
 # find source files
 
@@ -335,8 +343,12 @@ bench-vs-lfs2: \
 ## Run benchmarks v3 vs v2 comparing a simple counter
 .PHONY: bench-vs-lfs2-counter
 bench-vs-lfs2-counter: \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.csv
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.csv
 
 
 # run the benches!
@@ -506,16 +518,46 @@ $(RESULTSDIR)/bench_fwrit%.per.csv: $(RESULTSDIR)/bench_fwrit%.csv
 # v3 vs v2 bench rules!
 
 # run the benches against v3
-$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.csv: $(BENCH_RUNNER)
+$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.csv: $(BENCH_RUNNER)
 	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_counter \
 		-DSEED="range($(SAMPLES))" \
+		$(BENCH_SIM_EMMC) \
+		$(BENCHFLAGS) \
+		-o$@)
+
+$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.csv: $(BENCH_RUNNER)
+	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_counter \
+		-DSEED="range($(SAMPLES))" \
+		$(BENCH_SIM_NOR) \
+		$(BENCHFLAGS) \
+		-o$@)
+
+$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.csv: $(BENCH_RUNNER)
+	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_counter \
+		-DSEED="range($(SAMPLES))" \
+		$(BENCH_SIM_NAND) \
 		$(BENCHFLAGS) \
 		-o$@)
 
 # run the benches against v2
-$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.csv: $(BENCH_LFS2_RUNNER)
+$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.csv: $(BENCH_LFS2_RUNNER)
 	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_counter \
 		-DSEED="range($(SAMPLES))" \
+		$(BENCH_SIM_EMMC) \
+		$(BENCHFLAGS) \
+		-o$@)
+
+$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.csv: $(BENCH_LFS2_RUNNER)
+	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_counter \
+		-DSEED="range($(SAMPLES))" \
+		$(BENCH_SIM_NOR) \
+		$(BENCHFLAGS) \
+		-o$@)
+
+$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.csv: $(BENCH_LFS2_RUNNER)
+	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_counter \
+		-DSEED="range($(SAMPLES))" \
+		$(BENCH_SIM_NAND) \
 		$(BENCHFLAGS) \
 		-o$@)
 
@@ -1852,23 +1894,55 @@ PLOT_VS_LFS2_FLAGS += -W1750 -H750
 PLOT_VS_LFS2_FLAGS += --y2 --yunits=B
 PLOT_VS_LFS2_FLAGS += \
 		--subplot=" \
+				-DBLOCK_SIZE=512 \
 				-Dm=$2 \
 				--ylabel=$1 \
-				--title=nor \
-				--add-xticklabel=" \
+				--title=emmc \
+				$(if $3,--add-xticklabel=,)" \
 			$(if $3, \
 			--subplot-below=" \
+				-DBLOCK_SIZE=512 \
 				-Dm=$2+amor \
 				--ylabel='$1 (amortized)' \
-				-H0.5",)
+				-H0.5",) \
+		--subplot-right=" \
+				-DBLOCK_SIZE=4096 \
+				-Dm=$2 \
+				--title=nor \
+				$(if $3,--add-xticklabel=,) \
+				-W0.5 \
+			$(if $3, \
+			--subplot-below=\" \
+				-DBLOCK_SIZE=4096 \
+				-Dm=$2+amor \
+				-H0.5\",)" \
+		--subplot-right=" \
+				-DBLOCK_SIZE=131072 \
+				-Dm=$2 \
+				--title=nand \
+				$(if $3,--add-xticklabel=,) \
+				-W0.33 \
+			$(if $3, \
+			--subplot-below=\" \
+				-DBLOCK_SIZE=131072 \
+				-Dm=$2+amor \
+				-H0.5\",)"
 PLOT_VS_LFS2_FLAGS += $(PLOT_COLORS_1BND)
 
 # lfs3 vs lfs2 - simple counter - reads
 $(PLOTSDIR)/bench_vs_lfs2_counter_r.svg: \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.amor.avg.csv
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.amor.avg.csv
 	$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $^ \
 			-fbench_readed_avg \
@@ -1891,10 +1965,18 @@ $(PLOTSDIR)/bench_vs_lfs2_counter_r.svg: \
 
 # lfs3 vs lfs2 - simple counter - progs
 $(PLOTSDIR)/bench_vs_lfs2_counter_p.svg: \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.amor.avg.csv
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.amor.avg.csv
 	$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $^ \
 			-fbench_proged_avg \
@@ -1917,10 +1999,18 @@ $(PLOTSDIR)/bench_vs_lfs2_counter_p.svg: \
 
 # lfs3 vs lfs2 - simple counter - erases
 $(PLOTSDIR)/bench_vs_lfs2_counter_e.svg: \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.amor.avg.csv
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.amor.avg.csv
 	$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $^ \
 			-fbench_erased_avg \
@@ -1943,8 +2033,18 @@ $(PLOTSDIR)/bench_vs_lfs2_counter_e.svg: \
 
 # lfs3 vs lfs2 - simple counter - disk usage
 $(PLOTSDIR)/bench_vs_lfs2_counter_u.svg: \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.avg.csv
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.amor.avg.csv
 	$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $^ \
 			-fbench_readed_avg \
