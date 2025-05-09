@@ -1,0 +1,65 @@
+# Compare littlefs v3 vs v2
+
+# keep track of version in results
+defines.V = 'BENCH_IFDEF_LFS3(3, 2)'
+
+[cases.bench_vs_lfs2_counter]
+defines.N = 1024
+defines.SEED = 42
+code = '''
+    #ifdef LFS3
+    lfs_t lfs;
+    lfsr_format(&lfs, LFS_F_RDWR, CFG) => 0;
+    lfsr_mount(&lfs, LFS_M_RDWR, CFG) => 0;
+    #else
+    lfs2_t lfs;
+    lfs2_format(&lfs, (const struct lfs2_config*)CFG) => 0;
+    lfs2_mount(&lfs, (const struct lfs2_config*)CFG) => 0;
+    #endif
+
+    for (lfs_off_t i = 0; i < N; i++) {
+        // increment a simple counter, this measures the minimum circuitry
+        // necessary to update a file
+        BENCH_START("write", i+1);
+        #ifdef LFS3
+        lfsr_file_t file;
+        lfsr_file_open(&lfs, &file, "count",
+                LFS_O_RDWR | LFS_O_CREAT) => 0;
+
+        uint32_t count;
+        lfs_ssize_t size = lfsr_file_read(&lfs, &file,
+                &count, sizeof(uint32_t));
+        assert(size == 0 || size == sizeof(uint32_t));
+
+        count += 1;
+
+        lfsr_file_rewind(&lfs, &file) => 0;
+        lfsr_file_write(&lfs, &file,
+                &count, sizeof(uint32_t)) => sizeof(uint32_t);
+        lfsr_file_close(&lfs, &file) => 0;
+        #else
+        lfs2_file_t file;
+        lfs2_file_open(&lfs, &file, "count",
+                LFS2_O_RDWR | LFS2_O_CREAT) => 0;
+
+        uint32_t count;
+        lfs2_ssize_t size = lfs2_file_read(&lfs, &file,
+                &count, sizeof(uint32_t));
+        assert(size == 0 || size == sizeof(uint32_t));
+
+        count += 1;
+
+        lfs2_file_rewind(&lfs, &file) => 0;
+        lfs2_file_write(&lfs, &file,
+                &count, sizeof(uint32_t)) => sizeof(uint32_t);
+        lfs2_file_close(&lfs, &file) => 0;
+        #endif
+        BENCH_STOP("write");
+    }
+
+    #ifdef LFS3
+    lfsr_unmount(&lfs) => 0;
+    #else
+    lfs2_unmount(&lfs) => 0;
+    #endif
+'''

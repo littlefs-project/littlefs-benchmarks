@@ -16,30 +16,46 @@ BENCH_TUNE_CT ?= 0,256,512,1024,2048,4096
 
 
 # find source files
+
+# littlefs v3 bench-runner (the default)
 BENCHES ?= $(wildcard benches/*.toml)
+BENCH_RUNNER ?= $(BUILDDIR)/bench_runner
+BENCH_SRC ?= \
+		$(wildcard littlefs3/*.c) \
+		$(wildcard bd/*.c) \
+		runners/bench_runner.c
+BENCH_C     := \
+		$(BENCHES:%.toml=$(BUILDDIR)/%.lfs3.b.c) \
+		$(BENCH_SRC:%.c=$(BUILDDIR)/%.lfs3.b.c)
+BENCH_A     := $(BENCH_C:%.lfs3.b.c=%.lfs3.b.a.c)
+BENCH_OBJ   := $(BENCH_A:%.lfs3.b.a.c=%.lfs3.b.a.o)
+BENCH_DEP   := $(BENCH_A:%.lfs3.b.a.c=%.lfs3.b.a.d)
+BENCH_CI    := $(BENCH_A:%.lfs3.b.a.c=%.lfs3.b.a.ci)
+BENCH_GCNO  := $(BENCH_A:%.lfs3.b.a.c=%.lfs3.b.a.gcno) \
+BENCH_GCDA  := $(BENCH_A:%.lfs3.b.a.c=%.lfs3.b.a.gcda) \
+BENCH_PERF  := $(BENCH_RUNNER:%=%.perf)
+BENCH_TRACE := $(BENCH_RUNNER:%=%.trace)
+BENCH_CSV   := $(BENCH_RUNNER:%=%.csv)
 
-BENCH_SRC ?= $(wildcard bd/*.c) runners/bench_runner.c
-BENCH_C := $(BENCHES:%.toml=$(BUILDDIR)/%.b.c) \
-		$(BENCH_SRC:%.c=$(BUILDDIR)/%.b.c)
-BENCH_A := $(BENCH_C:%.b.c=%.b.a.c)
-
-BENCH_LFS3_RUNNER ?= $(BUILDDIR)/bench_runner_lfs3
-BENCH_LFS3_SRC ?= $(wildcard littlefs3/*.c)
-BENCH_LFS3_C     := $(BENCH_LFS3_SRC:%.c=$(BUILDDIR)/%.b.c)
-BENCH_LFS3_A     := $(BENCH_LFS3_C:%.b.c=%.b.a.c)
-BENCH_LFS3_OBJ   := $(BENCH_LFS3_A:%.b.a.c=%.b.a.o) \
-		$(BENCH_A:%.b.a.c=%.b.a.lfs3.o)
-BENCH_LFS3_DEP   := $(BENCH_LFS3_A:%.b.a.c=%.b.a.d) \
-		$(BENCH_A:%.b.a.c=%.b.a.lfs3.d)
-BENCH_LFS3_CI    := $(BENCH_LFS3_A:%.b.a.c=%.b.a.ci) \
-		$(BENCH_A:%.b.a.c=%.b.a.lfs3.ci)
-BENCH_LFS3_GCNO  := $(BENCH_LFS3_A:%.b.a.c=%.b.a.gcno) \
-		$(BENCH_A:%.b.a.c=%.b.a.lfs3.gcno)
-BENCH_LFS3_GCDA  := $(BENCH_LFS3_A:%.b.a.c=%.b.a.gcda) \
-		$(BENCH_A:%.b.a.c=%.b.a.lfs3.gcda)
-BENCH_LFS3_PERF  := $(BENCH_LFS3_RUNNER:%=%.perf)
-BENCH_LFS3_TRACE := $(BENCH_LFS3_RUNNER:%=%.trace)
-BENCH_LFS3_CSV   := $(BENCH_LFS3_RUNNER:%=%.csv)
+# littlefs v2 bench-runner
+BENCHES_LFS2 ?= benches/bench_vs_lfs2.toml
+BENCH_LFS2_RUNNER ?= $(BUILDDIR)/bench_lfs2_runner
+BENCH_LFS2_SRC ?= \
+		$(wildcard littlefs2/*.c) \
+		$(wildcard bd/*.c) \
+		runners/bench_runner.c
+BENCH_LFS2_C     := \
+		$(BENCHES_LFS2:%.toml=$(BUILDDIR)/%.lfs2.b.c) \
+		$(BENCH_LFS2_SRC:%.c=$(BUILDDIR)/%.lfs2.b.c)
+BENCH_LFS2_A     := $(BENCH_LFS2_C:%.lfs2.b.c=%.lfs2.b.a.c)
+BENCH_LFS2_OBJ   := $(BENCH_LFS2_A:%.lfs2.b.a.c=%.lfs2.b.a.o)
+BENCH_LFS2_DEP   := $(BENCH_LFS2_A:%.lfs2.b.a.c=%.lfs2.b.a.d)
+BENCH_LFS2_CI    := $(BENCH_LFS2_A:%.lfs2.b.a.c=%.lfs2.b.a.ci)
+BENCH_LFS2_GCNO  := $(BENCH_LFS2_A:%.lfs2.b.a.c=%.lfs2.b.a.gcno) \
+BENCH_LFS2_GCDA  := $(BENCH_LFS2_A:%.lfs2.b.a.c=%.lfs2.b.a.gcda) \
+BENCH_LFS2_PERF  := $(BENCH_LFS2_RUNNER:%=%.perf)
+BENCH_LFS2_TRACE := $(BENCH_LFS2_RUNNER:%=%.trace)
+BENCH_LFS2_CSV   := $(BENCH_LFS2_RUNNER:%=%.csv)
 
 # overridable tools/flags
 CC            ?= gcc
@@ -55,7 +71,7 @@ PRETTYASSERTS ?= ./scripts/prettyasserts.py
 # c flags
 CFLAGS += -fcallgraph-info=su
 CFLAGS += -g3
-CFLAGS += -I. -Ilittlefs3
+CFLAGS += -I. -Ilittlefs3 -Ilittlefs2
 CFLAGS += -std=c99 -Wall -Wextra -pedantic
 # labels are useful for debugging, in-function organization, etc
 CFLAGS += -Wno-unused-label
@@ -102,7 +118,7 @@ $(if $(findstring n,$(MAKEFLAGS)),, $(shell mkdir -p \
     $(addprefix $(BUILDDIR)/,$(dir \
         $(BENCHES) \
         $(BENCH_SRC) \
-        $(BENCH_LFS3_SRC)))))
+        $(BENCH_LFS2_SRC)))))
 endif
 
 # just use bash for everything, process substitution my beloved!
@@ -116,20 +132,25 @@ SHELL = /bin/bash
 build bench-runner build-benches: CFLAGS+=$(BENCH_CFLAGS)
 # note we remove some binary dependent files during compilation,
 # otherwise it's way to easy to end up with outdated results
-build bench-runner build-benches: $(BENCH_LFS3_RUNNER)
+build bench-runner build-benches: \
+		$(BENCH_RUNNER) \
+		$(BENCH_LFS2_RUNNER)
 ifdef COVGEN
-	rm -f $(BENCH_LFS3_GCDA)
+	rm -f $(BENCH_GCDA)
+	rm -f $(BENCH_LFS2_GCDA)
 endif
 ifdef PERFGEN
-	rm -f $(BENCH_LFS3_PERF)
+	rm -f $(BENCH_PERF)
+	rm -f $(BENCH_LFS2_PERF)
 endif
 ifdef PERFBDGEN
-	rm -f $(BENCH_LFS3_TRACE)
+	rm -f $(BENCH_TRACE)
+	rm -f $(BENCH_LFS2_TRACE)
 endif
 
 ## Find total section sizes
 .PHONY: size
-size: $(BENCH_LFS3_OBJ)
+size: $(BENCH_OBJ)
 	$(SIZE) -t $^
 
 ## Generate a ctags file
@@ -137,7 +158,9 @@ size: $(BENCH_LFS3_OBJ)
 tags ctags:
 	$(strip $(CTAGS) \
 		--totals --fields=+n --c-types=+p \
-		$(shell find -H -name '*.h') $(BENCH_LFS3_SRC))
+		$(shell find -H -name '*.h') \
+		$(BENCH_SRC) \
+		$(BENCH_LFS2_SRC))
 
 ## Show this help text
 .PHONY: help
@@ -157,28 +180,34 @@ help:
 
 
 # low-level rules
--include $(BENCH_LFS3_DEP)
+-include $(BENCH_DEP)
+-include $(BENCH_LFS2_DEP)
 .SUFFIXES:
 .SECONDARY:
 , := ,
 
-$(BENCH_LFS3_RUNNER): $(BENCH_LFS3_OBJ)
+$(BENCH_RUNNER): $(BENCH_OBJ)
 	$(CC) $(CFLAGS) $^ $(LFLAGS) -o$@
 
-# .lfs3 files need -DLFS3=1
-$(BUILDDIR)/%.lfs3.o $(BUILDDIR)/%.lfs3.ci: %.c
-	$(CC) -c -MMD -DLFS3=1 $(CFLAGS) $< -o $(BUILDDIR)/$*.lfs3.o
-
-$(BUILDDIR)/%.lfs3.o $(BUILDDIR)/%.lfs3.ci: $(BUILDDIR)/%.c
-	$(CC) -c -MMD -DLFS3=1 $(CFLAGS) $< -o $(BUILDDIR)/$*.lfs3.o
+$(BENCH_LFS2_RUNNER): $(BENCH_LFS2_OBJ)
+	$(CC) $(CFLAGS) $^ $(LFLAGS) -o$@
 
 # our main build rule generates .o, .d, and .ci files, the latter
 # used for stack analysis
-$(BUILDDIR)/%.o $(BUILDDIR)/%.ci: %.c
-	$(CC) -c -MMD $(CFLAGS) $< -o $(BUILDDIR)/$*.o
 
-$(BUILDDIR)/%.o $(BUILDDIR)/%.ci: $(BUILDDIR)/%.c
-	$(CC) -c -MMD $(CFLAGS) $< -o $(BUILDDIR)/$*.o
+# .lfs3 files need -DLFS3=1
+$(BUILDDIR)/%.lfs3.b.a.o $(BUILDDIR)/%.lfs3.b.a.ci: %.lfs3.b.a.c
+	$(CC) -c -MMD -DLFS3=1 $(CFLAGS) $< -o $(BUILDDIR)/$*.lfs3.b.a.o
+
+$(BUILDDIR)/%.lfs3.b.a.o $(BUILDDIR)/%.lfs3.b.a.ci: $(BUILDDIR)/%.lfs3.b.a.c
+	$(CC) -c -MMD -DLFS3=1 $(CFLAGS) $< -o $(BUILDDIR)/$*.lfs3.b.a.o
+
+# .lfs2 files need -DLFS2=1
+$(BUILDDIR)/%.lfs2.b.a.o $(BUILDDIR)/%.lfs2.b.a.ci: %.lfs2.b.a.c
+	$(CC) -c -MMD -DLFS2=1 $(CFLAGS) $< -o $(BUILDDIR)/$*.lfs2.b.a.o
+
+$(BUILDDIR)/%.lfs2.b.a.o $(BUILDDIR)/%.lfs2.b.a.ci: $(BUILDDIR)/%.lfs2.b.a.c
+	$(CC) -c -MMD -DLFS2=1 $(CFLAGS) $< -o $(BUILDDIR)/$*.lfs2.b.a.o
 
 $(BUILDDIR)/%.s: %.c
 	$(CC) -S $(CFLAGS) $< -o$@
@@ -192,17 +221,19 @@ $(BUILDDIR)/%.a.c: %.c
 $(BUILDDIR)/%.a.c: $(BUILDDIR)/%.c
 	$(PRETTYASSERTS) -Plfs_ $< -o$@
 
-$(BUILDDIR)/%.t.c: %.toml
-	./scripts/test.py -c $< $(TESTCFLAGS) -o$@
-
-$(BUILDDIR)/%.t.c: %.c $(TESTS)
-	./scripts/test.py -c $(TESTS) -s $< $(TESTCFLAGS) -o$@
-
-$(BUILDDIR)/%.b.c: %.toml
+# limit .lfs3 files to lfs3 benches
+$(BUILDDIR)/%.lfs3.b.c: %.toml
 	./scripts/bench.py -c $< $(BENCHCFLAGS) -o$@
 
-$(BUILDDIR)/%.b.c: %.c $(BENCHES)
+$(BUILDDIR)/%.lfs3.b.c: %.c $(BENCHES)
 	./scripts/bench.py -c $(BENCHES) -s $< $(BENCHCFLAGS) -o$@
+
+# limit .lfs2 files to lfs2 benches
+$(BUILDDIR)/%.lfs2.b.c: %.toml
+	./scripts/bench.py -c $< $(BENCHCFLAGS) -o$@
+
+$(BUILDDIR)/%.lfs2.b.c: %.c $(BENCHES_LFS2)
+	./scripts/bench.py -c $(BENCHES_LFS2) -s $< $(BENCHCFLAGS) -o$@
 
 
 #======================================================================#
@@ -242,7 +273,8 @@ bench bench-all: \
 		bench-internal \
 		bench-many \
 		bench-fwrite \
-		bench-fwrite-tune
+		bench-fwrite-tune \
+		bench-vs-lfs2
 
 ## Run benchmarks over internal data structures
 .PHONY: bench-internal
@@ -295,8 +327,20 @@ bench-fwrite-tune-fs: $(RESULTSDIR)/bench_fwrite_tune_fs.csv
 .PHONY: bench-fwrite-tune-ct
 bench-fwrite-tune-ct: $(RESULTSDIR)/bench_fwrite_tune_ct.csv
 
+## Run benchmarks over littlefs v3 vs v2
+.PHONY: bench-vs-lfs2
+bench-vs-lfs2: \
+		bench-vs-lfs2-counter
+
+## Run benchmarks v3 vs v2 comparing a simple counter
+.PHONY: bench-vs-lfs2-counter
+bench-vs-lfs2-counter: \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.csv
+
+
 # run the benches!
-$(RESULTSDIR)/bench_rbyd.csv: $(BENCH_LFS3_RUNNER)
+$(RESULTSDIR)/bench_rbyd.csv: $(BENCH_RUNNER)
 	$(strip ./scripts/bench.py -R$< -B bench_rbyd \
 		-DSEED="range($(SAMPLES))" \
 		$(BENCHFLAGS) \
@@ -317,7 +361,7 @@ $(RESULTSDIR)/bench_rby%.per.csv: $(RESULTSDIR)/bench_rby%.csv
 		-o$@)
 
 # run the benches!
-$(RESULTSDIR)/bench_btree.csv: $(BENCH_LFS3_RUNNER)
+$(RESULTSDIR)/bench_btree.csv: $(BENCH_RUNNER)
 	$(strip ./scripts/bench.py -R$< -B bench_btree \
 		-DSEED="range($(SAMPLES))" \
 		$(BENCHFLAGS) \
@@ -345,7 +389,7 @@ $(RESULTSDIR)/bench_btre%.per.csv: $(RESULTSDIR)/bench_btre%.csv
 		-o$@)
 
 # run the benches!
-$(RESULTSDIR)/bench_mtree.csv: $(BENCH_LFS3_RUNNER)
+$(RESULTSDIR)/bench_mtree.csv: $(BENCH_RUNNER)
 	$(strip ./scripts/bench.py -R$< -B bench_mtree \
 		-DSEED="range($(SAMPLES))" \
 		$(BENCHFLAGS) \
@@ -373,7 +417,7 @@ $(RESULTSDIR)/bench_mtre%.per.csv: $(RESULTSDIR)/bench_mtre%.csv
 		-o$@)
 
 # run the benches!
-$(RESULTSDIR)/bench_many.csv: $(BENCH_LFS3_RUNNER)
+$(RESULTSDIR)/bench_many.csv: $(BENCH_RUNNER)
 	$(strip ./scripts/bench.py -R$< -B bench_many \
 		-DSEED="range($(SAMPLES))" \
 		$(BENCHFLAGS) \
@@ -401,34 +445,34 @@ $(RESULTSDIR)/bench_man%.per.csv: $(RESULTSDIR)/bench_man%.csv
 		-o$@)
 
 # run the benches!
-$(RESULTSDIR)/bench_fwrite.csv: $(BENCH_LFS3_RUNNER)
+$(RESULTSDIR)/bench_fwrite.csv: $(BENCH_RUNNER)
 	$(strip ./scripts/bench.py -R$< -B bench_fwrite \
 		-DSEED="range($(SAMPLES))" \
 		$(BENCHFLAGS) \
 		-o$@)
 
-$(RESULTSDIR)/bench_fwrite_tune_bs.csv: $(BENCH_LFS3_RUNNER)
+$(RESULTSDIR)/bench_fwrite_tune_bs.csv: $(BENCH_RUNNER)
 	$(strip ./scripts/bench.py -R$< -B bench_fwrite \
 		-DSEED="range($(SAMPLES))" \
 		-DBLOCK_SIZE=$(BENCH_TUNE_BS) \
 		$(BENCHFLAGS) \
 		-o$@)
 
-$(RESULTSDIR)/bench_fwrite_tune_is.csv: $(BENCH_LFS3_RUNNER)
+$(RESULTSDIR)/bench_fwrite_tune_is.csv: $(BENCH_RUNNER)
 	$(strip ./scripts/bench.py -R$< -B bench_fwrite \
 		-DSEED="range($(SAMPLES))" \
 		-DINLINE_SIZE=$(BENCH_TUNE_IS) \
 		$(BENCHFLAGS) \
 		-o$@)
 
-$(RESULTSDIR)/bench_fwrite_tune_fs.csv: $(BENCH_LFS3_RUNNER)
+$(RESULTSDIR)/bench_fwrite_tune_fs.csv: $(BENCH_RUNNER)
 	$(strip ./scripts/bench.py -R$< -B bench_fwrite \
 		-DSEED="range($(SAMPLES))" \
 		-DFRAGMENT_SIZE=$(BENCH_TUNE_FS) \
 		$(BENCHFLAGS) \
 		-o$@)
 
-$(RESULTSDIR)/bench_fwrite_tune_ct.csv: $(BENCH_LFS3_RUNNER)
+$(RESULTSDIR)/bench_fwrite_tune_ct.csv: $(BENCH_RUNNER)
 	$(strip ./scripts/bench.py -R$< -B bench_fwrite \
 		-DSEED="range($(SAMPLES))" \
 		-DCRYSTAL_THRESH=$(BENCH_TUNE_CT) \
@@ -457,6 +501,34 @@ $(RESULTSDIR)/bench_fwrit%.per.csv: $(RESULTSDIR)/bench_fwrit%.csv
 		-fbench_proged='float(bench_proged) / float(REWRITE ? SIZE : n)' \
 		-fbench_erased='float(bench_erased) / float(REWRITE ? SIZE : n)' \
 		-o$@)
+
+
+# v3 vs v2 bench rules!
+
+# run the benches against v3
+$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.csv: $(BENCH_RUNNER)
+	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_counter \
+		-DSEED="range($(SAMPLES))" \
+		$(BENCHFLAGS) \
+		-o$@)
+
+# run the benches against v2
+$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.csv: $(BENCH_LFS2_RUNNER)
+	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_counter \
+		-DSEED="range($(SAMPLES))" \
+		$(BENCHFLAGS) \
+		-o$@)
+
+# amortized results
+$(RESULTSDIR)/bench_vs_lfs%.amor.csv: $(RESULTSDIR)/bench_vs_lfs%.csv
+	$(strip ./scripts/csv.py $^ \
+		-Bn -Bm='%(m)s+amor' \
+		-fbench_readed='float(bench_creaded) / float(n)' \
+		-fbench_proged='float(bench_cproged) / float(n)' \
+		-fbench_erased='float(bench_cerased) / float(n)' \
+		-o$@)
+
+
 
 # averaged results (over SAMPLES)
 $(RESULTSDIR)/bench_%.avg.csv: $(RESULTSDIR)/bench_%.csv
@@ -543,7 +615,8 @@ all plot plot-all: \
 		plot-internal \
 		plot-many \
 		plot-fwrite \
-		plot-fwrite-tune
+		plot-fwrite-tune \
+		plot-vs-lfs2
 
 ## Plot benchmarks over internal data structures
 .PHONY: plot-internal
@@ -591,29 +664,43 @@ plot-fwrite-tune: \
 		plot-fwrite-tune-fs \
 		plot-fwrite-tune-ct
 
-## Run file write benchmarks with different block_sizes
+## Plot file write benchmarks with different block_sizes
 .PHONY: plot-fwrite-tune-bs
 plot-fwrite-tune-bs: \
 		$(PLOTSDIR)/bench_fwrite_tune_bs_linear.svg \
 		$(PLOTSDIR)/bench_fwrite_tune_bs_random.svg
 
-## Run file write benchmarks with different inline_sizes
+## Plot file write benchmarks with different inline_sizes
 .PHONY: plot-fwrite-tune-is
 plot-fwrite-tune-is: \
 		$(PLOTSDIR)/bench_fwrite_tune_is_linear.svg \
 		$(PLOTSDIR)/bench_fwrite_tune_is_random.svg
 
-## Run file write benchmarks with different fragment_sizes
+## Plot file write benchmarks with different fragment_sizes
 .PHONY: plot-fwrite-tune-fs
 plot-fwrite-tune-fs: \
 		$(PLOTSDIR)/bench_fwrite_tune_fs_linear.svg \
 		$(PLOTSDIR)/bench_fwrite_tune_fs_random.svg
 
-## Run file write benchmarks with different crystal_threshs
+## Plot file write benchmarks with different crystal_threshs
 .PHONY: plot-fwrite-tune-ct
 plot-fwrite-tune-ct: \
 		$(PLOTSDIR)/bench_fwrite_tune_ct_linear.svg \
 		$(PLOTSDIR)/bench_fwrite_tune_ct_random.svg
+
+## Plot benchmarks over littlefs v3 vs v2
+.PHONY: plot-vs-lfs2
+plot-vs-lfs2: \
+		plot-vs-lfs2-counter
+
+## Plot benchmarks v3 vs v2 comparing a simple counter
+.PHONY: plot-vs-lfs2-counter
+plot-vs-lfs2-counter: \
+		$(PLOTSDIR)/bench_vs_lfs2_counter_r.svg \
+		$(PLOTSDIR)/bench_vs_lfs2_counter_p.svg \
+		$(PLOTSDIR)/bench_vs_lfs2_counter_e.svg
+#		$(PLOTSDIR)/bench_vs_lfs2_counter_u.svg \
+#		$(PLOTSDIR)/bench_vs_lfs2_counter.svg
 
 
 # plot rules
@@ -1755,6 +1842,104 @@ $(PLOTSDIR)/bench_fwrite_tune_ct_random.svg: \
 		$(call PLOT_FWRITE_FLAGS) \
 		$(PLOTFLAGS) \
 		-o$@)
+
+
+
+# vs lfs plot rules!
+
+# plot vs lfs2 config
+PLOT_VS_LFS2_FLAGS += -W1750 -H750
+PLOT_VS_LFS2_FLAGS += --y2 --yunits=B
+PLOT_VS_LFS2_FLAGS += \
+		--subplot=" \
+				-Dm=write \
+				--ylabel=$1 \
+				--title=nor \
+				--add-xticklabel=" \
+			--subplot-below=" \
+				-Dm=write+amor \
+				--ylabel='$1 (amortized)' \
+				-H0.5"
+PLOT_VS_LFS2_FLAGS += $(PLOT_COLORS_1BND)
+
+# lfs3 vs lfs2 - simple counter - reads
+$(PLOTSDIR)/bench_vs_lfs2_counter_r.svg: \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.amor.avg.csv
+	$(strip ./scripts/plotmpl.py \
+		<(./scripts/csv.py $^ \
+			-fbench_readed_avg \
+			-fbench_readed_bnd=bench_readed_min \
+			-o-) \
+		<(./scripts/csv.py $^ \
+			-Dbench_readed_avg='*' \
+			-fbench_readed_bnd=bench_readed_max \
+			-o-) \
+		--title="lfs3 vs lfs2 - simple counter - reads" \
+		-bV -SV \
+		-xn \
+		-ybench_readed_avg -ybench_readed_bnd \
+		--legend \
+		-L'*,bench_readed_avg=littlefs v%(V)s' \
+		-L'*,bench_readed_bnd=' \
+		$(call PLOT_VS_LFS2_FLAGS,readed) \
+		$(PLOTFLAGS) \
+		-o$@)
+
+# lfs3 vs lfs2 - simple counter - progs
+$(PLOTSDIR)/bench_vs_lfs2_counter_p.svg: \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.amor.avg.csv
+	$(strip ./scripts/plotmpl.py \
+		<(./scripts/csv.py $^ \
+			-fbench_proged_avg \
+			-fbench_proged_bnd=bench_proged_min \
+			-o-) \
+		<(./scripts/csv.py $^ \
+			-Dbench_proged_avg='*' \
+			-fbench_proged_bnd=bench_proged_max \
+			-o-) \
+		--title="lfs3 vs lfs2 - simple counter - progs" \
+		-bV -SV \
+		-xn \
+		-ybench_proged_avg -ybench_proged_bnd \
+		--legend \
+		-L'*,bench_proged_avg=littlefs v%(V)s' \
+		-L'*,bench_proged_bnd=' \
+		$(call PLOT_VS_LFS2_FLAGS,proged) \
+		$(PLOTFLAGS) \
+		-o$@)
+
+# lfs3 vs lfs2 - simple counter - erases
+$(PLOTSDIR)/bench_vs_lfs2_counter_e.svg: \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.amor.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.amor.avg.csv
+	$(strip ./scripts/plotmpl.py \
+		<(./scripts/csv.py $^ \
+			-fbench_erased_avg \
+			-fbench_erased_bnd=bench_erased_min \
+			-o-) \
+		<(./scripts/csv.py $^ \
+			-Dbench_erased_avg='*' \
+			-fbench_erased_bnd=bench_erased_max \
+			-o-) \
+		--title="lfs3 vs lfs2 - simple counter - erases" \
+		-bV -SV \
+		-xn \
+		-ybench_erased_avg -ybench_erased_bnd \
+		--legend \
+		-L'*,bench_erased_avg=littlefs v%(V)s' \
+		-L'*,bench_erased_bnd=' \
+		$(call PLOT_VS_LFS2_FLAGS,erased) \
+		$(PLOTFLAGS) \
+		-o$@)
+
 
 
 
