@@ -95,10 +95,10 @@ code = '''
         lfsr_file_read(&lfs, &file, rbuf, CHUNK) => CHUNK;
         BENCH_STOP("read");
 
-        // find the usage
+        // measure disk usage
         //
-        // our files are copy-on-write, so we need to build a bitmap to get
-        // the true disk usage
+        // littlefs can be a dag, so build a bitmap to find the exact
+        // disk usage
         memset(usage_bmap, 0, (BLOCK_COUNT+8-1)/8);
         lfsr_traversal_open(&lfs, &t, 0) => 0;
         while (true) {
