@@ -3,6 +3,16 @@
 # keep track of version in results
 defines.V = 'BENCH_IFDEF_LFS3(3, 2)'
 
+# littlefs v2 needs a callback for traversal
+code = '''
+int usage_bmap_cb(void *ctx, lfs_block_t block) {
+    uint8_t *usage_bmap = ctx;
+    usage_bmap[block/8] |= 1 << (block % 8);
+    return 0;
+}
+'''
+
+
 [cases.bench_vs_lfs2_counter]
 defines.N = 1024
 defines.SEED = 42
@@ -25,10 +35,13 @@ code = '''
     lfs2_fs_mkconsistent(&lfs) => 0;
     #endif
 
+    // allocate a bitmap for disk usage
+    uint8_t *usage_bmap = malloc((BLOCK_COUNT+8-1)/8);
+
     for (lfs_off_t i = 0; i < N; i++) {
         // increment a simple counter, this measures the minimum circuitry
         // necessary to update a file
-        BENCH_START("write", i+1);
+        BENCH_START("runtime", i+1);
         #ifdef LFS3
         lfsr_file_t file;
         lfsr_file_open(&lfs, &file, "count",
@@ -62,8 +75,41 @@ code = '''
                 &count, sizeof(uint32_t)) => sizeof(uint32_t);
         lfs2_file_close(&lfs, &file) => 0;
         #endif
-        BENCH_STOP("write");
+        BENCH_STOP("runtime");
+
+        // measure disk usage
+        //
+        // littlefs can be a dag, so build a bitmap to find the
+        // exact disk usage
+        memset(usage_bmap, 0, (BLOCK_COUNT+8-1)/8);
+        #ifdef LFS3
+        lfsr_traversal_t t;
+        lfsr_traversal_open(&lfs, &t, 0) => 0;
+        while (true) {
+            struct lfs_tinfo tinfo;
+            int err = lfsr_traversal_read(&lfs, &t, &tinfo);
+            assert(!err || err == LFS_ERR_NOENT);
+            if (err == LFS_ERR_NOENT) {
+                break;
+            }
+
+            usage_bmap[tinfo.block/8] |= 1 << (tinfo.block % 8);
+        }
+        lfsr_traversal_close(&lfs, &t) => 0;
+        #else
+        lfs2_fs_traverse(&lfs, usage_bmap_cb, usage_bmap) => 0;
+        #endif
+        lfs_size_t usage = 0;
+        for (lfs_size_t j = 0; j < BLOCK_COUNT; j++) {
+            if (usage_bmap[j / 8] & (1 << (j % 8))) {
+                usage += 1;
+            }
+        }
+        BENCH_RESULT("usage", i+1,
+                (uintmax_t)usage * (uintmax_t)CFG->block_size);
     }
+
+    free(usage_bmap);
 
     #ifdef LFS3
     lfsr_unmount(&lfs) => 0;

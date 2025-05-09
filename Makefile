@@ -698,8 +698,8 @@ plot-vs-lfs2: \
 plot-vs-lfs2-counter: \
 		$(PLOTSDIR)/bench_vs_lfs2_counter_r.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_counter_p.svg \
-		$(PLOTSDIR)/bench_vs_lfs2_counter_e.svg
-#		$(PLOTSDIR)/bench_vs_lfs2_counter_u.svg \
+		$(PLOTSDIR)/bench_vs_lfs2_counter_e.svg \
+		$(PLOTSDIR)/bench_vs_lfs2_counter_u.svg
 #		$(PLOTSDIR)/bench_vs_lfs2_counter.svg
 
 
@@ -1852,14 +1852,15 @@ PLOT_VS_LFS2_FLAGS += -W1750 -H750
 PLOT_VS_LFS2_FLAGS += --y2 --yunits=B
 PLOT_VS_LFS2_FLAGS += \
 		--subplot=" \
-				-Dm=write \
+				-Dm=$2 \
 				--ylabel=$1 \
 				--title=nor \
 				--add-xticklabel=" \
+			$(if $3, \
 			--subplot-below=" \
-				-Dm=write+amor \
+				-Dm=$2+amor \
 				--ylabel='$1 (amortized)' \
-				-H0.5"
+				-H0.5",)
 PLOT_VS_LFS2_FLAGS += $(PLOT_COLORS_1BND)
 
 # lfs3 vs lfs2 - simple counter - reads
@@ -1884,7 +1885,7 @@ $(PLOTSDIR)/bench_vs_lfs2_counter_r.svg: \
 		--legend \
 		-L'*,bench_readed_avg=littlefs v%(V)s' \
 		-L'*,bench_readed_bnd=' \
-		$(call PLOT_VS_LFS2_FLAGS,readed) \
+		$(call PLOT_VS_LFS2_FLAGS,readed,runtime,amor) \
 		$(PLOTFLAGS) \
 		-o$@)
 
@@ -1910,7 +1911,7 @@ $(PLOTSDIR)/bench_vs_lfs2_counter_p.svg: \
 		--legend \
 		-L'*,bench_proged_avg=littlefs v%(V)s' \
 		-L'*,bench_proged_bnd=' \
-		$(call PLOT_VS_LFS2_FLAGS,proged) \
+		$(call PLOT_VS_LFS2_FLAGS,proged,runtime,amor) \
 		$(PLOTFLAGS) \
 		-o$@)
 
@@ -1936,7 +1937,31 @@ $(PLOTSDIR)/bench_vs_lfs2_counter_e.svg: \
 		--legend \
 		-L'*,bench_erased_avg=littlefs v%(V)s' \
 		-L'*,bench_erased_bnd=' \
-		$(call PLOT_VS_LFS2_FLAGS,erased) \
+		$(call PLOT_VS_LFS2_FLAGS,erased,runtime,amor) \
+		$(PLOTFLAGS) \
+		-o$@)
+
+# lfs3 vs lfs2 - simple counter - disk usage
+$(PLOTSDIR)/bench_vs_lfs2_counter_u.svg: \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.avg.csv \
+		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.avg.csv
+	$(strip ./scripts/plotmpl.py \
+		<(./scripts/csv.py $^ \
+			-fbench_readed_avg \
+			-fbench_readed_bnd=bench_readed_min \
+			-o-) \
+		<(./scripts/csv.py $^ \
+			-Dbench_readed_avg='*' \
+			-fbench_readed_bnd=bench_readed_max \
+			-o-) \
+		--title="lfs3 vs lfs2 - simple counter - disk usage" \
+		-bV -SV \
+		-xn \
+		-ybench_readed_avg -ybench_readed_bnd \
+		--legend \
+		-L'*,bench_readed_avg=littlefs v%(V)s' \
+		-L'*,bench_readed_bnd=' \
+		$(call PLOT_VS_LFS2_FLAGS,usage,usage) \
 		$(PLOTFLAGS) \
 		-o$@)
 
