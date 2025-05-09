@@ -82,13 +82,13 @@ code = '''
             // measure mid lookups
             //
             // we use mid found by name lookup so we know mid is valid
-            BENCH_START("lookup", i+STEP);
+            BENCH_START("lookup", i+1);
             lfsr_mtree_lookup(&lfs, mdir.mid,
                     &mdir) => 0;
             BENCH_STOP("lookup");
 
             // measure traversal cost
-            BENCH_START("traversal", i+STEP);
+            BENCH_START("traversal", i+1);
             lfsr_traversal_t t;
             lfsr_traversal_open(&lfs, &t, 0) => 0;
             while (true) {
