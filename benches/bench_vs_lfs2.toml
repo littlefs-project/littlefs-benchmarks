@@ -17,6 +17,14 @@ code = '''
     lfs2_mount(&lfs, (const struct lfs2_config*)CFG) => 0;
     #endif
 
+    // go ahead and make consistent to avoid lazy mount operations
+    // messing with the benchmark
+    #ifdef LFS3
+    lfsr_fs_mkconsistent(&lfs) => 0;
+    #else
+    lfs2_fs_mkconsistent(&lfs) => 0;
+    #endif
+
     for (lfs_off_t i = 0; i < N; i++) {
         // increment a simple counter, this measures the minimum circuitry
         // necessary to update a file
