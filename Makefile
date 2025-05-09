@@ -8,6 +8,12 @@ PLOTSDIR ?= plots
 # how many samples to measure?
 SAMPLES ?= 16
 
+# tuneable configs
+BENCH_TUNE_BS ?= 512,1024,2048,4096,8192,16384
+BENCH_TUNE_IS ?= 0,256,512,1024
+BENCH_TUNE_FS ?= 16,32,64,128,256,512,1024
+BENCH_TUNE_CT ?= 0,256,512,1024,2048,4096
+
 
 # find source files
 BENCHES ?= $(wildcard benches/*.toml)
@@ -229,17 +235,12 @@ ifneq ($(PERF),perf)
 BENCHFLAGS += --perf-path="$(PERF)"
 endif
 
-# tuneable configs
-BENCH_TUNE_BS ?= 512,1024,2048,4096,8192,16384
-BENCH_TUNE_IS ?= 0,256,512,1024
-BENCH_TUNE_FS ?= 16,32,64,128,256,512,1024
-BENCH_TUNE_CT ?= 0,256,512,1024,2048,4096
-
 
 ## Run all benchmarks!
 .PHONY: bench bench-all
 bench bench-all: \
 		bench-internal \
+		bench-many \
 		bench-fwrite \
 		bench-fwrite-tune
 
@@ -261,6 +262,10 @@ bench-btree: $(RESULTSDIR)/bench_btree.csv
 ## Run benchmarks over mtree operations
 .PHONY: bench-mtree
 bench-mtree: $(RESULTSDIR)/bench_mtree.csv
+
+## Plot benchmarks over file/dir creation
+.PHONY: bench-many
+bench-many: $(RESULTSDIR)/bench_many.csv
 
 ## Run benchmarks over file writes
 .PHONY: bench-fwrite
@@ -357,6 +362,34 @@ $(RESULTSDIR)/bench_mtre%.amor.csv: $(RESULTSDIR)/bench_mtre%.csv
 
 # byte-per-byte usage results
 $(RESULTSDIR)/bench_mtre%.per.csv: $(RESULTSDIR)/bench_mtre%.csv
+	$(strip ./scripts/csv.py $^ \
+		-Bn -Dm=traversal,usage -Bm='%(m)s+per' \
+		-Dbench_creaded='*' \
+		-Dbench_cproged='*' \
+		-Dbench_cerased='*' \
+		-fbench_readed='float(bench_readed) / float(n)' \
+		-fbench_proged='float(bench_proged) / float(n)' \
+		-fbench_erased='float(bench_erased) / float(n)' \
+		-o$@)
+
+# run the benches!
+$(RESULTSDIR)/bench_many.csv: $(BENCH_LFS3_RUNNER)
+	$(strip ./scripts/bench.py -R$< -B bench_many \
+		-DSEED="range($(SAMPLES))" \
+		$(BENCHFLAGS) \
+		-o$@)
+
+# amortized results
+$(RESULTSDIR)/bench_man%.amor.csv: $(RESULTSDIR)/bench_man%.csv
+	$(strip ./scripts/csv.py $^ \
+		-Bn -Dm=creat,mkdir -Bm='%(m)s+amor' \
+		-fbench_readed='float(bench_creaded) / float(n)' \
+		-fbench_proged='float(bench_cproged) / float(n)' \
+		-fbench_erased='float(bench_cerased) / float(n)' \
+		-o$@)
+
+# byte-per-byte usage results
+$(RESULTSDIR)/bench_man%.per.csv: $(RESULTSDIR)/bench_man%.csv
 	$(strip ./scripts/csv.py $^ \
 		-Bn -Dm=traversal,usage -Bm='%(m)s+per' \
 		-Dbench_creaded='*' \
@@ -508,6 +541,7 @@ PLOT_COLORS_3BND := $(foreach C, $(PLOT_COLORS), \
 .PHONY: all plot plot-all
 all plot plot-all: \
 		plot-internal \
+		plot-many \
 		plot-fwrite \
 		plot-fwrite-tune
 
@@ -534,6 +568,12 @@ plot-btree: \
 .PHONY: plot-mtree
 plot-mtree: \
 		$(PLOTSDIR)/bench_mtree.svg
+
+## Plot benchmarks over file/dir creation
+.PHONY: plot-many
+plot-many: \
+		$(PLOTSDIR)/bench_many_files.svg \
+		$(PLOTSDIR)/bench_many_dirs.svg
 
 ## Plot benchmarks over file writes
 .PHONY: plot-fwrite
@@ -1087,6 +1127,201 @@ $(PLOTSDIR)/bench_mtree.svg: \
 		-L2,bench_erased_avg= \
 		-L2,bench_erased_bnd= \
 		$(PLOT_MTREE_FLAGS) \
+		$(PLOTFLAGS) \
+		-o$@)
+
+
+# plot bench_many config
+PLOT_MANY_FLAGS += -W1750 -H750
+PLOT_MANY_FLAGS += --y2 --yunits=B
+PLOT_MANY_FLAGS += \
+		--subplot=" \
+				-Dm=$1 \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--ylabel=bench_readed \
+				--title=$1 \
+				--add-xticklabel=" \
+			--subplot-below=" \
+				-Dm=$1 \
+				-ybench_proged_avg \
+				-ybench_proged_bnd \
+				--ylabel=bench_proged \
+				-H0.5" \
+			--subplot-below=" \
+				-Dm=$1 \
+				-ybench_erased_avg \
+				-ybench_erased_bnd \
+				--ylabel=bench_erased \
+				-H0.33" \
+		--subplot-right=" \
+				-Dm=$1+amor \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--title='$1 (amortized)' \
+				--add-xticklabel= \
+				-W0.5 \
+			--subplot-below=\" \
+				-Dm=$1+amor \
+				-ybench_proged_avg \
+				-ybench_proged_bnd \
+				-H0.5\" \
+			--subplot-below=\" \
+				-Dm=$1+amor \
+				-ybench_erased_avg \
+				-ybench_erased_bnd \
+				-H0.33\"" \
+		--subplot-right=" \
+				-Dm=read \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--title=read \
+				--add-xticklabel= \
+				-W0.33 \
+			--subplot-below=\" \
+				-Dm=read \
+				-ybench_proged_avg \
+				-ybench_proged_bnd \
+				-Y0,1 \
+				-H0.5\" \
+			--subplot-below=\" \
+				-Dm=read \
+				-ybench_erased_avg \
+				-ybench_erased_bnd \
+				-Y0,1 \
+				-H0.33\"" \
+		--subplot-right=" \
+				-Dm=traversal+per \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--title='traversal (per-entry)' \
+				--add-xticklabel= \
+				-W0.25 \
+			--subplot-below=\" \
+				-Dm=traversal+per \
+				-ybench_proged_avg \
+				-ybench_proged_bnd \
+				-Y0,1 \
+				-H0.5\" \
+			--subplot-below=\" \
+				-Dm=traversal+per \
+				-ybench_erased_avg \
+				-ybench_erased_bnd \
+				-Y0,1 \
+				-H0.33\"" \
+		--subplot-right=" \
+				-Dm=usage+per \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--ylabel=bench_usage \
+				--title='usage (per-entry)' \
+				--add-xticklabel= \
+				-Y0,2048 \
+				-W0.20 \
+			--subplot-below=\" \
+				-Dm=usage \
+				-ybench_readed_avg \
+				-ybench_readed_bnd \
+				--ylabel=bench_usage \
+				--title='usage (total)' \
+				-H0.665\""
+PLOT_MANY_FLAGS += $(PLOT_COLORS_3BND)
+
+# many files
+$(PLOTSDIR)/bench_many_files.svg: \
+		$(RESULTSDIR)/bench_many.avg.csv \
+		$(RESULTSDIR)/bench_many.amor.avg.csv \
+		$(RESULTSDIR)/bench_many.per.avg.csv
+	$(strip ./scripts/plotmpl.py \
+		<(./scripts/csv.py $^ \
+			-fbench_readed_avg \
+			-fbench_proged_avg \
+			-fbench_erased_avg \
+			-fbench_readed_bnd=bench_readed_min \
+			-fbench_proged_bnd=bench_proged_min \
+			-fbench_erased_bnd=bench_erased_min \
+			-o-) \
+		<(./scripts/csv.py $^ \
+			-Dbench_readed_avg='*' \
+			-Dbench_proged_avg='*' \
+			-Dbench_erased_avg='*' \
+			-fbench_readed_bnd=bench_readed_max \
+			-fbench_proged_bnd=bench_proged_max \
+			-fbench_erased_bnd=bench_erased_max \
+			-o-) \
+		--title="many files" \
+		-Dcase=bench_many_files \
+		-bORDER \
+		-xn \
+		--legend \
+		-L0,bench_readed_avg=inorder \
+		-L0,bench_readed_bnd= \
+		-L0,bench_proged_avg= \
+		-L0,bench_proged_bnd= \
+		-L0,bench_erased_avg= \
+		-L0,bench_erased_bnd= \
+		-L1,bench_readed_avg=reversed \
+		-L1,bench_readed_bnd= \
+		-L1,bench_proged_avg= \
+		-L1,bench_proged_bnd= \
+		-L1,bench_erased_avg= \
+		-L1,bench_erased_bnd= \
+		-L2,bench_readed_avg=random \
+		-L2,bench_readed_bnd= \
+		-L2,bench_proged_avg= \
+		-L2,bench_proged_bnd= \
+		-L2,bench_erased_avg= \
+		-L2,bench_erased_bnd= \
+		$(call PLOT_MANY_FLAGS,creat) \
+		$(PLOTFLAGS) \
+		-o$@)
+
+# many dirs
+$(PLOTSDIR)/bench_many_dirs.svg: \
+		$(RESULTSDIR)/bench_many.avg.csv \
+		$(RESULTSDIR)/bench_many.amor.avg.csv \
+		$(RESULTSDIR)/bench_many.per.avg.csv
+	$(strip ./scripts/plotmpl.py \
+		<(./scripts/csv.py $^ \
+			-fbench_readed_avg \
+			-fbench_proged_avg \
+			-fbench_erased_avg \
+			-fbench_readed_bnd=bench_readed_min \
+			-fbench_proged_bnd=bench_proged_min \
+			-fbench_erased_bnd=bench_erased_min \
+			-o-) \
+		<(./scripts/csv.py $^ \
+			-Dbench_readed_avg='*' \
+			-Dbench_proged_avg='*' \
+			-Dbench_erased_avg='*' \
+			-fbench_readed_bnd=bench_readed_max \
+			-fbench_proged_bnd=bench_proged_max \
+			-fbench_erased_bnd=bench_erased_max \
+			-o-) \
+		--title="many dirs" \
+		-Dcase=bench_many_dirs \
+		-bORDER \
+		-xn \
+		--legend \
+		-L0,bench_readed_avg=inorder \
+		-L0,bench_readed_bnd= \
+		-L0,bench_proged_avg= \
+		-L0,bench_proged_bnd= \
+		-L0,bench_erased_avg= \
+		-L0,bench_erased_bnd= \
+		-L1,bench_readed_avg=reversed \
+		-L1,bench_readed_bnd= \
+		-L1,bench_proged_avg= \
+		-L1,bench_proged_bnd= \
+		-L1,bench_erased_avg= \
+		-L1,bench_erased_bnd= \
+		-L2,bench_readed_avg=random \
+		-L2,bench_readed_bnd= \
+		-L2,bench_proged_avg= \
+		-L2,bench_proged_bnd= \
+		-L2,bench_erased_avg= \
+		-L2,bench_erased_bnd= \
+		$(call PLOT_MANY_FLAGS,mkdir) \
 		$(PLOTFLAGS) \
 		-o$@)
 

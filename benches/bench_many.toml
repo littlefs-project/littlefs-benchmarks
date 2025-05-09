@@ -1,0 +1,169 @@
+# Bench many files/dirs
+
+[cases.bench_many_files]
+# 0 = in-order
+# 1 = reversed-order
+# 2 = random-order
+defines.ORDER = [0, 1, 2]
+defines.N = 1024
+defines.STEP = 1
+defines.SEED = 42
+defines.SIZE = 4
+code = '''
+    lfs_t lfs;
+    lfsr_format(&lfs, LFS_F_RDWR, CFG) => 0;
+    lfsr_mount(&lfs, LFS_M_RDWR, CFG) => 0;
+
+    // create a filesystem with N files
+    uint32_t prng = SEED;
+    for (lfs_size_t i = 0; i < N; i++) {
+        lfsr_mid_t i_
+                = (ORDER == 0) ? i
+                : (ORDER == 1) ? N-1-i
+                : BENCH_PRNG(&prng) % N;
+        char name[256];
+        sprintf(name, "file%05d", i_);
+        uint8_t wbuf[SIZE];
+        memset(wbuf, 'a'+(BENCH_PRNG(&prng) % 26), SIZE);
+
+        // measure creat+write
+        if ((i+1) % STEP == 0) {
+            BENCH_START("creat", i+1);
+        }
+        lfsr_file_t file;
+        int err = lfsr_file_open(&lfs, &file, name,
+                LFS_O_WRONLY | LFS_O_CREAT | LFS_O_EXCL);
+        assert(!err || err == LFS_ERR_EXIST);
+        if (!err) {
+            lfsr_file_write(&lfs, &file, &wbuf, SIZE) => SIZE;
+            lfsr_file_close(&lfs, &file) => 0;
+        }
+        if ((i+1) % STEP == 0) {
+            BENCH_STOP("creat");
+        }
+
+        if ((i+1) % STEP == 0) {
+            // measure open+read
+            BENCH_START("read", i+1);
+            lfsr_mid_t i_ = BENCH_PRNG(&prng) % N;
+            sprintf(name, "file%05d", i_);
+            err = lfsr_file_open(&lfs, &file, name, LFS_O_RDONLY);
+            assert(!err || err == LFS_ERR_NOENT);
+            if (!err) {
+                uint8_t rbuf[SIZE];
+                lfsr_file_read(&lfs, &file, rbuf, SIZE) => SIZE;
+                lfsr_file_close(&lfs, &file) => 0;
+            }
+            BENCH_STOP("read");
+
+            // measure traversal cost
+            BENCH_START("traversal", i+1);
+            lfsr_traversal_t t;
+            lfsr_traversal_open(&lfs, &t, 0) => 0;
+            while (true) {
+                struct lfs_tinfo tinfo;
+                int err = lfsr_traversal_read(&lfs, &t,
+                        &tinfo);
+                assert(!err || err == LFS_ERR_NOENT);
+                if (err == LFS_ERR_NOENT) {
+                    break;
+                }
+            }
+            lfsr_traversal_close(&lfs, &t) => 0;
+            BENCH_STOP("traversal");
+
+            // measure disk usage
+            lfs_soff_t count = lfsr_fs_usage(&lfs);
+            assert(count >= 0);
+            BENCH_RESULT("usage", i+1,
+                    (uintmax_t)count * (uintmax_t)CFG->block_size);
+        }
+    }
+
+    lfsr_unmount(&lfs) => 0;
+'''
+
+[cases.bench_many_dirs]
+# 0 = in-order
+# 1 = reversed-order
+# 2 = random-order
+defines.ORDER = [0, 1, 2]
+defines.N = 1024
+defines.STEP = 1
+defines.SEED = 42
+code = '''
+    lfs_t lfs;
+    lfsr_format(&lfs, LFS_F_RDWR, CFG) => 0;
+    lfsr_mount(&lfs, LFS_M_RDWR, CFG) => 0;
+
+    // create a filesystem with N dirs
+    uint32_t prng = SEED;
+    for (lfs_size_t i = 0; i < N; i++) {
+        lfsr_mid_t i_
+                = (ORDER == 0) ? i
+                : (ORDER == 1) ? N-1-i
+                : BENCH_PRNG(&prng) % N;
+        char name[256];
+        sprintf(name, "dir%05d", i_);
+        uint8_t wbuf[SIZE];
+        memset(wbuf, 'a'+(BENCH_PRNG(&prng) % 26), SIZE);
+
+        // measure creat+write
+        if ((i+1) % STEP == 0) {
+            BENCH_START("mkdir", i+1);
+        }
+        int err = lfsr_mkdir(&lfs, name);
+        assert(!err || err == LFS_ERR_EXIST);
+        if ((i+1) % STEP == 0) {
+            BENCH_STOP("mkdir");
+        }
+
+        if ((i+1) % STEP == 0) {
+            // measure open+read
+            BENCH_START("read", i+1);
+            lfsr_mid_t i_ = BENCH_PRNG(&prng) % N;
+            sprintf(name, "dir%05d", i_);
+            lfsr_dir_t dir;
+            err = lfsr_dir_open(&lfs, &dir, name);
+            assert(!err || err == LFS_ERR_NOENT);
+            if (!err) {
+                struct lfs_info info;
+                lfsr_dir_read(&lfs, &dir, &info) => 0;
+                assert(strcmp(info.name, ".") == 0);
+                assert(info.type == LFS_TYPE_DIR);
+                assert(info.size == 0);
+                lfsr_dir_read(&lfs, &dir, &info) => 0;
+                assert(strcmp(info.name, "..") == 0);
+                assert(info.type == LFS_TYPE_DIR);
+                assert(info.size == 0);
+                lfsr_dir_read(&lfs, &dir, &info) => LFS_ERR_NOENT;
+                lfsr_dir_close(&lfs, &dir) => 0;
+            }
+            BENCH_STOP("read");
+
+            // measure traversal cost
+            BENCH_START("traversal", i+1);
+            lfsr_traversal_t t;
+            lfsr_traversal_open(&lfs, &t, 0) => 0;
+            while (true) {
+                struct lfs_tinfo tinfo;
+                int err = lfsr_traversal_read(&lfs, &t,
+                        &tinfo);
+                assert(!err || err == LFS_ERR_NOENT);
+                if (err == LFS_ERR_NOENT) {
+                    break;
+                }
+            }
+            lfsr_traversal_close(&lfs, &t) => 0;
+            BENCH_STOP("traversal");
+
+            // measure disk usage
+            lfs_soff_t count = lfsr_fs_usage(&lfs);
+            assert(count >= 0);
+            BENCH_RESULT("usage", i+1,
+                    (uintmax_t)count * (uintmax_t)CFG->block_size);
+        }
+    }
+
+    lfsr_unmount(&lfs) => 0;
+'''

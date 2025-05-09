@@ -1,4 +1,4 @@
-# Bench files
+# Bench file writes
 
 [cases.bench_fwrite]
 # 0 = in-order
