@@ -117,3 +117,109 @@ code = '''
     lfs2_unmount(&lfs) => 0;
     #endif
 '''
+
+[cases.bench_vs_lfs2_many]
+# 0 = in-order
+# 1 = reversed-order
+# 2 = random-order
+defines.ORDER = 2
+defines.N = 1024
+defines.STEP = 1
+defines.SEED = 42
+defines.SIZE = 4
+code = '''
+    #ifdef LFS3
+    lfs_t lfs;
+    lfsr_format(&lfs, LFS_F_RDWR, CFG) => 0;
+    lfsr_mount(&lfs, LFS_M_RDWR, CFG) => 0;
+    #else
+    lfs2_t lfs;
+    lfs2_format(&lfs, (const struct lfs2_config*)CFG) => 0;
+    lfs2_mount(&lfs, (const struct lfs2_config*)CFG) => 0;
+    #endif
+
+    // go ahead and make consistent to avoid lazy mount operations
+    // messing with the benchmark
+    #ifdef LFS3
+    lfsr_fs_mkconsistent(&lfs) => 0;
+    #else
+    lfs2_fs_mkconsistent(&lfs) => 0;
+    #endif
+
+    // allocate a bitmap for disk usage
+    uint8_t *usage_bmap = malloc((BLOCK_COUNT+8-1)/8);
+
+    // create a filesystem with N files
+    uint32_t prng = SEED;
+    for (lfs_size_t i = 0; i < N; i++) {
+        lfsr_mid_t i_
+                = (ORDER == 0) ? i
+                : (ORDER == 1) ? N-1-i
+                : BENCH_PRNG(&prng) % N;
+        char name[256];
+        sprintf(name, "file%05d", i_);
+        uint8_t wbuf[SIZE];
+        memset(wbuf, 'a'+(BENCH_PRNG(&prng) % 26), SIZE);
+
+        BENCH_START("runtime", i+1);
+        #ifdef LFS3
+        lfsr_file_t file;
+        int err = lfsr_file_open(&lfs, &file, name,
+                LFS_O_WRONLY | LFS_O_CREAT | LFS_O_EXCL);
+        assert(!err || err == LFS_ERR_EXIST);
+        if (!err) {
+            lfsr_file_write(&lfs, &file, &wbuf, SIZE) => SIZE;
+            lfsr_file_close(&lfs, &file) => 0;
+        }
+        #else
+        lfs2_file_t file;
+        int err = lfs2_file_open(&lfs, &file, name,
+                LFS2_O_WRONLY | LFS2_O_CREAT | LFS2_O_EXCL);
+        assert(!err || err == LFS2_ERR_EXIST);
+        if (!err) {
+            lfs2_file_write(&lfs, &file, &wbuf, SIZE) => SIZE;
+            lfs2_file_close(&lfs, &file) => 0;
+        }
+        #endif
+        BENCH_STOP("runtime");
+
+        // measure disk usage
+        //
+        // littlefs can be a dag, so build a bitmap to find the
+        // exact disk usage
+        memset(usage_bmap, 0, (BLOCK_COUNT+8-1)/8);
+        #ifdef LFS3
+        lfsr_traversal_t t;
+        lfsr_traversal_open(&lfs, &t, 0) => 0;
+        while (true) {
+            struct lfs_tinfo tinfo;
+            int err = lfsr_traversal_read(&lfs, &t, &tinfo);
+            assert(!err || err == LFS_ERR_NOENT);
+            if (err == LFS_ERR_NOENT) {
+                break;
+            }
+
+            usage_bmap[tinfo.block/8] |= 1 << (tinfo.block % 8);
+        }
+        lfsr_traversal_close(&lfs, &t) => 0;
+        #else
+        lfs2_fs_traverse(&lfs, usage_bmap_cb, usage_bmap) => 0;
+        #endif
+        lfs_size_t usage = 0;
+        for (lfs_size_t j = 0; j < BLOCK_COUNT; j++) {
+            if (usage_bmap[j / 8] & (1 << (j % 8))) {
+                usage += 1;
+            }
+        }
+        BENCH_RESULT("usage", i+1,
+                (uintmax_t)usage * (uintmax_t)CFG->block_size);
+    }
+
+    free(usage_bmap);
+
+    #ifdef LFS3
+    lfsr_unmount(&lfs) => 0;
+    #else
+    lfs2_unmount(&lfs) => 0;
+    #endif
+'''

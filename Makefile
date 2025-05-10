@@ -373,17 +373,22 @@ bench-fwrite-tune-ct: $(RESULTSDIR)/bench_fwrite_tune_ct.csv
 ## Run benchmarks over littlefs v3 vs v2
 .PHONY: bench-vs-lfs2
 bench-vs-lfs2: \
-		bench-vs-lfs2-counter
+		bench-vs-lfs2-counter \
+		bench-vs-lfs2-many
 
 ## Run benchmarks v3 vs v2 comparing a simple counter
 .PHONY: bench-vs-lfs2-counter
 bench-vs-lfs2-counter: \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.csv
+		$(foreach sim, emmc nor nand, \
+			$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.$(sim).csv \
+			$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.$(sim).csv)
+
+## Run benchmarks v3 vs v2 comparing file creation
+.PHONY: bench-vs-lfs2-many
+bench-vs-lfs2-many: \
+		$(foreach sim, emmc nor nand, \
+			$(RESULTSDIR)/bench_vs_lfs2_many.lfs3.$(sim).csv \
+			$(RESULTSDIR)/bench_vs_lfs2_many.lfs2.$(sim).csv)
 
 
 # run the benches!
@@ -553,8 +558,8 @@ $(RESULTSDIR)/bench_fwrit%.per.csv: $(RESULTSDIR)/bench_fwrit%.csv
 # v3 vs v2 bench rules!
 
 # run the benches against v3
-$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.csv: $(BENCH_RUNNER)
-	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_counter \
+$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.emmc.csv: $(BENCH_RUNNER)
+	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_$* \
 		-DSEED="range($(SAMPLES))" \
 		-DREAD_SIZE=$(EMMC_READ_SIZE) \
 		-DPROG_SIZE=$(EMMC_PROG_SIZE) \
@@ -562,8 +567,8 @@ $(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.csv: $(BENCH_RUNNER)
 		$(BENCHFLAGS) \
 		-o$@)
 
-$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.csv: $(BENCH_RUNNER)
-	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_counter \
+$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.nor.csv: $(BENCH_RUNNER)
+	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_$* \
 		-DSEED="range($(SAMPLES))" \
 		-DREAD_SIZE=$(NOR_READ_SIZE) \
 		-DPROG_SIZE=$(NOR_PROG_SIZE) \
@@ -571,8 +576,8 @@ $(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.csv: $(BENCH_RUNNER)
 		$(BENCHFLAGS) \
 		-o$@)
 
-$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.csv: $(BENCH_RUNNER)
-	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_counter \
+$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.nand.csv: $(BENCH_RUNNER)
+	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_$* \
 		-DSEED="range($(SAMPLES))" \
 		-DREAD_SIZE=$(NAND_READ_SIZE) \
 		-DPROG_SIZE=$(NAND_PROG_SIZE) \
@@ -581,8 +586,8 @@ $(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.csv: $(BENCH_RUNNER)
 		-o$@)
 
 # run the benches against v2
-$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.csv: $(BENCH_LFS2_RUNNER)
-	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_counter \
+$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.emmc.csv: $(BENCH_LFS2_RUNNER)
+	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_$* \
 		-DSEED="range($(SAMPLES))" \
 		-DREAD_SIZE=$(EMMC_READ_SIZE) \
 		-DPROG_SIZE=$(EMMC_PROG_SIZE) \
@@ -590,8 +595,8 @@ $(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.csv: $(BENCH_LFS2_RUNNER)
 		$(BENCHFLAGS) \
 		-o$@)
 
-$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.csv: $(BENCH_LFS2_RUNNER)
-	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_counter \
+$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.nor.csv: $(BENCH_LFS2_RUNNER)
+	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_$* \
 		-DSEED="range($(SAMPLES))" \
 		-DREAD_SIZE=$(NOR_READ_SIZE) \
 		-DPROG_SIZE=$(NOR_PROG_SIZE) \
@@ -599,8 +604,8 @@ $(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.csv: $(BENCH_LFS2_RUNNER)
 		$(BENCHFLAGS) \
 		-o$@)
 
-$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.csv: $(BENCH_LFS2_RUNNER)
-	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_counter \
+$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.nand.csv: $(BENCH_LFS2_RUNNER)
+	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_$* \
 		-DSEED="range($(SAMPLES))" \
 		-DREAD_SIZE=$(NAND_READ_SIZE) \
 		-DPROG_SIZE=$(NAND_PROG_SIZE) \
@@ -839,16 +844,29 @@ plot-fwrite-tune-ct: \
 ## Plot benchmarks over littlefs v3 vs v2
 .PHONY: plot-vs-lfs2
 plot-vs-lfs2: \
-		plot-vs-lfs2-counter
+		plot-vs-lfs2-counter \
+		plot-vs-lfs2-many
 
 ## Plot benchmarks v3 vs v2 comparing a simple counter
 .PHONY: plot-vs-lfs2-counter
+plot-vs-lfs2-counter: TITLE=simple counter
 plot-vs-lfs2-counter: \
 		$(PLOTSDIR)/bench_vs_lfs2_counter_r.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_counter_p.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_counter_e.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_counter_u.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_counter.svg
+
+## Plot benchmarks v3 vs v2 comparing file creation
+.PHONY: plot-vs-lfs2-many
+plot-vs-lfs2-many: TITLE=many files
+plot-vs-lfs2-many: \
+		$(PLOTSDIR)/bench_vs_lfs2_many_r.svg \
+		$(PLOTSDIR)/bench_vs_lfs2_many_p.svg \
+		$(PLOTSDIR)/bench_vs_lfs2_many_e.svg \
+		$(PLOTSDIR)/bench_vs_lfs2_many_u.svg \
+		$(PLOTSDIR)/bench_vs_lfs2_many.svg
+
 
 
 # plot rules
@@ -1999,55 +2017,48 @@ $(PLOTSDIR)/bench_fwrite_tune_ct_random.svg: \
 PLOT_VS_LFS2_FLAGS += -W1750 -H750
 PLOT_VS_LFS2_FLAGS += \
 		--subplot=" \
-				-DBLOCK_SIZE=512 \
+				-DBLOCK_SIZE=$(EMMC_ERASE_SIZE) \
 				-Dm=$2 \
 				--ylabel=raw \
 				--title=sd/emmc \
 				$(if $3,--add-xticklabel=,)" \
 			$(if $3, \
 			--subplot-below=" \
-				-DBLOCK_SIZE=512 \
+				-DBLOCK_SIZE=$(EMMC_ERASE_SIZE) \
 				-Dm=$2+amor \
 				--ylabel=amortized \
 				-H0.5",) \
 		--subplot-right=" \
-				-DBLOCK_SIZE=4096 \
+				-DBLOCK_SIZE=$(NOR_ERASE_SIZE) \
 				-Dm=$2 \
 				--title=nor \
 				$(if $3,--add-xticklabel=,) \
 				-W0.5 \
 			$(if $3, \
 			--subplot-below=\" \
-				-DBLOCK_SIZE=4096 \
+				-DBLOCK_SIZE=$(NOR_ERASE_SIZE) \
 				-Dm=$2+amor \
 				-H0.5\",)" \
 		--subplot-right=" \
-				-DBLOCK_SIZE=131072 \
+				-DBLOCK_SIZE=$(NAND_ERASE_SIZE) \
 				-Dm=$2 \
 				--title=nand \
 				$(if $3,--add-xticklabel=,) \
 				-W0.33 \
 			$(if $3, \
 			--subplot-below=\" \
-				-DBLOCK_SIZE=131072 \
+				-DBLOCK_SIZE=$(NAND_ERASE_SIZE) \
 				-Dm=$2+amor \
 				-H0.5\",)"
 PLOT_VS_LFS2_FLAGS += $(PLOT_COLORS_1BND)
 
-# lfs3 (no bmap) vs lfs2 - simple counter - reads
-$(PLOTSDIR)/bench_vs_lfs2_counter_r.svg: \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.amor.avg.csv
+# lfs3 (no bmap) vs lfs2 - reads
+$(PLOTSDIR)/bench_vs_lfs2_%_r.svg: \
+		$(foreach sim, emmc nor nand, \
+			$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.$(sim).avg.csv \
+			$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.$(sim).amor.avg.csv \
+			$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.$(sim).avg.csv \
+			$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.$(sim).amor.avg.csv)
 	$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $^ \
 			-fbench_readed_avg \
@@ -2057,7 +2068,7 @@ $(PLOTSDIR)/bench_vs_lfs2_counter_r.svg: \
 			-Dbench_readed_avg='*' \
 			-fbench_readed_bnd=bench_readed_max \
 			-o-) \
-		--title="lfs3 (no bmap) vs lfs2 - simple counter - reads" \
+		--title="lfs3 (no bmap) vs lfs2 - $(TITLE) - reads" \
 		-bV -SV \
 		-xn \
 		-ybench_readed_avg -ybench_readed_bnd \
@@ -2071,20 +2082,13 @@ $(PLOTSDIR)/bench_vs_lfs2_counter_r.svg: \
 		$(PLOTFLAGS) \
 		-o$@)
 
-# lfs3 (no bmap) vs lfs2 - simple counter - progs
-$(PLOTSDIR)/bench_vs_lfs2_counter_p.svg: \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.amor.avg.csv
+# lfs3 (no bmap) vs lfs2 - progs
+$(PLOTSDIR)/bench_vs_lfs2_%_p.svg: \
+		$(foreach sim, emmc nor nand, \
+			$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.$(sim).avg.csv \
+			$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.$(sim).amor.avg.csv \
+			$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.$(sim).avg.csv \
+			$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.$(sim).amor.avg.csv)
 	$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $^ \
 			-fbench_proged_avg \
@@ -2094,7 +2098,7 @@ $(PLOTSDIR)/bench_vs_lfs2_counter_p.svg: \
 			-Dbench_proged_avg='*' \
 			-fbench_proged_bnd=bench_proged_max \
 			-o-) \
-		--title="lfs3 (no bmap) vs lfs2 - simple counter - progs" \
+		--title="lfs3 (no bmap) vs lfs2 - $(TITLE) - progs" \
 		-bV -SV \
 		-xn \
 		-ybench_proged_avg -ybench_proged_bnd \
@@ -2108,20 +2112,13 @@ $(PLOTSDIR)/bench_vs_lfs2_counter_p.svg: \
 		$(PLOTFLAGS) \
 		-o$@)
 
-# lfs3 (no bmap) vs lfs2 - simple counter - erases
-$(PLOTSDIR)/bench_vs_lfs2_counter_e.svg: \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.amor.avg.csv
+# lfs3 (no bmap) vs lfs2 - erases
+$(PLOTSDIR)/bench_vs_lfs2_%_e.svg: \
+		$(foreach sim, emmc nor nand, \
+			$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.$(sim).avg.csv \
+			$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.$(sim).amor.avg.csv \
+			$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.$(sim).avg.csv \
+			$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.$(sim).amor.avg.csv)
 	$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $^ \
 			-fbench_erased_avg \
@@ -2131,7 +2128,7 @@ $(PLOTSDIR)/bench_vs_lfs2_counter_e.svg: \
 			-Dbench_erased_avg='*' \
 			-fbench_erased_bnd=bench_erased_max \
 			-o-) \
-		--title="lfs3 (no bmap) vs lfs2 - simple counter - erases" \
+		--title="lfs3 (no bmap) vs lfs2 - $(TITLE) - erases" \
 		-bV -SV \
 		-xn \
 		-ybench_erased_avg -ybench_erased_bnd \
@@ -2145,20 +2142,13 @@ $(PLOTSDIR)/bench_vs_lfs2_counter_e.svg: \
 		$(PLOTFLAGS) \
 		-o$@)
 
-# lfs3 (no bmap) vs lfs2 - simple counter - disk usage
-$(PLOTSDIR)/bench_vs_lfs2_counter_u.svg: \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.amor.avg.csv
+# lfs3 (no bmap) vs lfs2 - disk usage
+$(PLOTSDIR)/bench_vs_lfs2_%_u.svg: \
+		$(foreach sim, emmc nor nand, \
+			$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.$(sim).avg.csv \
+			$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.$(sim).amor.avg.csv \
+			$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.$(sim).avg.csv \
+			$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.$(sim).amor.avg.csv)
 	$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $^ \
 			-fbench_readed_avg \
@@ -2168,7 +2158,7 @@ $(PLOTSDIR)/bench_vs_lfs2_counter_u.svg: \
 			-Dbench_readed_avg='*' \
 			-fbench_readed_bnd=bench_readed_max \
 			-o-) \
-		--title="lfs3 (no bmap) vs lfs2 - simple counter - disk usage" \
+		--title="lfs3 (no bmap) vs lfs2 - $(TITLE) - disk usage" \
 		-bV -SV \
 		-xn \
 		-ybench_readed_avg -ybench_readed_bnd \
@@ -2182,20 +2172,13 @@ $(PLOTSDIR)/bench_vs_lfs2_counter_u.svg: \
 		$(PLOTFLAGS) \
 		-o$@)
 
-# lfs3 (no bmap) vs lfs2 - simple counter - simulated runtime
-$(PLOTSDIR)/bench_vs_lfs2_counter.svg: \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.sim.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.emmc.sim.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.sim.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.emmc.sim.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.sim.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nor.sim.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.sim.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nor.sim.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.sim.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.nand.sim.amor.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.sim.avg.csv \
-		$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.nand.sim.amor.avg.csv
+# lfs3 (no bmap) vs lfs2 - simulated runtime
+$(PLOTSDIR)/bench_vs_lfs2_%.svg: \
+		$(foreach sim, emmc nor nand, \
+			$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.$(sim).sim.avg.csv \
+			$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.$(sim).sim.amor.avg.csv \
+			$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.$(sim).sim.avg.csv \
+			$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.$(sim).sim.amor.avg.csv)
 	$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $^ \
 			-fbench_readed_avg \
@@ -2205,7 +2188,7 @@ $(PLOTSDIR)/bench_vs_lfs2_counter.svg: \
 			-Dbench_readed_avg='*' \
 			-fbench_readed_bnd=bench_readed_max \
 			-o-) \
-		--title="lfs3 (no bmap) vs lfs2 - simple counter - simulated runtime" \
+		--title="lfs3 (no bmap) vs lfs2 - $(TITLE) - simulated runtime" \
 		-bV -SV \
 		-xn \
 		-ybench_readed_avg -ybench_readed_bnd \
