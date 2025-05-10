@@ -16,14 +16,16 @@ BENCH_TUNE_CT ?= 0,256,512,1024,2048,4096
 
 # configurations that simulate real-world storage
 #
-# runtime is a per-byte estimate in nanoseconds
+# with *_TIME indicating a per-byte estimate in nanoseconds
 #
-# using a byte-level estimate is inaccurate in that it doesn't take into
-# account instruction transfer times, on-disk buffers/caches, etc, but
-# it gives a decent rough estimate without making things too complicated
+# Using a per-byte estimate isn't _super_ accurate, it ignores
+# important nuances such as instruction overhead and on-disk buffers/
+# caches that make batched reads/progs more efficient. But it's simple,
+# and provides a decent rough estimate.
 #
 
-# sd/emmc - estimated based on w25n01gv, assumes _perfect_ FTL
+# sd/emmc - estimated based on w25n01gv, assumes a _perfect_ FTL
+#
 EMMC_READ_SIZE  ?= 512  # these estimates are at the byte-level, so the
 EMMC_PROG_SIZE  ?= 512  # block size doesn't actual change anything
 EMMC_ERASE_SIZE ?= 512  #
@@ -32,15 +34,21 @@ EMMC_PROG_TIME  ?= 1462 # taken from w25n01gv, prog time + erase time
 EMMC_ERASE_TIME ?= 0    # noop
 
 # nor flash - based on w25q64jv
-NOR_READ_SIZE  ?= 1     # FR=104 MHz, quad prog (9.6 ns * (8/4))
+#
+# https://www.winbond.com/resource-files/W25Q256JV%20SPI%20RevQ%2002072025%20Plus.pdf
+#
+NOR_READ_SIZE  ?= 1     # FR=104 MHz, quad prog (9.6 ns * 8/4)
 NOR_PROG_SIZE  ?= 1     # => +~19 ns for bus (not read!)
 NOR_ERASE_SIZE ?= 4096  #
-NOR_READ_TIME  ?= 40    # fR=50 MHz, quad read (20 ns * (8/4))
+NOR_READ_TIME  ?= 40    # fR=50 MHz, quad read (20 ns * 8/4)
 NOR_PROG_TIME  ?= 11738 # tPP=3 ms, page=256 (3 ms / 256 + bus)
 NOR_ERASE_TIME ?= 97657 # tSE=400 ms, sector=4096 (400 ms / 4096)
 
 # nand flash - based on w25n01gv
-NAND_READ_SIZE  ?= 512    # FR=104 MHz, quad read/prog (9.6 ns * (8/4))
+#
+# https://www.winbond.com/resource-files/W25N01GV%20Rev%20R%20070323.pdf
+#
+NAND_READ_SIZE  ?= 512    # FR=104 MHz, quad read/prog (9.6 ns * 8/4)
 NAND_PROG_SIZE  ?= 512    # => +~19 ns for bus
 NAND_ERASE_SIZE ?= 131072 # 
 NAND_READ_TIME  ?= 68     # tRD1=25 us, p=2048, s=512 (25 us / 512 + bus)
