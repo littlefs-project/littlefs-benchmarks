@@ -14,7 +14,7 @@ defines.SYNC = true
 code = '''
     lfs_t lfs;
     lfsr_format(&lfs, LFS_F_RDWR, CFG) => 0;
-    lfsr_mount(&lfs, LFS_M_RDWR, CFG) => 0;
+    lfsr_mount(&lfs, LFS_M_RDWR | LFS_M_MKCONSISTENT, CFG) => 0;
     uint32_t prng = SEED;
 
     // find the baseline usage after format

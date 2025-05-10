@@ -12,7 +12,7 @@ defines.SIZE = 4
 code = '''
     lfs_t lfs;
     lfsr_format(&lfs, LFS_F_RDWR, CFG) => 0;
-    lfsr_mount(&lfs, LFS_M_RDWR, CFG) => 0;
+    lfsr_mount(&lfs, LFS_M_RDWR | LFS_M_MKCONSISTENT, CFG) => 0;
 
     // allocate a bitmap for disk usage
     uint8_t *usage_bmap = malloc((BLOCK_COUNT+8-1)/8);
@@ -118,7 +118,7 @@ defines.SEED = 42
 code = '''
     lfs_t lfs;
     lfsr_format(&lfs, LFS_F_RDWR, CFG) => 0;
-    lfsr_mount(&lfs, LFS_M_RDWR, CFG) => 0;
+    lfsr_mount(&lfs, LFS_M_RDWR | LFS_M_MKCONSISTENT, CFG) => 0;
 
     // allocate a bitmap for disk usage
     uint8_t *usage_bmap = malloc((BLOCK_COUNT+8-1)/8);
