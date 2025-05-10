@@ -30,7 +30,7 @@ EMMC_READ_SIZE  ?= 512  # these estimates are at the byte-level, so the
 EMMC_PROG_SIZE  ?= 512  # block size doesn't actual change anything
 EMMC_ERASE_SIZE ?= 512  #
 EMMC_READ_TIME  ?= 68   # taken from w25n01gv, read time
-EMMC_PROG_TIME  ?= 1462 # taken from w25n01gv, prog time + erase time
+EMMC_PROG_TIME  ?= 522  # taken from w25n01gv, prog time + erase time
 EMMC_ERASE_TIME ?= 0    # noop
 
 # nor flash - based on w25q64jv
@@ -41,8 +41,8 @@ NOR_READ_SIZE  ?= 1     # FR=104 MHz, quad prog (9.6 ns * 8/4)
 NOR_PROG_SIZE  ?= 1     # => +~19 ns for bus (not read!)
 NOR_ERASE_SIZE ?= 4096  #
 NOR_READ_TIME  ?= 40    # fR=50 MHz, quad read (20 ns * 8/4)
-NOR_PROG_TIME  ?= 11738 # tPP=3 ms, page=256 (3 ms / 256 + bus)
-NOR_ERASE_TIME ?= 97657 # tSE=400 ms, sector=4096 (400 ms / 4096)
+NOR_PROG_TIME  ?= 1582  # tPP=0.4 ms, page=256 (0.4 ms / 256 + bus)
+NOR_ERASE_TIME ?= 10986 # tSE=45 ms, sector=4096 (45 ms / 4096)
 
 # nand flash - based on w25n01gv
 #
@@ -52,8 +52,8 @@ NAND_READ_SIZE  ?= 512    # FR=104 MHz, quad read/prog (9.6 ns * 8/4)
 NAND_PROG_SIZE  ?= 512    # => +~19 ns for bus
 NAND_ERASE_SIZE ?= 131072 # 
 NAND_READ_TIME  ?= 68     # tRD1=25 us, p=2048, s=512 (25 us / 512 + bus)
-NAND_PROG_TIME  ?= 1386   # tPP=700 us, p=2048, s=512 (700 us / 512 + bus)
-NAND_ERASE_TIME ?= 76     # tBE=10 ms, block=131072 (10 ms / 131072)
+NAND_PROG_TIME  ?= 507    # tPP=250 us, p=2048, s=512 (250 us / 512 + bus)
+NAND_ERASE_TIME ?= 15     # tBE=2 ms, block=131072 (2 ms / 131072)
 
 
 
