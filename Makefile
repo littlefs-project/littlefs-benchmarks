@@ -813,7 +813,8 @@ plot-many: \
 .PHONY: plot-fwrite
 plot-fwrite: \
 		$(PLOTSDIR)/bench_fwrite_sparseish.svg \
-		$(PLOTSDIR)/bench_fwrite_rewriting.svg \
+		$(PLOTSDIR)/bench_fwrite_rewrite.svg \
+		$(PLOTSDIR)/bench_fwrite_incrrewrite.svg \
 		$(PLOTSDIR)/bench_fwrite_linear.svg \
 		$(PLOTSDIR)/bench_fwrite_random.svg
 
@@ -1600,6 +1601,7 @@ $(PLOTSDIR)/bench_many_dirs.svg: \
 
 # plot bench_fwrite config
 PLOT_FWRITE_FLAGS += -W1750 -H750
+PLOT_FWRITE_FLAGS += --x2 --xunits=B
 PLOT_FWRITE_FLAGS += --y2 --yunits=B
 PLOT_FWRITE_FLAGS += \
 		--subplot=" \
@@ -1678,7 +1680,7 @@ PLOT_FWRITE_FLAGS += \
 				-H0.665\""
 PLOT_FWRITE_FLAGS += $(if $1,$(PLOT_COLORS_3BND),$(PLOT_COLORS_3))
 
-# file writes - sparseish
+# file writes - sparse/incremental
 $(PLOTSDIR)/bench_fwrite_sparseish.svg: \
 		$(RESULTSDIR)/bench_fwrite.avg.csv \
 		$(RESULTSDIR)/bench_fwrite.amor.avg.csv \
@@ -1700,7 +1702,7 @@ $(PLOTSDIR)/bench_fwrite_sparseish.svg: \
 			-fbench_proged_bnd=bench_proged_max \
 			-fbench_erased_bnd=bench_erased_max \
 			-o-) \
-		--title="file writes - sparseish" \
+		--title="file writes - sparse/incremental" \
 		-bORDER \
 		-DREWRITE=0 \
 		-xn \
@@ -1734,7 +1736,7 @@ $(PLOTSDIR)/bench_fwrite_sparseish.svg: \
 		-o$@)
 
 # file writes - rewriting
-$(PLOTSDIR)/bench_fwrite_rewriting.svg: \
+$(PLOTSDIR)/bench_fwrite_rewrite.svg: \
 		$(RESULTSDIR)/bench_fwrite.avg.csv \
 		$(RESULTSDIR)/bench_fwrite.amor.avg.csv \
 		$(RESULTSDIR)/bench_fwrite.per.avg.csv
@@ -1758,6 +1760,61 @@ $(PLOTSDIR)/bench_fwrite_rewriting.svg: \
 		--title="file writes - rewriting" \
 		-bORDER \
 		-DREWRITE=1 \
+		-xn \
+		--legend \
+		-L'0,bench_readed_avg=inorder' \
+		-L'0,bench_readed_bnd=' \
+		-L'0,bench_proged_avg=' \
+		-L'0,bench_proged_bnd=' \
+		-L'0,bench_erased_avg=' \
+		-L'0,bench_erased_bnd=' \
+		-L'1,bench_readed_avg=reversed' \
+		-L'1,bench_readed_bnd=' \
+		-L'1,bench_proged_avg=' \
+		-L'1,bench_proged_bnd=' \
+		-L'1,bench_erased_avg=' \
+		-L'1,bench_erased_bnd=' \
+		-L'2,bench_readed_avg=random aligned' \
+		-L'2,bench_readed_bnd=' \
+		-L'2,bench_proged_avg=' \
+		-L'2,bench_proged_bnd=' \
+		-L'2,bench_erased_avg=' \
+		-L'2,bench_erased_bnd=' \
+		-L'3,bench_readed_avg=random unaligned' \
+		-L'3,bench_readed_bnd=' \
+		-L'3,bench_proged_avg=' \
+		-L'3,bench_proged_bnd=' \
+		-L'3,bench_erased_avg=' \
+		-L'3,bench_erased_bnd=' \
+		$(call PLOT_FWRITE_FLAGS,bnd) \
+		$(PLOTFLAGS) \
+		-o$@)
+
+# file writes - incremental rewriting
+$(PLOTSDIR)/bench_fwrite_incrrewrite.svg: \
+		$(RESULTSDIR)/bench_fwrite.avg.csv \
+		$(RESULTSDIR)/bench_fwrite.amor.avg.csv \
+		$(RESULTSDIR)/bench_fwrite.per.avg.csv
+	$(strip ./scripts/plotmpl.py \
+		<(./scripts/csv.py $^ \
+			-fbench_readed_avg \
+			-fbench_proged_avg \
+			-fbench_erased_avg \
+			-fbench_readed_bnd=bench_readed_min \
+			-fbench_proged_bnd=bench_proged_min \
+			-fbench_erased_bnd=bench_erased_min \
+			-o-) \
+		<(./scripts/csv.py $^ \
+			-Dbench_readed_avg='*' \
+			-Dbench_proged_avg='*' \
+			-Dbench_erased_avg='*' \
+			-fbench_readed_bnd=bench_readed_max \
+			-fbench_proged_bnd=bench_proged_max \
+			-fbench_erased_bnd=bench_erased_max \
+			-o-) \
+		--title="file writes - incremental rewriting" \
+		-bORDER \
+		-DREWRITE=2 \
 		-xn \
 		--legend \
 		-L'0,bench_readed_avg=inorder' \
@@ -1848,7 +1905,7 @@ $(PLOTSDIR)/bench_fwrite_random.svg: \
 			-o-) \
 		--title="file writes - random" \
 		-DORDER=3 \
-		-DREWRITE=1 \
+		-DREWRITE=2 \
 		-xn \
 		-L'bench_readed_avg=random' \
 		-L'bench_readed_bnd=' \
@@ -1890,7 +1947,7 @@ $(PLOTSDIR)/bench_fwrite_tune_bs_random.svg: \
 		$^ \
 		--title="file writes - block_size - random" \
 		-DORDER=3 \
-		-DREWRITE=1 \
+		-DREWRITE=2 \
 		-bBLOCK_SIZE \
 		-xn \
 		--legend \
@@ -1932,7 +1989,7 @@ $(PLOTSDIR)/bench_fwrite_tune_is_random.svg: \
 		$^ \
 		--title="file writes - inline_size - random" \
 		-DORDER=3 \
-		-DREWRITE=1 \
+		-DREWRITE=2 \
 		-bINLINE_SIZE \
 		-xn \
 		--legend \
@@ -1974,7 +2031,7 @@ $(PLOTSDIR)/bench_fwrite_tune_fs_random.svg: \
 		$^ \
 		--title="file writes - fragment_size - random" \
 		-DORDER=3 \
-		-DREWRITE=1 \
+		-DREWRITE=2 \
 		-bFRAGMENT_SIZE \
 		-xn \
 		--legend \
@@ -2016,7 +2073,7 @@ $(PLOTSDIR)/bench_fwrite_tune_ct_random.svg: \
 		$^ \
 		--title="file writes - crystal_thresh - random" \
 		-DORDER=3 \
-		-DREWRITE=1 \
+		-DREWRITE=2 \
 		-bCRYSTAL_THRESH \
 		-xn \
 		--legend \
