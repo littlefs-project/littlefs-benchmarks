@@ -374,7 +374,8 @@ bench-fwrite-tune-ct: $(RESULTSDIR)/bench_fwrite_tune_ct.csv
 .PHONY: bench-vs-lfs2
 bench-vs-lfs2: \
 		bench-vs-lfs2-counter \
-		bench-vs-lfs2-many
+		bench-vs-lfs2-many-creat \
+		bench-vs-lfs2-many-open
 
 ## Run benchmarks v3 vs v2 comparing a simple counter
 .PHONY: bench-vs-lfs2-counter
@@ -383,12 +384,19 @@ bench-vs-lfs2-counter: \
 			$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.$(sim).csv \
 			$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.$(sim).csv)
 
-## Run benchmarks v3 vs v2 comparing file creation
-.PHONY: bench-vs-lfs2-many
-bench-vs-lfs2-many: \
+## Run benchmarks v3 vs v2 comparing many file creation
+.PHONY: bench-vs-lfs2-many-creat
+bench-vs-lfs2-many-creat: \
 		$(foreach sim, emmc nor nand, \
-			$(RESULTSDIR)/bench_vs_lfs2_many.lfs3.$(sim).csv \
-			$(RESULTSDIR)/bench_vs_lfs2_many.lfs2.$(sim).csv)
+			$(RESULTSDIR)/bench_vs_lfs2_many_creat.lfs3.$(sim).csv \
+			$(RESULTSDIR)/bench_vs_lfs2_many_creat.lfs2.$(sim).csv)
+
+## Run benchmarks v3 vs v2 comparing many file open+read
+.PHONY: bench-vs-lfs2-many-open
+bench-vs-lfs2-many-open: \
+		$(foreach sim, emmc nor nand, \
+			$(RESULTSDIR)/bench_vs_lfs2_many_open.lfs3.$(sim).csv \
+			$(RESULTSDIR)/bench_vs_lfs2_many_open.lfs2.$(sim).csv)
 
 
 # run the benches!
@@ -845,7 +853,8 @@ plot-fwrite-tune-ct: \
 .PHONY: plot-vs-lfs2
 plot-vs-lfs2: \
 		plot-vs-lfs2-counter \
-		plot-vs-lfs2-many
+		plot-vs-lfs2-many-creat \
+		plot-vs-lfs2-many-open
 
 ## Plot benchmarks v3 vs v2 comparing a simple counter
 .PHONY: plot-vs-lfs2-counter
@@ -857,15 +866,25 @@ plot-vs-lfs2-counter: \
 		$(PLOTSDIR)/bench_vs_lfs2_counter_u.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_counter.svg
 
-## Plot benchmarks v3 vs v2 comparing file creation
-.PHONY: plot-vs-lfs2-many
-plot-vs-lfs2-many: TITLE=many files
-plot-vs-lfs2-many: \
-		$(PLOTSDIR)/bench_vs_lfs2_many_r.svg \
-		$(PLOTSDIR)/bench_vs_lfs2_many_p.svg \
-		$(PLOTSDIR)/bench_vs_lfs2_many_e.svg \
-		$(PLOTSDIR)/bench_vs_lfs2_many_u.svg \
-		$(PLOTSDIR)/bench_vs_lfs2_many.svg
+## Plot benchmarks v3 vs v2 comparing many file creation
+.PHONY: plot-vs-lfs2-many-creat
+plot-vs-lfs2-many-creat: TITLE=many files create
+plot-vs-lfs2-many-creat: \
+		$(PLOTSDIR)/bench_vs_lfs2_many_creat_r.svg \
+		$(PLOTSDIR)/bench_vs_lfs2_many_creat_p.svg \
+		$(PLOTSDIR)/bench_vs_lfs2_many_creat_e.svg \
+		$(PLOTSDIR)/bench_vs_lfs2_many_creat_u.svg \
+		$(PLOTSDIR)/bench_vs_lfs2_many_creat.svg
+
+## Plot benchmarks v3 vs v2 comparing many file open+read
+.PHONY: plot-vs-lfs2-many-open
+plot-vs-lfs2-many-open: TITLE=many files open+read
+plot-vs-lfs2-many-open: \
+		$(PLOTSDIR)/bench_vs_lfs2_many_open_r.svg \
+		$(PLOTSDIR)/bench_vs_lfs2_many_open_p.svg \
+		$(PLOTSDIR)/bench_vs_lfs2_many_open_e.svg \
+		$(PLOTSDIR)/bench_vs_lfs2_many_open_u.svg \
+		$(PLOTSDIR)/bench_vs_lfs2_many_open.svg
 
 
 
