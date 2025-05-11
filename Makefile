@@ -374,29 +374,21 @@ bench-fwrite-tune-ct: $(RESULTSDIR)/bench_fwrite_tune_ct.csv
 .PHONY: bench-vs-lfs2
 bench-vs-lfs2: \
 		bench-vs-lfs2-counter \
-		bench-vs-lfs2-many-creat \
-		bench-vs-lfs2-many-open
+		bench-vs-lfs2-many
 
 ## Run benchmarks v3 vs v2 comparing a simple counter
 .PHONY: bench-vs-lfs2-counter
 bench-vs-lfs2-counter: \
-		$(foreach sim, emmc nor nand, \
-			$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.$(sim).csv \
-			$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.$(sim).csv)
+		$(foreach SIM, emmc nor nand, \
+			$(RESULTSDIR)/bench_vs_lfs2_counter.lfs3.$(SIM).csv \
+			$(RESULTSDIR)/bench_vs_lfs2_counter.lfs2.$(SIM).csv)
 
-## Run benchmarks v3 vs v2 comparing many file creation
-.PHONY: bench-vs-lfs2-many-creat
-bench-vs-lfs2-many-creat: \
-		$(foreach sim, emmc nor nand, \
-			$(RESULTSDIR)/bench_vs_lfs2_many_creat.lfs3.$(sim).csv \
-			$(RESULTSDIR)/bench_vs_lfs2_many_creat.lfs2.$(sim).csv)
-
-## Run benchmarks v3 vs v2 comparing many file open+read
-.PHONY: bench-vs-lfs2-many-open
-bench-vs-lfs2-many-open: \
-		$(foreach sim, emmc nor nand, \
-			$(RESULTSDIR)/bench_vs_lfs2_many_open.lfs3.$(sim).csv \
-			$(RESULTSDIR)/bench_vs_lfs2_many_open.lfs2.$(sim).csv)
+## Run benchmarks v3 vs v2 comparing many files
+.PHONY: bench-vs-lfs2-many
+bench-vs-lfs2-many: \
+		$(foreach SIM, emmc nor nand, \
+			$(RESULTSDIR)/bench_vs_lfs2_many.lfs3.$(SIM).csv \
+			$(RESULTSDIR)/bench_vs_lfs2_many.lfs2.$(SIM).csv)
 
 
 # run the benches!
@@ -564,128 +556,79 @@ $(RESULTSDIR)/bench_fwrit%.per.csv: $(RESULTSDIR)/bench_fwrit%.csv
 
 
 # v3 vs v2 bench rules!
+define BENCH_VS_LFS2_RULES
 
-# run the benches against v3
-$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.emmc.csv: $(BENCH_RUNNER)
-	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_$* \
-		-DSEED="range($(SAMPLES))" \
-		-DREAD_SIZE=$(EMMC_READ_SIZE) \
-		-DPROG_SIZE=$(EMMC_PROG_SIZE) \
-		-DBLOCK_SIZE=$(EMMC_ERASE_SIZE) \
-		$(BENCHFLAGS) \
-		-o$@)
+# the actual v3 vs v2 bench rules
+$$(RESULTSDIR)/bench_vs_lfs2_counter.$(V).$(SIM).csv: $(V_RUNNER)
+	$$(strip ./scripts/bench.py -R$$< -B bench_vs_lfs2_counter \
+		-DSEED="range($$(SAMPLES))" \
+		-DREAD_SIZE=$(SIM_READ_SIZE) \
+		-DPROG_SIZE=$(SIM_PROG_SIZE) \
+		-DBLOCK_SIZE=$(SIM_ERASE_SIZE) \
+		$$(BENCHFLAGS) \
+		-o$$@)
 
-$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.nor.csv: $(BENCH_RUNNER)
-	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_$* \
-		-DSEED="range($(SAMPLES))" \
-		-DREAD_SIZE=$(NOR_READ_SIZE) \
-		-DPROG_SIZE=$(NOR_PROG_SIZE) \
-		-DBLOCK_SIZE=$(NOR_ERASE_SIZE) \
-		$(BENCHFLAGS) \
-		-o$@)
+$$(RESULTSDIR)/bench_vs_lfs2_many.$(V).$(SIM).csv: $(V_RUNNER)
+	$$(strip ./scripts/bench.py -R$$< -B bench_vs_lfs2_many \
+		-DSEED="range($$(SAMPLES))" \
+		-DREAD_SIZE=$(SIM_READ_SIZE) \
+		-DPROG_SIZE=$(SIM_PROG_SIZE) \
+		-DBLOCK_SIZE=$(SIM_ERASE_SIZE) \
+		$$(BENCHFLAGS) \
+		-o$$@)
 
-$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.nand.csv: $(BENCH_RUNNER)
-	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_$* \
-		-DSEED="range($(SAMPLES))" \
-		-DREAD_SIZE=$(NAND_READ_SIZE) \
-		-DPROG_SIZE=$(NAND_PROG_SIZE) \
-		-DBLOCK_SIZE=$(NAND_ERASE_SIZE) \
-		$(BENCHFLAGS) \
-		-o$@)
+# simulated/estimated results
+$$(RESULTSDIR)/bench_vs_lfs%.$(SIM).sim.csv: \
+		$$(RESULTSDIR)/bench_vs_lfs%.$(SIM).csv
+	$$(strip ./scripts/csv.py $$^ \
+		-Bm='%(m)s+sim' \
+		-fbench_readed=' \
+			(float(bench_readed)*float($(SIM_READ_TIME)) \
+				+ float(bench_proged)*float($(SIM_PROG_TIME)) \
+				+ float(bench_erased)*float($(SIM_ERASE_TIME)) \
+				) / 1.0e9' \
+		-fbench_proged=0 \
+		-fbench_erased=0 \
+		-fbench_creaded=' \
+			(float(bench_creaded)*float($(SIM_READ_TIME)) \
+				+ float(bench_cproged)*float($(SIM_PROG_TIME)) \
+				+ float(bench_cerased)*float($(SIM_ERASE_TIME)) \
+				) / 1.0e9' \
+		-fbench_cproged=0 \
+		-fbench_cerased=0 \
+		-o$$@)
 
-# run the benches against v2
-$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.emmc.csv: $(BENCH_LFS2_RUNNER)
-	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_$* \
-		-DSEED="range($(SAMPLES))" \
-		-DREAD_SIZE=$(EMMC_READ_SIZE) \
-		-DPROG_SIZE=$(EMMC_PROG_SIZE) \
-		-DBLOCK_SIZE=$(EMMC_ERASE_SIZE) \
-		$(BENCHFLAGS) \
-		-o$@)
+endef
 
-$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.nor.csv: $(BENCH_LFS2_RUNNER)
-	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_$* \
-		-DSEED="range($(SAMPLES))" \
-		-DREAD_SIZE=$(NOR_READ_SIZE) \
-		-DPROG_SIZE=$(NOR_PROG_SIZE) \
-		-DBLOCK_SIZE=$(NOR_ERASE_SIZE) \
-		$(BENCHFLAGS) \
-		-o$@)
-
-$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.nand.csv: $(BENCH_LFS2_RUNNER)
-	$(strip ./scripts/bench.py -R$< -B bench_vs_lfs2_$* \
-		-DSEED="range($(SAMPLES))" \
-		-DREAD_SIZE=$(NAND_READ_SIZE) \
-		-DPROG_SIZE=$(NAND_PROG_SIZE) \
-		-DBLOCK_SIZE=$(NAND_ERASE_SIZE) \
-		$(BENCHFLAGS) \
-		-o$@)
+# parameterize based on lfs3/lfs2 and sim type
+$(foreach V_, lfs3/LFS3 lfs2/LFS2, \
+	$(foreach V, $(word 1,$(subst /, ,$(V_))), \
+	$(foreach V_RUNNER, $(if $(filter lfs3/%,$(V_)), \
+			$$(BENCH_RUNNER), \
+			$$(BENCH_LFS2_RUNNER)), \
+	$(foreach SIM_, emmc/EMMC nor/NOR nand/NAND, \
+		$(foreach SIM, $(word 1,$(subst /, ,$(SIM_))), \
+		$(foreach SIM_READ_SIZE, \
+			$$($(word 2,$(subst /, ,$(SIM_)))_READ_SIZE), \
+		$(foreach SIM_PROG_SIZE, \
+			$$($(word 2,$(subst /, ,$(SIM_)))_PROG_SIZE), \
+		$(foreach SIM_ERASE_SIZE, \
+			$$($(word 2,$(subst /, ,$(SIM_)))_ERASE_SIZE), \
+		$(foreach SIM_READ_TIME, \
+			$$($(word 2,$(subst /, ,$(SIM_)))_READ_TIME), \
+		$(foreach SIM_PROG_TIME, \
+			$$($(word 2,$(subst /, ,$(SIM_)))_PROG_TIME), \
+		$(foreach SIM_ERASE_TIME, \
+			$$($(word 2,$(subst /, ,$(SIM_)))_ERASE_TIME), \
+		$(eval $(BENCH_VS_LFS2_RULES)))))))))))))
 
 # amortized results
 $(RESULTSDIR)/bench_vs_lfs%.amor.csv: $(RESULTSDIR)/bench_vs_lfs%.csv
 	$(strip ./scripts/csv.py $^ \
-		-Bn -Dm=runtime -Bm='%(m)s+amor' \
+		-Bn -Bm='%(m)s+amor' \
 		-fbench_readed='float(bench_creaded) / float(n)' \
 		-fbench_proged='float(bench_cproged) / float(n)' \
 		-fbench_erased='float(bench_cerased) / float(n)' \
-		-o$@)
-
-# simulated/estimated results
-$(RESULTSDIR)/bench_vs_lfs%.emmc.sim.csv: $(RESULTSDIR)/bench_vs_lfs%.emmc.csv
-	$(strip ./scripts/csv.py $^ \
-		-Dm=runtime -Bm='%(m)s' \
-		-fbench_readed=' \
-			(float(bench_readed)*float($(EMMC_READ_TIME)) \
-				+ float(bench_proged)*float($(EMMC_PROG_TIME)) \
-				+ float(bench_erased)*float($(EMMC_ERASE_TIME)) \
-				) / 1.0e9' \
-		-fbench_proged=0 \
-		-fbench_erased=0 \
-		-fbench_creaded=' \
-			(float(bench_creaded)*float($(EMMC_READ_TIME)) \
-				+ float(bench_cproged)*float($(EMMC_PROG_TIME)) \
-				+ float(bench_cerased)*float($(EMMC_ERASE_TIME)) \
-				) / 1.0e9' \
-		-fbench_cproged=0 \
-		-fbench_cerased=0 \
-		-o$@)
-
-$(RESULTSDIR)/bench_vs_lfs%.nor.sim.csv: $(RESULTSDIR)/bench_vs_lfs%.nor.csv
-	$(strip ./scripts/csv.py $^ \
-		-Dm=runtime -Bm='%(m)s' \
-		-fbench_readed=' \
-			(float(bench_readed)*float($(NOR_READ_TIME)) \
-				+ float(bench_proged)*float($(NOR_PROG_TIME)) \
-				+ float(bench_erased)*float($(NOR_ERASE_TIME)) \
-				) / 1.0e9' \
-		-fbench_proged=0 \
-		-fbench_erased=0 \
-		-fbench_creaded=' \
-			(float(bench_creaded)*float($(NOR_READ_TIME)) \
-				+ float(bench_cproged)*float($(NOR_PROG_TIME)) \
-				+ float(bench_cerased)*float($(NOR_ERASE_TIME)) \
-				) / 1.0e9' \
-		-fbench_cproged=0 \
-		-fbench_cerased=0 \
-		-o$@)
-
-$(RESULTSDIR)/bench_vs_lfs%.nand.sim.csv: $(RESULTSDIR)/bench_vs_lfs%.nand.csv
-	$(strip ./scripts/csv.py $^ \
-		-Dm=runtime -Bm='%(m)s' \
-		-fbench_readed=' \
-			(float(bench_readed)*float($(NAND_READ_TIME)) \
-				+ float(bench_proged)*float($(NAND_PROG_TIME)) \
-				+ float(bench_erased)*float($(NAND_ERASE_TIME)) \
-				) / 1.0e9' \
-		-fbench_proged=0 \
-		-fbench_erased=0 \
-		-fbench_creaded=' \
-			(float(bench_creaded)*float($(NAND_READ_TIME)) \
-				+ float(bench_cproged)*float($(NAND_PROG_TIME)) \
-				+ float(bench_cerased)*float($(NAND_ERASE_TIME)) \
-				) / 1.0e9' \
-		-fbench_cproged=0 \
-		-fbench_cerased=0 \
 		-o$@)
 
 
@@ -854,12 +797,10 @@ plot-fwrite-tune-ct: \
 .PHONY: plot-vs-lfs2
 plot-vs-lfs2: \
 		plot-vs-lfs2-counter \
-		plot-vs-lfs2-many-creat \
-		plot-vs-lfs2-many-open
+		plot-vs-lfs2-many
 
 ## Plot benchmarks v3 vs v2 comparing a simple counter
 .PHONY: plot-vs-lfs2-counter
-plot-vs-lfs2-counter: TITLE=simple counter
 plot-vs-lfs2-counter: \
 		$(PLOTSDIR)/bench_vs_lfs2_counter_r.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_counter_p.svg \
@@ -867,9 +808,14 @@ plot-vs-lfs2-counter: \
 		$(PLOTSDIR)/bench_vs_lfs2_counter_u.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_counter.svg
 
+## Plot benchmarks v3 vs v2 comparing many files
+.PHONY: plot-vs-lfs2-many
+plot-vs-lfs2-many: \
+		plot-vs-lfs2-many-creat \
+		plot-vs-lfs2-many-open
+
 ## Plot benchmarks v3 vs v2 comparing many file creation
 .PHONY: plot-vs-lfs2-many-creat
-plot-vs-lfs2-many-creat: TITLE=many files create
 plot-vs-lfs2-many-creat: \
 		$(PLOTSDIR)/bench_vs_lfs2_many_creat_r.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_many_creat_p.svg \
@@ -879,12 +825,8 @@ plot-vs-lfs2-many-creat: \
 
 ## Plot benchmarks v3 vs v2 comparing many file open+read
 .PHONY: plot-vs-lfs2-many-open
-plot-vs-lfs2-many-open: TITLE=many files open+read
 plot-vs-lfs2-many-open: \
 		$(PLOTSDIR)/bench_vs_lfs2_many_open_r.svg \
-		$(PLOTSDIR)/bench_vs_lfs2_many_open_p.svg \
-		$(PLOTSDIR)/bench_vs_lfs2_many_open_e.svg \
-		$(PLOTSDIR)/bench_vs_lfs2_many_open_u.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_many_open.svg
 
 
@@ -2095,7 +2037,7 @@ PLOT_VS_LFS2_FLAGS += \
 		--subplot=" \
 				-DBLOCK_SIZE=$(EMMC_ERASE_SIZE) \
 				-Dm=$2 \
-				--ylabel=raw \
+				$(if $3,--ylabel=raw) \
 				--title=sd/emmc \
 				$(if $3,--add-xticklabel=,)" \
 			$(if $3, \
@@ -2128,155 +2070,110 @@ PLOT_VS_LFS2_FLAGS += \
 				-H0.5\",)"
 PLOT_VS_LFS2_FLAGS += $(PLOT_COLORS_1BND)
 
-# lfs3 (no bmap) vs lfs2 - reads
-$(PLOTSDIR)/bench_vs_lfs2_%_r.svg: \
-		$(foreach sim, emmc nor nand, \
-			$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.$(sim).avg.csv \
-			$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.$(sim).amor.avg.csv \
-			$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.$(sim).avg.csv \
-			$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.$(sim).amor.avg.csv)
-	$(strip ./scripts/plotmpl.py \
-		<(./scripts/csv.py $^ \
-			-fbench_readed_avg \
-			-fbench_readed_bnd=bench_readed_min \
+# lfs3 (no bmap) vs lfs2 rules
+define PLOT_VS_LFS2_RULE
+$$(PLOTSDIR)/bench_vs_lfs2_$1.svg: \
+		$$(foreach SIM, emmc nor nand, \
+			$$(RESULTSDIR)/bench_vs_lfs2_$2.lfs3.$$(SIM).avg.csv \
+			$$(RESULTSDIR)/bench_vs_lfs2_$2.lfs3.$$(SIM).amor.avg.csv \
+			$$(RESULTSDIR)/bench_vs_lfs2_$2.lfs2.$$(SIM).avg.csv \
+			$$(RESULTSDIR)/bench_vs_lfs2_$2.lfs2.$$(SIM).amor.avg.csv)
+	$$(strip ./scripts/plotmpl.py \
+		<(./scripts/csv.py $$^ \
+			-f$4_avg \
+			-f$4_bnd=$4_min \
 			-o-) \
-		<(./scripts/csv.py $^ \
-			-Dbench_readed_avg='*' \
-			-fbench_readed_bnd=bench_readed_max \
+		<(./scripts/csv.py $$^ \
+			-D$4_avg='*' \
+			-f$4_bnd=$4_max \
 			-o-) \
-		--title="lfs3 (no bmap) vs lfs2 - $(TITLE) - reads" \
+		--title=$3 \
 		-bV -SV \
 		-xn \
-		-ybench_readed_avg -ybench_readed_bnd \
+		-y$4_avg -y$4_bnd \
 		--y2 --yunits=B \
 		--legend \
-		-L'3,bench_readed_avg=lfs3 (no bmap)' \
-		-L'3,bench_readed_bnd=' \
-		-L'2,bench_readed_avg=lfs2' \
-		-L'2,bench_readed_bnd=' \
-		$(call PLOT_VS_LFS2_FLAGS,readed,runtime,amor) \
-		$(PLOTFLAGS) \
-		-o$@)
+		-L'3,$4_avg=lfs3 (no bmap)' \
+		-L'3,$4_bnd=' \
+		-L'2,$4_avg=lfs2' \
+		-L'2,$4_bnd=' \
+		$$(call PLOT_VS_LFS2_FLAGS,$5,$6,$7) \
+		$$(PLOTFLAGS) \
+		-o$$@)
+endef
 
-# lfs3 (no bmap) vs lfs2 - progs
-$(PLOTSDIR)/bench_vs_lfs2_%_p.svg: \
-		$(foreach sim, emmc nor nand, \
-			$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.$(sim).avg.csv \
-			$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.$(sim).amor.avg.csv \
-			$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.$(sim).avg.csv \
-			$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.$(sim).amor.avg.csv)
-	$(strip ./scripts/plotmpl.py \
-		<(./scripts/csv.py $^ \
-			-fbench_proged_avg \
-			-fbench_proged_bnd=bench_proged_min \
+define PLOT_VS_LFS2_SIM_RULE
+$$(PLOTSDIR)/bench_vs_lfs2_$1.svg: \
+		$$(foreach SIM, emmc nor nand, \
+			$$(RESULTSDIR)/bench_vs_lfs2_$2.lfs3.$$(SIM).sim.avg.csv \
+			$$(RESULTSDIR)/bench_vs_lfs2_$2.lfs3.$$(SIM).sim.amor.avg.csv \
+			$$(RESULTSDIR)/bench_vs_lfs2_$2.lfs2.$$(SIM).sim.avg.csv \
+			$$(RESULTSDIR)/bench_vs_lfs2_$2.lfs2.$$(SIM).sim.amor.avg.csv)
+	$$(strip ./scripts/plotmpl.py \
+		<(./scripts/csv.py $$^ \
+			-f$4_avg \
+			-f$4_bnd=$4_min \
 			-o-) \
-		<(./scripts/csv.py $^ \
-			-Dbench_proged_avg='*' \
-			-fbench_proged_bnd=bench_proged_max \
+		<(./scripts/csv.py $$^ \
+			-D$4_avg='*' \
+			-f$4_bnd=$4_max \
 			-o-) \
-		--title="lfs3 (no bmap) vs lfs2 - $(TITLE) - progs" \
+		--title=$3 \
 		-bV -SV \
 		-xn \
-		-ybench_proged_avg -ybench_proged_bnd \
-		--y2 --yunits=B \
-		--legend \
-		-L'3,bench_proged_avg=lfs3 (no bmap)' \
-		-L'3,bench_proged_bnd=' \
-		-L'2,bench_proged_avg=lfs2' \
-		-L'2,bench_proged_bnd=' \
-		$(call PLOT_VS_LFS2_FLAGS,proged,runtime,amor) \
-		$(PLOTFLAGS) \
-		-o$@)
-
-# lfs3 (no bmap) vs lfs2 - erases
-$(PLOTSDIR)/bench_vs_lfs2_%_e.svg: \
-		$(foreach sim, emmc nor nand, \
-			$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.$(sim).avg.csv \
-			$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.$(sim).amor.avg.csv \
-			$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.$(sim).avg.csv \
-			$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.$(sim).amor.avg.csv)
-	$(strip ./scripts/plotmpl.py \
-		<(./scripts/csv.py $^ \
-			-fbench_erased_avg \
-			-fbench_erased_bnd=bench_erased_min \
-			-o-) \
-		<(./scripts/csv.py $^ \
-			-Dbench_erased_avg='*' \
-			-fbench_erased_bnd=bench_erased_max \
-			-o-) \
-		--title="lfs3 (no bmap) vs lfs2 - $(TITLE) - erases" \
-		-bV -SV \
-		-xn \
-		-ybench_erased_avg -ybench_erased_bnd \
-		--y2 --yunits=B \
-		--legend \
-		-L'3,bench_erased_avg=lfs3 (no bmap)' \
-		-L'3,bench_erased_bnd=' \
-		-L'2,bench_erased_avg=lfs2' \
-		-L'2,bench_erased_bnd=' \
-		$(call PLOT_VS_LFS2_FLAGS,erased,runtime,amor) \
-		$(PLOTFLAGS) \
-		-o$@)
-
-# lfs3 (no bmap) vs lfs2 - disk usage
-$(PLOTSDIR)/bench_vs_lfs2_%_u.svg: \
-		$(foreach sim, emmc nor nand, \
-			$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.$(sim).avg.csv \
-			$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.$(sim).amor.avg.csv \
-			$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.$(sim).avg.csv \
-			$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.$(sim).amor.avg.csv)
-	$(strip ./scripts/plotmpl.py \
-		<(./scripts/csv.py $^ \
-			-fbench_readed_avg \
-			-fbench_readed_bnd=bench_readed_min \
-			-o-) \
-		<(./scripts/csv.py $^ \
-			-Dbench_readed_avg='*' \
-			-fbench_readed_bnd=bench_readed_max \
-			-o-) \
-		--title="lfs3 (no bmap) vs lfs2 - $(TITLE) - disk usage" \
-		-bV -SV \
-		-xn \
-		-ybench_readed_avg -ybench_readed_bnd \
-		--y2 --yunits=B \
-		--legend \
-		-L'3,bench_readed_avg=lfs3 (no bmap)' \
-		-L'3,bench_readed_bnd=' \
-		-L'2,bench_readed_avg=lfs2' \
-		-L'2,bench_readed_bnd=' \
-		$(call PLOT_VS_LFS2_FLAGS,usage,usage) \
-		$(PLOTFLAGS) \
-		-o$@)
-
-# lfs3 (no bmap) vs lfs2 - simulated runtime
-$(PLOTSDIR)/bench_vs_lfs2_%.svg: \
-		$(foreach sim, emmc nor nand, \
-			$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.$(sim).sim.avg.csv \
-			$(RESULTSDIR)/bench_vs_lfs2_%.lfs3.$(sim).sim.amor.avg.csv \
-			$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.$(sim).sim.avg.csv \
-			$(RESULTSDIR)/bench_vs_lfs2_%.lfs2.$(sim).sim.amor.avg.csv)
-	$(strip ./scripts/plotmpl.py \
-		<(./scripts/csv.py $^ \
-			-fbench_readed_avg \
-			-fbench_readed_bnd=bench_readed_min \
-			-o-) \
-		<(./scripts/csv.py $^ \
-			-Dbench_readed_avg='*' \
-			-fbench_readed_bnd=bench_readed_max \
-			-o-) \
-		--title="lfs3 (no bmap) vs lfs2 - $(TITLE) - simulated runtime" \
-		-bV -SV \
-		-xn \
-		-ybench_readed_avg -ybench_readed_bnd \
+		-y$4_avg -y$4_bnd \
 		--yunits=s \
 		--legend \
-		-L'3,bench_readed_avg=lfs3 (no bmap)' \
-		-L'3,bench_readed_bnd=' \
-		-L'2,bench_readed_avg=lfs2' \
-		-L'2,bench_readed_bnd=' \
-		$(call PLOT_VS_LFS2_FLAGS,simulated,runtime,amor) \
-		$(PLOTFLAGS) \
-		-o$@)
+		-L'3,$4_avg=lfs3 (no bmap)' \
+		-L'3,$4_bnd=' \
+		-L'2,$4_avg=lfs2' \
+		-L'2,$4_bnd=' \
+		$$(call PLOT_VS_LFS2_FLAGS,$5,$6,$7) \
+		$$(PLOTFLAGS) \
+		-o$$@)
+endef
+
+# lfs3 (no bmap) vs lfs2 - simple counter
+$(eval $(call PLOT_VS_LFS2_RULE,counter_r,counter,$\
+	"lfs3 (no bmap) vs lfs2 - simple counter - reads",$\
+	bench_readed,readed,creat,amor))
+$(eval $(call PLOT_VS_LFS2_RULE,counter_p,counter,$\
+	"lfs3 (no bmap) vs lfs2 - simple counter - progs",$\
+	bench_proged,proged,creat,amor))
+$(eval $(call PLOT_VS_LFS2_RULE,counter_e,counter,$\
+	"lfs3 (no bmap) vs lfs2 - simple counter - erases",$\
+	bench_erased,erased,creat,amor))
+$(eval $(call PLOT_VS_LFS2_RULE,counter_u,counter,$\
+	"lfs3 (no bmap) vs lfs2 - simple counter - usage",$\
+	bench_readed,usage,usage))
+$(eval $(call PLOT_VS_LFS2_SIM_RULE,counter,counter,$\
+	"lfs3 (no bmap) vs lfs2 - simple counter - simulated runtime",$\
+	bench_readed,simulated,creat+sim,amor))
+
+# lfs3 (no bmap) vs lfs2 - many files create
+$(eval $(call PLOT_VS_LFS2_RULE,many_creat_r,many,$\
+	"lfs3 (no bmap) vs lfs2 - many files create - reads",$\
+	bench_readed,readed,creat,amor))
+$(eval $(call PLOT_VS_LFS2_RULE,many_creat_p,many,$\
+	"lfs3 (no bmap) vs lfs2 - many files create - progs",$\
+	bench_proged,proged,creat,amor))
+$(eval $(call PLOT_VS_LFS2_RULE,many_creat_e,many,$\
+	"lfs3 (no bmap) vs lfs2 - many files create - erases",$\
+	bench_erased,erased,creat,amor))
+$(eval $(call PLOT_VS_LFS2_RULE,many_creat_u,many,$\
+	"lfs3 (no bmap) vs lfs2 - many files create - usage",$\
+	bench_readed,usage,usage))
+$(eval $(call PLOT_VS_LFS2_SIM_RULE,many_creat,many,$\
+	"lfs3 (no bmap) vs lfs2 - many files create - simulated runtime",$\
+	bench_readed,simulated,creat+sim,amor))
+
+# lfs3 (no bmap) vs lfs2 - many files open+read
+$(eval $(call PLOT_VS_LFS2_RULE,many_open_r,many,$\
+	"lfs3 (no bmap) vs lfs2 - many files open+read - reads",$\
+	bench_readed,readed,open,amor))
+$(eval $(call PLOT_VS_LFS2_SIM_RULE,many_open,many,$\
+	"lfs3 (no bmap) vs lfs2 - many files open+read - simulated runtime",$\
+	bench_readed,simulated,open+sim,amor))
 
 
 
