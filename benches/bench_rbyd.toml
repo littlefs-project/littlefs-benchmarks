@@ -3,8 +3,8 @@
 # set block_size to the full size of disk so we can test arbitrarily
 # large rbyd trees, we don't really care about block sizes at this
 # abstraction level
-defines.DISK_SIZE = 32768
-defines.BLOCK_SIZE = 32768
+defines.DISK_SIZE = 524288
+defines.BLOCK_SIZE = 524288
 defines.BLOCK_COUNT = 1
 
 [cases.bench_rbyd_attr_append]
