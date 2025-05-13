@@ -375,7 +375,8 @@ bench-fwrite-tune-ct: $(RESULTSDIR)/bench_fwrite_tune_ct.csv
 bench-vs-lfs2: \
 		bench-vs-lfs2-counter \
 		bench-vs-lfs2-many \
-		bench-vs-lfs2-fwrite
+		bench-vs-lfs2-fwrite \
+		bench-vs-lfs2-logging
 
 ## Run benchmarks v3 vs v2 comparing a simple counter
 .PHONY: bench-vs-lfs2-counter
@@ -397,6 +398,13 @@ bench-vs-lfs2-fwrite: \
 		$(foreach SIM, emmc nor nand, \
 			$(RESULTSDIR)/bench_vs_lfs2_fwrite.lfs3.$(SIM).csv \
 			$(RESULTSDIR)/bench_vs_lfs2_fwrite.lfs2.$(SIM).csv)
+
+## Run benchmarks v3 vs v2 comparing logging
+.PHONY: bench-vs-lfs2-logging
+bench-vs-lfs2-logging: \
+		$(foreach SIM, emmc nor nand, \
+			$(RESULTSDIR)/bench_vs_lfs2_logging.lfs3.$(SIM).csv \
+			$(RESULTSDIR)/bench_vs_lfs2_logging.lfs2.$(SIM).csv)
 
 
 # run the benches!
@@ -590,6 +598,15 @@ $$(RESULTSDIR)/bench_vs_lfs2_many.$(V).$(SIM).csv: $(V_RUNNER)
 
 $$(RESULTSDIR)/bench_vs_lfs2_fwrite.$(V).$(SIM).csv: $(V_RUNNER)
 	$$(strip ./scripts/bench.py -R$$< -B bench_vs_lfs2_fwrite \
+		-DSEED="range($$(SAMPLES))" \
+		-DREAD_SIZE=$(SIM_READ_SIZE) \
+		-DPROG_SIZE=$(SIM_PROG_SIZE) \
+		-DBLOCK_SIZE=$(SIM_ERASE_SIZE) \
+		$$(BENCHFLAGS) \
+		-o$$@)
+
+$$(RESULTSDIR)/bench_vs_lfs2_logging.$(V).$(SIM).csv: $(V_RUNNER)
+	$$(strip ./scripts/bench.py -R$$< -B bench_vs_lfs2_logging \
 		-DSEED="range($$(SAMPLES))" \
 		-DREAD_SIZE=$(SIM_READ_SIZE) \
 		-DPROG_SIZE=$(SIM_PROG_SIZE) \
@@ -829,7 +846,8 @@ plot-fwrite-tune-ct: \
 plot-vs-lfs2: \
 		plot-vs-lfs2-counter \
 		plot-vs-lfs2-many \
-		plot-vs-lfs2-fwrite
+		plot-vs-lfs2-fwrite \
+		plot-vs-lfs2-logging
 
 ## Plot benchmarks v3 vs v2 comparing a simple counter
 .PHONY: plot-vs-lfs2-counter
@@ -844,7 +862,8 @@ plot-vs-lfs2-counter: \
 .PHONY: plot-vs-lfs2-many
 plot-vs-lfs2-many: \
 		plot-vs-lfs2-many-creat \
-		plot-vs-lfs2-many-open
+		plot-vs-lfs2-many-open \
+		plot-vs-lfs2-many-usage
 
 ## Plot benchmarks v3 vs v2 comparing many file creation
 .PHONY: plot-vs-lfs2-many-creat
@@ -852,7 +871,6 @@ plot-vs-lfs2-many-creat: \
 		$(PLOTSDIR)/bench_vs_lfs2_many_creat_r.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_many_creat_p.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_many_creat_e.svg \
-		$(PLOTSDIR)/bench_vs_lfs2_many_creat_u.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_many_creat.svg
 
 ## Plot benchmarks v3 vs v2 comparing many file open+read
@@ -860,6 +878,11 @@ plot-vs-lfs2-many-creat: \
 plot-vs-lfs2-many-open: \
 		$(PLOTSDIR)/bench_vs_lfs2_many_open_r.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_many_open.svg
+
+## Plot benchmarks v3 vs v2 comparing many file usage
+.PHONY: plot-vs-lfs2-many-usage
+plot-vs-lfs2-many-usage: \
+		$(PLOTSDIR)/bench_vs_lfs2_many_usage.svg
 
 ## Plot benchmarks v3 vs v2 comparing file reads/writes
 .PHONY: plot-vs-lfs2-fwrite
@@ -908,6 +931,25 @@ plot-vs-lfs2-fwrite-random-read: \
 .PHONY: plot-vs-lfs2-fwrite-random-usage
 plot-vs-lfs2-fwrite-random-usage: \
 		$(PLOTSDIR)/bench_vs_lfs2_fwrite_random_usage.svg
+
+## Plot benchmarks v3 vs v2 comparing logging
+.PHONY: plot-vs-lfs2-logging
+plot-vs-lfs2-logging: \
+		plot-vs-lfs2-logging-write \
+		plot-vs-lfs2-logging-usage
+
+## Plot benchmarks v3 vs v2 comparing logging writes
+.PHONY: plot-vs-lfs2-logging-write
+plot-vs-lfs2-logging-write: \
+		$(PLOTSDIR)/bench_vs_lfs2_logging_write_r.svg \
+		$(PLOTSDIR)/bench_vs_lfs2_logging_write_p.svg \
+		$(PLOTSDIR)/bench_vs_lfs2_logging_write_e.svg \
+		$(PLOTSDIR)/bench_vs_lfs2_logging_write.svg
+
+## Plot benchmarks v3 vs v2 comparing logging usage
+.PHONY: plot-vs-lfs2-logging-usage
+plot-vs-lfs2-logging-usage: \
+		$(PLOTSDIR)/bench_vs_lfs2_logging_usage.svg
 
 
 
@@ -2226,11 +2268,6 @@ $(eval $(call PLOT_VS_LFS2_RULE,many_creat_e,$\
 	"lfs3 (no bmap) vs lfs2 - many files create - erases",$\
 	bench_erased,erased,creat,amor,$\
 	--y2 --yunits=B))
-$(eval $(call PLOT_VS_LFS2_RULE,many_creat_u,$\
-	many.$$(V).$$(SIM) many.$$(V).$$(SIM).per,$\
-	"lfs3 (no bmap) vs lfs2 - many files create - usage",$\
-	bench_readed,usage,usage,per,$\
-	--y2 --yunits=B))
 $(eval $(call PLOT_VS_LFS2_RULE,many_creat,$\
 	many.$$(V).$$(SIM).sim many.$$(V).$$(SIM).sim.amor,$\
 	"lfs3 (no bmap) vs lfs2 - many files create - simulated runtime",$\
@@ -2248,6 +2285,13 @@ $(eval $(call PLOT_VS_LFS2_RULE,many_open,$\
 	"lfs3 (no bmap) vs lfs2 - many files open+read - simulated runtime",$\
 	bench_readed,simulated,open+sim,amor,$\
 	--yunits=s))
+
+# lfs3 (no bmap) vs lfs2 - many files usage
+$(eval $(call PLOT_VS_LFS2_RULE,many_usage,$\
+	many.$$(V).$$(SIM) many.$$(V).$$(SIM).per,$\
+	"lfs3 (no bmap) vs lfs2 - many files usage",$\
+	bench_readed,usage,usage,per,$\
+	--y2 --yunits=B))
 
 # lfs3 (no bmap) vs lfs2 - linear file writes
 $(eval $(call PLOT_VS_LFS2_RULE,fwrite_linear_write_r,$\
@@ -2330,6 +2374,35 @@ $(eval $(call PLOT_VS_LFS2_RULE,fwrite_random_usage,$\
 	"lfs3 (no bmap) vs lfs2 - random file usage",$\
 	bench_readed,usage,usage,per,$\
 	-DMODE=5 --x2 --xunits=B --y2 --yunits=B))
+
+# lfs3 (no bmap) vs lfs2 - logging writes
+$(eval $(call PLOT_VS_LFS2_RULE,logging_write_r,$\
+	logging.$$(V).$$(SIM) logging.$$(V).$$(SIM).amor,$\
+	"lfs3 (no bmap) vs lfs2 - logging writes - reads",$\
+	bench_readed,readed,write,amor,$\
+	-DMODE=0 --x2 --xunits=B --y2 --yunits=B))
+$(eval $(call PLOT_VS_LFS2_RULE,logging_write_p,$\
+	logging.$$(V).$$(SIM) logging.$$(V).$$(SIM).amor,$\
+	"lfs3 (no bmap) vs lfs2 - logging writes - progs",$\
+	bench_proged,proged,write,amor,$\
+	-DMODE=0 --x2 --xunits=B --y2 --yunits=B))
+$(eval $(call PLOT_VS_LFS2_RULE,logging_write_e,$\
+	logging.$$(V).$$(SIM) logging.$$(V).$$(SIM).amor,$\
+	"lfs3 (no bmap) vs lfs2 - logging writes - erases",$\
+	bench_erased,erased,write,amor,$\
+	-DMODE=0 --x2 --xunits=B --y2 --yunits=B))
+$(eval $(call PLOT_VS_LFS2_RULE,logging_write,$\
+	logging.$$(V).$$(SIM).sim logging.$$(V).$$(SIM).sim.amor,$\
+	"lfs3 (no bmap) vs lfs2 - logging writes - simulated runtime",$\
+	bench_readed,simulated,write+sim,amor,$\
+	-DMODE=0 --x2 --xunits=B --yunits=s))
+
+# lfs3 (no bmap) vs lfs2 - logging usage
+$(eval $(call PLOT_VS_LFS2_RULE,logging_usage,$\
+	logging.$$(V).$$(SIM) logging.$$(V).$$(SIM).per,$\
+	"lfs3 (no bmap) vs lfs2 - logging usage",$\
+	bench_readed,usage,usage,per,$\
+	-DMODE=1 --x2 --xunits=B --y2 --yunits=B))
 
 
 
