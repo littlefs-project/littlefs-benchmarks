@@ -866,8 +866,10 @@ plot-vs-lfs2-many-open: \
 plot-vs-lfs2-fwrite: \
 		plot-vs-lfs2-fwrite-linear-write \
 		plot-vs-lfs2-fwrite-linear-read \
+		plot-vs-lfs2-fwrite-linear-usage \
 		plot-vs-lfs2-fwrite-random-write \
-		plot-vs-lfs2-fwrite-random-read
+		plot-vs-lfs2-fwrite-random-read \
+		plot-vs-lfs2-fwrite-random-usage
 
 ## Plot benchmarks v3 vs v2 comparing linear file writes
 .PHONY: plot-vs-lfs2-fwrite-linear-write
@@ -875,7 +877,6 @@ plot-vs-lfs2-fwrite-linear-write: \
 		$(PLOTSDIR)/bench_vs_lfs2_fwrite_linear_write_r.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_fwrite_linear_write_p.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_fwrite_linear_write_e.svg \
-		$(PLOTSDIR)/bench_vs_lfs2_fwrite_linear_write_u.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_fwrite_linear_write.svg
 
 ## Plot benchmarks v3 vs v2 comparing linear file reads
@@ -884,13 +885,17 @@ plot-vs-lfs2-fwrite-linear-read: \
 		$(PLOTSDIR)/bench_vs_lfs2_fwrite_linear_read_r.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_fwrite_linear_read.svg
 
+## Plot benchmarks v3 vs v2 comparing linear file usage
+.PHONY: plot-vs-lfs2-fwrite-linear-usage
+plot-vs-lfs2-fwrite-linear-usage: \
+		$(PLOTSDIR)/bench_vs_lfs2_fwrite_linear_usage.svg
+
 ## Plot benchmarks v3 vs v2 comparing random file writes
 .PHONY: plot-vs-lfs2-fwrite-random-write
 plot-vs-lfs2-fwrite-random-write: \
 		$(PLOTSDIR)/bench_vs_lfs2_fwrite_random_write_r.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_fwrite_random_write_p.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_fwrite_random_write_e.svg \
-		$(PLOTSDIR)/bench_vs_lfs2_fwrite_random_write_u.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_fwrite_random_write.svg
 
 ## Plot benchmarks v3 vs v2 comparing random file reads
@@ -898,6 +903,11 @@ plot-vs-lfs2-fwrite-random-write: \
 plot-vs-lfs2-fwrite-random-read: \
 		$(PLOTSDIR)/bench_vs_lfs2_fwrite_random_read_r.svg \
 		$(PLOTSDIR)/bench_vs_lfs2_fwrite_random_read.svg
+
+## Plot benchmarks v3 vs v2 comparing random file usage
+.PHONY: plot-vs-lfs2-fwrite-random-usage
+plot-vs-lfs2-fwrite-random-usage: \
+		$(PLOTSDIR)/bench_vs_lfs2_fwrite_random_usage.svg
 
 
 
@@ -2244,78 +2254,82 @@ $(eval $(call PLOT_VS_LFS2_RULE,fwrite_linear_write_r,$\
 	fwrite.$$(V).$$(SIM) fwrite.$$(V).$$(SIM).amor,$\
 	"lfs3 (no bmap) vs lfs2 - linear file writes - reads",$\
 	bench_readed,readed,write,amor,$\
-	-DORDER=0 -DREWRITE=0 -DREREAD=0 --x2 --xunits=B --y2 --yunits=B))
+	-DMODE=0 --x2 --xunits=B --y2 --yunits=B))
 $(eval $(call PLOT_VS_LFS2_RULE,fwrite_linear_write_p,$\
 	fwrite.$$(V).$$(SIM) fwrite.$$(V).$$(SIM).amor,$\
 	"lfs3 (no bmap) vs lfs2 - linear file writes - progs",$\
 	bench_proged,proged,write,amor,$\
-	-DORDER=0 -DREWRITE=0 -DREREAD=0 --x2 --xunits=B --y2 --yunits=B))
+	-DMODE=0 --x2 --xunits=B --y2 --yunits=B))
 $(eval $(call PLOT_VS_LFS2_RULE,fwrite_linear_write_e,$\
 	fwrite.$$(V).$$(SIM) fwrite.$$(V).$$(SIM).amor,$\
 	"lfs3 (no bmap) vs lfs2 - linear file writes - erases",$\
 	bench_erased,erased,write,amor,$\
-	-DORDER=0 -DREWRITE=0 -DREREAD=0 --x2 --xunits=B --y2 --yunits=B))
-$(eval $(call PLOT_VS_LFS2_RULE,fwrite_linear_write_u,$\
-	fwrite.$$(V).$$(SIM) fwrite.$$(V).$$(SIM).per,$\
-	"lfs3 (no bmap) vs lfs2 - linear file writes - usage",$\
-	bench_readed,usage,usage,per,$\
-	-DORDER=0 -DREWRITE=0 -DREREAD=0 --x2 --xunits=B --y2 --yunits=B))
+	-DMODE=0 --x2 --xunits=B --y2 --yunits=B))
 $(eval $(call PLOT_VS_LFS2_RULE,fwrite_linear_write,$\
 	fwrite.$$(V).$$(SIM).sim fwrite.$$(V).$$(SIM).sim.amor,$\
 	"lfs3 (no bmap) vs lfs2 - linear file writes - simulated runtime",$\
 	bench_readed,simulated,write+sim,amor,$\
-	-DORDER=0 -DREWRITE=0 -DREREAD=0 --x2 --xunits=B --yunits=s))
+	-DMODE=0 --x2 --xunits=B --yunits=s))
 
 # lfs3 (no bmap) vs lfs2 - linear file reads
 $(eval $(call PLOT_VS_LFS2_RULE,fwrite_linear_read_r,$\
 	fwrite.$$(V).$$(SIM) fwrite.$$(V).$$(SIM).per,$\
 	"lfs3 (no bmap) vs lfs2 - linear file reads - reads",$\
 	bench_readed,readed,read,per,$\
-	-DORDER=0 -DREWRITE=0 -DREREAD=1 --x2 --xunits=B --y2 --yunits=B))
+	-DMODE=1 --x2 --xunits=B --y2 --yunits=B))
 $(eval $(call PLOT_VS_LFS2_RULE,fwrite_linear_read,$\
 	fwrite.$$(V).$$(SIM).sim fwrite.$$(V).$$(SIM).sim.per,$\
 	"lfs3 (no bmap) vs lfs2 - linear file reads - simulated runtime",$\
 	bench_readed,simulated,read+sim,per,$\
-	-DORDER=0 -DREWRITE=0 -DREREAD=1 --x2 --xunits=B --yunits=s))
+	-DMODE=1 --x2 --xunits=B --yunits=s))
+
+# lfs3 (no bmap) vs lfs2 - linear file usage
+$(eval $(call PLOT_VS_LFS2_RULE,fwrite_linear_usage,$\
+	fwrite.$$(V).$$(SIM) fwrite.$$(V).$$(SIM).per,$\
+	"lfs3 (no bmap) vs lfs2 - linear file usage",$\
+	bench_readed,usage,usage,per,$\
+	-DMODE=2 --x2 --xunits=B --y2 --yunits=B))
 
 # lfs3 (no bmap) vs lfs2 - random file writes
 $(eval $(call PLOT_VS_LFS2_RULE,fwrite_random_write_r,$\
 	fwrite.$$(V).$$(SIM) fwrite.$$(V).$$(SIM).amor,$\
 	"lfs3 (no bmap) vs lfs2 - random file writes - reads",$\
 	bench_readed,readed,write,amor,$\
-	-DORDER=3 -DREWRITE=1 -DREREAD=0 --x2 --xunits=B --y2 --yunits=B))
+	-DMODE=3 --x2 --xunits=B --y2 --yunits=B))
 $(eval $(call PLOT_VS_LFS2_RULE,fwrite_random_write_p,$\
 	fwrite.$$(V).$$(SIM) fwrite.$$(V).$$(SIM).amor,$\
 	"lfs3 (no bmap) vs lfs2 - random file writes - progs",$\
 	bench_proged,proged,write,amor,$\
-	-DORDER=3 -DREWRITE=1 -DREREAD=0 --x2 --xunits=B --y2 --yunits=B))
+	-DMODE=3 --x2 --xunits=B --y2 --yunits=B))
 $(eval $(call PLOT_VS_LFS2_RULE,fwrite_random_write_e,$\
 	fwrite.$$(V).$$(SIM) fwrite.$$(V).$$(SIM).amor,$\
 	"lfs3 (no bmap) vs lfs2 - random file writes - erases",$\
 	bench_erased,erased,write,amor,$\
-	-DORDER=3 -DREWRITE=1 -DREREAD=0 --x2 --xunits=B --y2 --yunits=B))
-$(eval $(call PLOT_VS_LFS2_RULE,fwrite_random_write_u,$\
-	fwrite.$$(V).$$(SIM) fwrite.$$(V).$$(SIM).per,$\
-	"lfs3 (no bmap) vs lfs2 - random file writes - usage",$\
-	bench_readed,usage,usage,per,$\
-	-DORDER=3 -DREWRITE=1 -DREREAD=0 --x2 --xunits=B --y2 --yunits=B))
+	-DMODE=3 --x2 --xunits=B --y2 --yunits=B))
 $(eval $(call PLOT_VS_LFS2_RULE,fwrite_random_write,$\
 	fwrite.$$(V).$$(SIM).sim fwrite.$$(V).$$(SIM).sim.amor,$\
 	"lfs3 (no bmap) vs lfs2 - random file writes - simulated runtime",$\
 	bench_readed,simulated,write+sim,amor,$\
-	-DORDER=3 -DREWRITE=1 -DREREAD=0 --x2 --xunits=B --yunits=s))
+	-DMODE=3 --x2 --xunits=B --yunits=s))
 
 # lfs3 (no bmap) vs lfs2 - random file reads
 $(eval $(call PLOT_VS_LFS2_RULE,fwrite_random_read_r,$\
 	fwrite.$$(V).$$(SIM) fwrite.$$(V).$$(SIM).amor,$\
 	"lfs3 (no bmap) vs lfs2 - random file reads - reads",$\
 	bench_readed,readed,read,amor,$\
-	-DORDER=3 -DREWRITE=0 -DREREAD=1 --x2 --xunits=B --y2 --yunits=B))
+	-DMODE=4 --x2 --xunits=B --y2 --yunits=B))
 $(eval $(call PLOT_VS_LFS2_RULE,fwrite_random_read,$\
 	fwrite.$$(V).$$(SIM).sim fwrite.$$(V).$$(SIM).sim.amor,$\
 	"lfs3 (no bmap) vs lfs2 - random file reads - simulated runtime",$\
 	bench_readed,simulated,read+sim,amor,$\
-	-DORDER=3 -DREWRITE=0 -DREREAD=1 --x2 --xunits=B --yunits=s))
+	-DMODE=4 --x2 --xunits=B --yunits=s))
+
+# lfs3 (no bmap) vs lfs2 - random file usage
+$(eval $(call PLOT_VS_LFS2_RULE,fwrite_random_usage,$\
+	fwrite.$$(V).$$(SIM) fwrite.$$(V).$$(SIM).per,$\
+	"lfs3 (no bmap) vs lfs2 - random file usage",$\
+	bench_readed,usage,usage,per,$\
+	-DMODE=5 --x2 --xunits=B --y2 --yunits=B))
 
 
 
