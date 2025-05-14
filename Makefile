@@ -63,8 +63,8 @@ NAND_ERASE_TIME ?= 15     # tBE=2 ms, block=131072 (2 ms / 131072)
 BENCHES ?= $(wildcard benches/*.toml)
 BENCH_RUNNER ?= $(BUILDDIR)/bench_runner
 BENCH_SRC ?= \
-		$(wildcard littlefs3/*.c) \
-		$(wildcard bd/*.c) \
+		$(filter-out %.t.c %.b.c %.a.c,$(wildcard littlefs3/*.c)) \
+		$(filter-out %.t.c %.b.c %.a.c,$(wildcard bd/*.c)) \
 		runners/bench_runner.c
 BENCH_C     := \
 		$(BENCHES:%.toml=$(BUILDDIR)/%.lfs3.b.c) \
@@ -83,8 +83,8 @@ BENCH_CSV   := $(BENCH_RUNNER:%=%.csv)
 BENCHES_LFS2 ?= benches/bench_vs_lfs2.toml
 BENCH_LFS2_RUNNER ?= $(BUILDDIR)/bench_lfs2_runner
 BENCH_LFS2_SRC ?= \
-		$(wildcard littlefs2/*.c) \
-		$(wildcard bd/*.c) \
+		$(filter-out %.t.c %.b.c %.a.c,$(wildcard littlefs2/*.c)) \
+		$(filter-out %.t.c %.b.c %.a.c,$(wildcard bd/*.c)) \
 		runners/bench_runner.c
 BENCH_LFS2_C     := \
 		$(BENCHES_LFS2:%.toml=$(BUILDDIR)/%.lfs2.b.c) \
