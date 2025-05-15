@@ -126,14 +126,18 @@ void bench_permutation(size_t i, uint32_t *buffer, size_t size);
     BENCH_DEFINE(BLOCK_RECYCLES,     -1                                     ) \
     BENCH_DEFINE(RCACHE_SIZE,        LFS_MAX(16, READ_SIZE)                 ) \
     BENCH_DEFINE(PCACHE_SIZE,        LFS_MAX(16, PROG_SIZE)                 ) \
-    BENCH_DEFINE(FILE_CACHE_SIZE,    16                                     ) \
+    /* NOTE this max is not necessary, but levels the playing field        */ \
+    /* vs littlefs v2                                                      */ \
+    BENCH_DEFINE(FILE_CACHE_SIZE,    LFS_MAX(16, \
+                                        LFS_MAX(READ_SIZE, PROG_SIZE))      ) \
     BENCH_DEFINE(LOOKAHEAD_SIZE,     16                                     ) \
     BENCH_DEFINE(GC_FLAGS,           0                                      ) \
     BENCH_DEFINE(GC_STEPS,           0                                      ) \
     BENCH_DEFINE(GC_COMPACT_THRESH,  0                                      ) \
     BENCH_DEFINE(INLINE_SIZE,        BLOCK_SIZE/4                           ) \
     BENCH_DEFINE(FRAGMENT_SIZE,      LFS_MIN(BLOCK_SIZE/8, 512)             ) \
-    BENCH_DEFINE(CRYSTAL_THRESH,     BLOCK_SIZE/8                           ) \
+    /* TODO should this be enforced in lfs_init? */                           \
+    BENCH_DEFINE(CRYSTAL_THRESH,     LFS_MAX(BLOCK_SIZE/8, PROG_SIZE)       ) \
     BENCH_DEFINE(FRAGMENT_THRESH,    -1                                     ) \
     BENCH_DEFINE(ERASE_VALUE,        0xff                                   ) \
     BENCH_DEFINE(ERASE_CYCLES,       0                                      ) \

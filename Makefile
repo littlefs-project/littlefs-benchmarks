@@ -1193,7 +1193,7 @@ PLOT_BTREE_FLAGS += \
 				--ylabel=bench_usage \
 				--title='usage (per-entry)' \
 				--add-xticklabel= \
-				-Y0,512 \
+				--ylim-stddev=3 \
 				-W$(if $1,0.20,0.25) \
 			--subplot-below=\" \
 				-Dm=usage \
@@ -1407,7 +1407,7 @@ PLOT_MTREE_FLAGS += \
 				--ylabel=bench_usage \
 				--title='usage (per-entry)' \
 				--add-xticklabel= \
-				-Y0,1024\
+				--ylim-stddev=3 \
 				-W0.16 \
 			--subplot-below=\" \
 				-Dm=usage \
@@ -1733,7 +1733,7 @@ PLOT_FWRITE_FLAGS += \
 				--ylabel=usage \
 				--title='usage (per-byte)' \
 				--add-xticklabel= \
-				-Y0,16 \
+				--ylim-stddev=3 \
 				-W0.25 \
 			--subplot-below=\" \
 				-Dm=usage \
@@ -2169,6 +2169,7 @@ PLOT_VS_LFS2_FLAGS += \
 				-Dm=$2+$3 \
 				$(if $(filter amor,$3),--ylabel=amortized) \
 				$(if $(filter per,$3),--ylabel=per) \
+				--ylim-stddev=3 \
 				-H0.5",) \
 		--subplot-right=" \
 				-DBLOCK_SIZE=$(NOR_ERASE_SIZE) \
@@ -2180,6 +2181,7 @@ PLOT_VS_LFS2_FLAGS += \
 			--subplot-below=\" \
 				-DBLOCK_SIZE=$(NOR_ERASE_SIZE) \
 				-Dm=$2+$3 \
+				--ylim-stddev=3 \
 				-H0.5\",)" \
 		--subplot-right=" \
 				-DBLOCK_SIZE=$(NAND_ERASE_SIZE) \
@@ -2191,6 +2193,7 @@ PLOT_VS_LFS2_FLAGS += \
 			--subplot-below=\" \
 				-DBLOCK_SIZE=$(NAND_ERASE_SIZE) \
 				-Dm=$2+$3 \
+				--ylim-stddev=3 \
 				-H0.5\",)"
 PLOT_VS_LFS2_FLAGS += $(PLOT_COLORS_1BND)
 
