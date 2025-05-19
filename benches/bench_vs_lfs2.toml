@@ -357,7 +357,9 @@ code = '''
 
         // a little bit weird, but this incrementally measures linear
         // writes, including open and close costs
-        if ((MODE == 0) && (i+1) % STEP == 0) {
+        if ((MODE == 0)
+                && (i+1) % STEP == 0
+                && (i+1) < (SIZE+(CHUNK-1))/CHUNK) {
             BENCH_STOP("write");
             BENCH_START("write", (i+1)*CHUNK+CHUNK);
         }
@@ -636,7 +638,9 @@ code = '''
 
         // a little bit weird, but this incrementally measures linear
         // writes, including open and close costs
-        if ((MODE == 0) && (i+1) % STEP == 0) {
+        if ((MODE == 0)
+                && (i+1) % STEP == 0
+                && (i+1) < (N+(CHUNK-1))/CHUNK) {
             BENCH_STOP("write");
             BENCH_START("write", (i+1)*CHUNK+CHUNK);
         }
