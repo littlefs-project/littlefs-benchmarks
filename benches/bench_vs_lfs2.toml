@@ -255,10 +255,10 @@ code = '''
 # 4 = random read
 # 5 = random usage
 defines.MODE = [0, 1, 2, 3, 4, 5]
-#defines.DISK_SIZE = '64*1024*1024'
-#defines.SIZE = '64*16384'
-#defines.CHUNK = 32
-#defines.STEP = '64*1'
+# defines.DISK_SIZE = '64*1024*1024'
+# defines.SIZE = '64*16384'
+# defines.CHUNK = 32
+# defines.STEP = '64*1'
 defines.SIZE = 16384
 defines.CHUNK = 32
 defines.STEP = 1
@@ -519,13 +519,13 @@ code = '''
 # 0 = write
 # 1 = usage
 defines.MODE = [0, 1]
-#defines.DISK_SIZE = '64*1024*1024'
-#defines.N = '64*16384'
-#defines.SIZE = '64*4096'
-#defines.CHUNK = 32
-#defines.STEP = '64*1'
-defines.N = 16384
-defines.SIZE = 4096
+# defines.DISK_SIZE = '64*1024*1024'
+# defines.SIZE = '64*16384'
+# defines.LOG_SIZE = '64*4096'
+# defines.CHUNK = 32
+# defines.STEP = '64*1'
+defines.SIZE = 16384
+defines.LOG_SIZE = 4096
 defines.CHUNK = 32
 defines.STEP = 1
 defines.SEED = 42
@@ -594,7 +594,7 @@ code = '''
     lfs2_file_open(&lfs, &file, "bench_log",
             LFS2_O_RDWR | LFS2_O_CREAT | LFS2_O_EXCL | LFS2_O_APPEND) => 0;
     #endif
-    for (lfs_size_t i = 0; i < (N+(CHUNK-1))/CHUNK; i++) {
+    for (lfs_size_t i = 0; i < (SIZE+(CHUNK-1))/CHUNK; i++) {
         // append to log
         uint8_t wbuf[CHUNK];
         for (lfs_size_t j = 0; j < CHUNK; j++) {
@@ -619,13 +619,13 @@ code = '''
         #ifdef LFS3
         lfs_soff_t size = lfsr_file_size(&lfs, &file);
         assert(size >= 0);
-        if (size > SIZE) {
-            lfsr_file_fruncate(&lfs, &file, SIZE) => 0;
+        if (size > LOG_SIZE) {
+            lfsr_file_fruncate(&lfs, &file, LOG_SIZE) => 0;
         }
         #else
         lfs_soff_t size = lfs2_file_size(&lfs, &file);
         assert(size >= 0);
-        if (size >= SIZE) {
+        if (size >= LOG_SIZE) {
             lfs2_file_close(&lfs, &file) => 0;
             lfs2_rename(&lfs, "bench_log", "bench_log.1") => 0;
             lfs2_file_open(&lfs, &file, "bench_log",
@@ -640,7 +640,7 @@ code = '''
         // writes, including open and close costs
         if ((MODE == 0)
                 && (i+1) % STEP == 0
-                && (i+1) < (N+(CHUNK-1))/CHUNK) {
+                && (i+1) < (SIZE+(CHUNK-1))/CHUNK) {
             BENCH_STOP("write");
             BENCH_START("write", (i+1)*CHUNK+CHUNK);
         }
