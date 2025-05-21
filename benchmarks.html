@@ -12,11 +12,29 @@
     a {
         color: #7997b7;
     }
+    .codemaps {
+        text-align: center;
+    }
+    .codemaps:img {
+        display: inline-block;
+    }
     </style>
 </head>
 <body style="background-color:#443333;">
     <h1 align="center">littlefs v3 benchmarks</h1>
+    <div class="codemaps">
+        <a href="plots/codemap_lfs1.svg"
+            ><img src="plots/codemap_lfs1_tiny.svg"></a>
+        <a href="plots/codemap_lfs2.svg"
+            ><img src="plots/codemap_lfs2_tiny.svg"></a>
+        <a href="plots/codemap_lfs3.svg"
+            ><img src="plots/codemap_lfs3_tiny.svg"></a>
+    </div>
     <ul>
+        <li>
+            <a href="bench_codemap.html">bench_codemap</a>
+            - Codemaps for exploring code cost
+        </li>
         <li>
             <a href="bench_internal.html">bench_internal</a>
             - Internal data-structure benchmarks

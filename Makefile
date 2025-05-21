@@ -59,6 +59,27 @@ NAND_ERASE_TIME ?= 15     # tBE=2 ms, block=131072 (2 ms / 131072)
 
 # find source files
 
+# littlefs v3 sources
+CODEMAP_SRC ?= $(filter-out %.t.c %.b.c %.a.c,$(wildcard littlefs3/*.c))
+CODEMAP_OBJ := $(CODEMAP_SRC:%.c=$(BUILDDIR)/thumb/%.o)
+CODEMAP_DEP := $(CODEMAP_SRC:%.c=$(BUILDDIR)/thumb/%.d)
+CODEMAP_ASM := $(CODEMAP_SRC:%.c=$(BUILDDIR)/thumb/%.s)
+CODEMAP_CI  := $(CODEMAP_SRC:%.c=$(BUILDDIR)/thumb/%.ci)
+
+# littlefs v2 sources
+CODEMAP_LFS2_SRC ?= $(filter-out %.t.c %.b.c %.a.c,$(wildcard littlefs2/*.c))
+CODEMAP_LFS2_OBJ := $(CODEMAP_LFS2_SRC:%.c=$(BUILDDIR)/thumb/%.o)
+CODEMAP_LFS2_DEP := $(CODEMAP_LFS2_SRC:%.c=$(BUILDDIR)/thumb/%.d)
+CODEMAP_LFS2_ASM := $(CODEMAP_LFS2_SRC:%.c=$(BUILDDIR)/thumb/%.s)
+CODEMAP_LFS2_CI  := $(CODEMAP_LFS2_SRC:%.c=$(BUILDDIR)/thumb/%.ci)
+
+# littlefs v1 sources
+CODEMAP_LFS1_SRC ?= $(filter-out %.t.c %.b.c %.a.c,$(wildcard littlefs1/*.c))
+CODEMAP_LFS1_OBJ := $(CODEMAP_LFS1_SRC:%.c=$(BUILDDIR)/thumb/%.o)
+CODEMAP_LFS1_DEP := $(CODEMAP_LFS1_SRC:%.c=$(BUILDDIR)/thumb/%.d)
+CODEMAP_LFS1_ASM := $(CODEMAP_LFS1_SRC:%.c=$(BUILDDIR)/thumb/%.s)
+CODEMAP_LFS1_CI  := $(CODEMAP_LFS1_SRC:%.c=$(BUILDDIR)/thumb/%.ci)
+
 # littlefs v3 bench-runner (the default)
 BENCHES ?= $(wildcard benches/*.toml)
 BENCH_RUNNER ?= $(BUILDDIR)/bench_runner
@@ -142,8 +163,18 @@ endif
 
 # also forward all LFS_*, LFS2_*, and LFS3*_ environment variables
 CFLAGS += $(foreach D,$(filter LFS_%,$(.VARIABLES)),-D$D=$($D))
+CFLAGS += $(foreach D,$(filter LFS1_%,$(.VARIABLES)),-D$D=$($D))
 CFLAGS += $(foreach D,$(filter LFS2_%,$(.VARIABLES)),-D$D=$($D))
 CFLAGS += $(foreach D,$(filter LFS3_%,$(.VARIABLES)),-D$D=$($D))
+
+# cross-compile codemap, we don't really care about x86 code size
+CODEMAP_CC ?= arm-linux-gnueabi-gcc -mthumb --static -Wno-stringop-overflow
+CODEMAP_CFLAGS += $(foreach P,LFS LFS1 LFS2 LFS3,-D$P_NO_LOG)
+CODEMAP_CFLAGS += $(foreach P,LFS LFS1 LFS2 LFS3,-D$P_NO_DEBUG)
+CODEMAP_CFLAGS += $(foreach P,LFS LFS1 LFS2 LFS3,-D$P_NO_INFO)
+CODEMAP_CFLAGS += $(foreach P,LFS LFS1 LFS2 LFS3,-D$P_NO_WARN)
+CODEMAP_CFLAGS += $(foreach P,LFS LFS1 LFS2 LFS3,-D$P_NO_ERROR)
+CODEMAP_CFLAGS += $(foreach P,LFS LFS1 LFS2 LFS3,-D$P_NO_ASSERT)
 
 # bench.py -c flags
 ifdef VERBOSE
@@ -155,9 +186,20 @@ endif
 ifneq ($(BUILDDIR),.)
 $(if $(findstring n,$(MAKEFLAGS)),, $(shell mkdir -p \
 	$(BUILDDIR) \
+	$(BUILDDIR)/thumb \
 	$(RESULTSDIR) \
 	$(PLOTSDIR) \
     $(addprefix $(BUILDDIR)/,$(dir \
+		$(CODEMAP_SRC) \
+		$(CODEMAP_LFS2_SRC) \
+		$(CODEMAP_LFS1_SRC) \
+        $(BENCHES) \
+        $(BENCH_SRC) \
+        $(BENCH_LFS2_SRC))) \
+    $(addprefix $(BUILDDIR)/thumb/,$(dir \
+		$(CODEMAP_SRC) \
+		$(CODEMAP_LFS2_SRC) \
+		$(CODEMAP_LFS1_SRC) \
         $(BENCHES) \
         $(BENCH_SRC) \
         $(BENCH_LFS2_SRC)))))
@@ -236,6 +278,15 @@ $(BENCH_LFS2_RUNNER): $(BENCH_LFS2_OBJ)
 
 # our main build rule generates .o, .d, and .ci files, the latter
 # used for stack analysis
+
+# cross-compile for codemap
+$(BUILDDIR)/thumb/%.o $(BUILDDIR)/thumb/%.ci: %.c
+	$(strip $(CODEMAP_CC) -c -MMD $(CFLAGS) $(CODEMAP_CFLAGS) $< \
+		-o $(BUILDDIR)/thumb/$*.o)
+
+$(BUILDDIR)/thumb/%.o $(BUILDDIR)/thumb/%.ci: $(BUILDDIR)/thumb/%.c
+	$(strip $(CODEMAP_CC) -c -MMD $(CFLAGS) $(CODEMAP_CFLAGS) $< \
+		-o $(BUILDDIR)/thumb/$*.o)
 
 # .lfs3 files need -DLFS3=1
 $(BUILDDIR)/%.lfs3.b.a.o $(BUILDDIR)/%.lfs3.b.a.ci: %.lfs3.b.a.c
@@ -708,6 +759,7 @@ $(RESULTSDIR)/bench_%.avg.csv: $(RESULTSDIR)/bench_%.csv
 # plot config
 ifndef LIGHT
 PLOTFLAGS += --dark
+CODEMAPFLAGS += --dark
 endif
 ifdef GGPLOT
 PLOTFLAGS += --ggplot
@@ -764,11 +816,23 @@ PLOT_COLORS_3BND := $(foreach C, $(PLOT_COLORS), \
 ## Plot all benchmarks!
 .PHONY: all plot plot-all
 all plot plot-all: \
+		plot-codemap \
 		plot-internal \
 		plot-many \
 		plot-fwrite \
 		plot-fwrite-tune \
 		plot-vs-lfs2
+
+## Generate codemaps
+# ok, it's not really a plot, but gotta put this somewhere
+.PHONY: codemap plot-codemap
+codemap plot-codemap: \
+		$(PLOTSDIR)/codemap_lfs3_tiny.svg \
+		$(PLOTSDIR)/codemap_lfs2_tiny.svg \
+		$(PLOTSDIR)/codemap_lfs1_tiny.svg \
+		$(PLOTSDIR)/codemap_lfs3.svg \
+		$(PLOTSDIR)/codemap_lfs2.svg \
+		$(PLOTSDIR)/codemap_lfs1.svg
 
 ## Plot benchmarks over internal data structures
 .PHONY: plot-internal
@@ -954,6 +1018,43 @@ plot-vs-lfs2-logging-usage: \
 
 
 # plot rules
+
+# codemap rules!
+define CODEMAP_RULES
+
+$$(PLOTSDIR)/codemap_$(V).svg: $(V_OBJ) $(V_CI)
+	$$(strip ./scripts/codemapsvg.py $$^ \
+		--title="$(V) code %(code)s stack %(stack)s ctx %(ctx)s" \
+		-W1750 -H750 \
+		$$(CODEMAPFLAGS) \
+		-o$$@ \
+		&& ./scripts/codemap.py $$^ --no-header)
+
+$$(PLOTSDIR)/codemap_$(V)_tiny.svg: $(V_OBJ) $(V_CI)
+	$$(strip ./scripts/codemapsvg.py $$^ \
+		--tiny --background=\#00000000 \
+		$$(CODEMAPFLAGS) \
+		-o$$@ \
+		&& ./scripts/codemap.py $$^ --no-header)
+
+endef
+
+# parameterize based on lfs3/lfs2/lfs1
+$(foreach V_, lfs3/LFS3 lfs2/LFS2 lfs1/LFS1, \
+	$(foreach V, $(word 1,$(subst /, ,$(V_))), \
+	$(foreach V_OBJ, $(if $(filter lfs3/%,$(V_)), \
+			$$(CODEMAP_OBJ), \
+			$(if $(filter lfs2/%,$(V_)), \
+				$$(CODEMAP_LFS2_OBJ), \
+				$$(CODEMAP_LFS1_OBJ))), \
+	$(foreach V_CI, $(if $(filter lfs3/%,$(V_)), \
+			$$(CODEMAP_CI), \
+			$(if $(filter lfs2/%,$(V_)), \
+				$$(CODEMAP_LFS2_CI), \
+				$$(CODEMAP_LFS1_CI))), \
+	$(eval $(CODEMAP_RULES))))))
+
+
 
 # plot bench_rbyd config
 PLOT_RBYD_FLAGS += -W1750 -H750
