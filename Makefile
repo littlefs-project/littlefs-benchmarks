@@ -354,19 +354,19 @@ bench-fwrite-tune: \
 		bench-fwrite-tune-fs \
 		bench-fwrite-tune-ct
 
-## Run file write benchmarks with different block_sizes
+## Run file write benchmarks comparing block_sizes
 .PHONY: bench-fwrite-tune-bs
 bench-fwrite-tune-bs: $(RESULTSDIR)/bench_fwrite_tune_bs.csv
 
-## Run file write benchmarks with different inline_sizes
+## Run file write benchmarks comparing inline_sizes
 .PHONY: bench-fwrite-tune-is
 bench-fwrite-tune-is: $(RESULTSDIR)/bench_fwrite_tune_is.csv
 
-## Run file write benchmarks with different fragment_sizes
+## Run file write benchmarks comparing fragment_sizes
 .PHONY: bench-fwrite-tune-fs
 bench-fwrite-tune-fs: $(RESULTSDIR)/bench_fwrite_tune_fs.csv
 
-## Run file write benchmarks with different crystal_threshs
+## Run file write benchmarks comparing crystal_threshs
 .PHONY: bench-fwrite-tune-ct
 bench-fwrite-tune-ct: $(RESULTSDIR)/bench_fwrite_tune_ct.csv
 
@@ -817,25 +817,25 @@ plot-fwrite-tune: \
 		plot-fwrite-tune-fs \
 		plot-fwrite-tune-ct
 
-## Plot file write benchmarks with different block_sizes
+## Plot file write benchmarks comparing block_sizes
 .PHONY: plot-fwrite-tune-bs
 plot-fwrite-tune-bs: \
 		$(PLOTSDIR)/bench_fwrite_tune_bs_linear.svg \
 		$(PLOTSDIR)/bench_fwrite_tune_bs_random.svg
 
-## Plot file write benchmarks with different inline_sizes
+## Plot file write benchmarks comparing inline_sizes
 .PHONY: plot-fwrite-tune-is
 plot-fwrite-tune-is: \
 		$(PLOTSDIR)/bench_fwrite_tune_is_linear.svg \
 		$(PLOTSDIR)/bench_fwrite_tune_is_random.svg
 
-## Plot file write benchmarks with different fragment_sizes
+## Plot file write benchmarks comparing fragment_sizes
 .PHONY: plot-fwrite-tune-fs
 plot-fwrite-tune-fs: \
 		$(PLOTSDIR)/bench_fwrite_tune_fs_linear.svg \
 		$(PLOTSDIR)/bench_fwrite_tune_fs_random.svg
 
-## Plot file write benchmarks with different crystal_threshs
+## Plot file write benchmarks comparing crystal_threshs
 .PHONY: plot-fwrite-tune-ct
 plot-fwrite-tune-ct: \
 		$(PLOTSDIR)/bench_fwrite_tune_ct_linear.svg \

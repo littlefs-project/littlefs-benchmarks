@@ -28,6 +28,9 @@ all plot plot-all: \
 		plot-vs-lfs2-logging
 
 
+# don't run rules in parallel at this level, it breaks things
+.NOTPARALLEL:
+
 # we just set the above defines, the default Makefile does all the
 # real work
 FORCE:;

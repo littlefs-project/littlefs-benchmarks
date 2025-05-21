@@ -135,9 +135,10 @@ void bench_permutation(size_t i, uint32_t *buffer, size_t size);
     BENCH_DEFINE(GC_STEPS,           0                                      ) \
     BENCH_DEFINE(GC_COMPACT_THRESH,  0                                      ) \
     BENCH_DEFINE(INLINE_SIZE,        BLOCK_SIZE/4                           ) \
-    BENCH_DEFINE(FRAGMENT_SIZE,      LFS_MIN(BLOCK_SIZE/8, 512)             ) \
-    /* TODO should this be enforced in lfs_init? */                           \
-    BENCH_DEFINE(CRYSTAL_THRESH,     LFS_MAX(BLOCK_SIZE/8, PROG_SIZE)       ) \
+    /* TODO crystal/fragment_thresh 1/16 or 1/8? */                           \
+    BENCH_DEFINE(FRAGMENT_SIZE,      LFS_MIN(BLOCK_SIZE/16, 512)            ) \
+    /* TODO should max-prog_size be enforced in lfs_init? */                  \
+    BENCH_DEFINE(CRYSTAL_THRESH,     LFS_MAX(BLOCK_SIZE/16, PROG_SIZE)      ) \
     BENCH_DEFINE(FRAGMENT_THRESH,    -1                                     ) \
     BENCH_DEFINE(ERASE_VALUE,        0xff                                   ) \
     BENCH_DEFINE(ERASE_CYCLES,       0                                      ) \
