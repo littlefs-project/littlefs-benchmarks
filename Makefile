@@ -26,9 +26,14 @@ BENCH_TUNE_CT ?= 0,256,512,1024,2048,4096
 
 # sd/emmc - estimated based on w25n01gv, assumes a _perfect_ FTL
 #
-EMMC_READ_SIZE  ?= 512  # these estimates are at the byte-level, so the
-EMMC_PROG_SIZE  ?= 512  # block size doesn't actual change anything
-EMMC_ERASE_SIZE ?= 512  #
+# these estimates are at the byte-level, so the block size doesn't
+# actual change anything
+#
+EMMC_READ_SIZE  ?= 512
+EMMC_PROG_SIZE  ?= 512
+EMMC_ERASE_SIZE ?= 512
+EMMC_BLOCK_SIZE      ?= 1024 # v3 performs better with larger block sizes
+EMMC_LFS2_BLOCK_SIZE ?= 512  # but no reason to penalize v2
 EMMC_READ_TIME  ?= 31   # taken from w25n01gv, read time
 EMMC_PROG_TIME  ?= 156  # taken from w25n01gv, prog time + erase time
 EMMC_ERASE_TIME ?= 0    # noop
@@ -37,9 +42,14 @@ EMMC_ERASE_TIME ?= 0    # noop
 #
 # https://www.winbond.com/resource-files/W25Q256JV%20SPI%20RevQ%2002072025%20Plus.pdf
 #
-NOR_READ_SIZE  ?= 1     # FR=104 MHz, quad prog (9.6 ns * 8/4)
-NOR_PROG_SIZE  ?= 1     # => +~19 ns for bus (not read!)
-NOR_ERASE_SIZE ?= 4096  #
+# FR=104 MHz, quad prog (9.6 ns * 8/4)
+# => +~19 ns for bus (not read!)
+#
+NOR_READ_SIZE  ?= 1
+NOR_PROG_SIZE  ?= 1
+NOR_ERASE_SIZE ?= 4096
+NOR_BLOCK_SIZE 	    ?= 4096
+NOR_LFS2_BLOCK_SIZE ?= 4096
 NOR_READ_TIME  ?= 40    # fR=50 MHz, quad read (20 ns * 8/4)
 NOR_PROG_TIME  ?= 1582  # tPP=0.4 ms, page=256 (0.4 ms / 256 + bus)
 NOR_ERASE_TIME ?= 10986 # tSE=45 ms, sector=4096 (45 ms / 4096)
@@ -48,9 +58,14 @@ NOR_ERASE_TIME ?= 10986 # tSE=45 ms, sector=4096 (45 ms / 4096)
 #
 # https://www.winbond.com/resource-files/W25N01GV%20Rev%20R%20070323.pdf
 #
-NAND_READ_SIZE  ?= 512    # FR=104 MHz, quad read/prog (9.6 ns * 8/4)
-NAND_PROG_SIZE  ?= 512    # => +~19 ns for bus
-NAND_ERASE_SIZE ?= 131072 # 
+# FR=104 MHz, quad read/prog (9.6 ns * 8/4)
+# => +~19 ns for bus
+#
+NAND_READ_SIZE  ?= 512
+NAND_PROG_SIZE  ?= 512
+NAND_ERASE_SIZE ?= 131072
+NAND_BLOCK_SIZE      ?= 131072
+NAND_LFS2_BLOCK_SIZE ?= 131072
 NAND_READ_TIME  ?= 31     # tRD1=25 us, p=2048, s=512 (25 us / 2048 + bus)
 NAND_PROG_TIME  ?= 141    # tPP=250 us, p=2048, s=512 (250 us / 2048 + bus)
 NAND_ERASE_TIME ?= 15     # tBE=2 ms, block=131072 (2 ms / 131072)
@@ -634,7 +649,7 @@ $$(RESULTSDIR)/bench_vs_lfs2_counter.$(V).$(SIM).csv: $(V_RUNNER)
 		-DSEED="range($$(SAMPLES))" \
 		-DREAD_SIZE=$(SIM_READ_SIZE) \
 		-DPROG_SIZE=$(SIM_PROG_SIZE) \
-		-DBLOCK_SIZE=$(SIM_ERASE_SIZE) \
+		-DBLOCK_SIZE=$(SIM_BLOCK_SIZE) \
 		$$(BENCHFLAGS) \
 		-o$$@)
 
@@ -643,7 +658,7 @@ $$(RESULTSDIR)/bench_vs_lfs2_many.$(V).$(SIM).csv: $(V_RUNNER)
 		-DSEED="range($$(SAMPLES))" \
 		-DREAD_SIZE=$(SIM_READ_SIZE) \
 		-DPROG_SIZE=$(SIM_PROG_SIZE) \
-		-DBLOCK_SIZE=$(SIM_ERASE_SIZE) \
+		-DBLOCK_SIZE=$(SIM_BLOCK_SIZE) \
 		$$(BENCHFLAGS) \
 		-o$$@)
 
@@ -652,7 +667,7 @@ $$(RESULTSDIR)/bench_vs_lfs2_fwrite.$(V).$(SIM).csv: $(V_RUNNER)
 		-DSEED="range($$(SAMPLES))" \
 		-DREAD_SIZE=$(SIM_READ_SIZE) \
 		-DPROG_SIZE=$(SIM_PROG_SIZE) \
-		-DBLOCK_SIZE=$(SIM_ERASE_SIZE) \
+		-DBLOCK_SIZE=$(SIM_BLOCK_SIZE) \
 		$$(BENCHFLAGS) \
 		-o$$@)
 
@@ -661,7 +676,7 @@ $$(RESULTSDIR)/bench_vs_lfs2_logging.$(V).$(SIM).csv: $(V_RUNNER)
 		-DSEED="range($$(SAMPLES))" \
 		-DREAD_SIZE=$(SIM_READ_SIZE) \
 		-DPROG_SIZE=$(SIM_PROG_SIZE) \
-		-DBLOCK_SIZE=$(SIM_ERASE_SIZE) \
+		-DBLOCK_SIZE=$(SIM_BLOCK_SIZE) \
 		$$(BENCHFLAGS) \
 		-o$$@)
 
@@ -702,13 +717,17 @@ $(foreach V_, lfs3/LFS3 lfs2/LFS2, \
 			$$($(word 2,$(subst /, ,$(SIM_)))_PROG_SIZE), \
 		$(foreach SIM_ERASE_SIZE, \
 			$$($(word 2,$(subst /, ,$(SIM_)))_ERASE_SIZE), \
+		$(foreach SIM_BLOCK_SIZE, \
+			$(if $(filter lfs3/%,$(V_)), \
+				$$($(word 2,$(subst /, ,$(SIM_)))_BLOCK_SIZE), \
+				$$($(word 2,$(subst /, ,$(SIM_)))_LFS2_BLOCK_SIZE)), \
 		$(foreach SIM_READ_TIME, \
 			$$($(word 2,$(subst /, ,$(SIM_)))_READ_TIME), \
 		$(foreach SIM_PROG_TIME, \
 			$$($(word 2,$(subst /, ,$(SIM_)))_PROG_TIME), \
 		$(foreach SIM_ERASE_TIME, \
 			$$($(word 2,$(subst /, ,$(SIM_)))_ERASE_TIME), \
-		$(eval $(BENCH_VS_LFS2_RULES)))))))))))))
+		$(eval $(BENCH_VS_LFS2_RULES))))))))))))))
 
 # amortized results
 $(RESULTSDIR)/bench_vs_lfs%.amor.csv: $(RESULTSDIR)/bench_vs_lfs%.csv
@@ -2299,7 +2318,7 @@ $(PLOTSDIR)/bench_fwrite_tune_ct_random.svg: \
 PLOT_VS_LFS2_FLAGS += -W1750 -H750
 PLOT_VS_LFS2_FLAGS += \
 		--subplot=" \
-				-DBLOCK_SIZE=$(EMMC_ERASE_SIZE) \
+				-DBLOCK_SIZE='$(EMMC_BLOCK_SIZE)$(,)$(EMMC_LFS2_BLOCK_SIZE)' \
 				-Dm=$2 \
 				$(if $(filter amor,$3),--ylabel=raw) \
 				$(if $(filter per,$3),--ylabel=total) \
@@ -2307,33 +2326,33 @@ PLOT_VS_LFS2_FLAGS += \
 				$(if $3,--add-xticklabel=,)" \
 			$(if $3, \
 			--subplot-below=" \
-				-DBLOCK_SIZE=$(EMMC_ERASE_SIZE) \
+				-DBLOCK_SIZE='$(EMMC_BLOCK_SIZE)$(,)$(EMMC_LFS2_BLOCK_SIZE)' \
 				-Dm=$2+$3 \
 				$(if $(filter amor,$3),--ylabel=amortized) \
 				$(if $(filter per,$3),--ylabel=per) \
 				--ylim-stddev=3 \
 				-H0.5",) \
 		--subplot-right=" \
-				-DBLOCK_SIZE=$(NOR_ERASE_SIZE) \
+				-DBLOCK_SIZE='$(NOR_BLOCK_SIZE)$(,)$(NOR_LFS2_BLOCK_SIZE)' \
 				-Dm=$2 \
 				--title=nor \
 				$(if $3,--add-xticklabel=,) \
 				-W0.5 \
 			$(if $3, \
 			--subplot-below=\" \
-				-DBLOCK_SIZE=$(NOR_ERASE_SIZE) \
+				-DBLOCK_SIZE='$(NOR_BLOCK_SIZE)$(,)$(NOR_LFS2_BLOCK_SIZE)' \
 				-Dm=$2+$3 \
 				--ylim-stddev=3 \
 				-H0.5\",)" \
 		--subplot-right=" \
-				-DBLOCK_SIZE=$(NAND_ERASE_SIZE) \
+				-DBLOCK_SIZE='$(NAND_BLOCK_SIZE)$(,)$(NAND_LFS2_BLOCK_SIZE)' \
 				-Dm=$2 \
 				--title=nand \
 				$(if $3,--add-xticklabel=,) \
 				-W0.33 \
 			$(if $3, \
 			--subplot-below=\" \
-				-DBLOCK_SIZE=$(NAND_ERASE_SIZE) \
+				-DBLOCK_SIZE='$(NAND_BLOCK_SIZE)$(,)$(NAND_LFS2_BLOCK_SIZE)' \
 				-Dm=$2+$3 \
 				--ylim-stddev=3 \
 				-H0.5\",)"
@@ -2360,9 +2379,15 @@ $$(PLOTSDIR)/bench_vs_lfs2_$1.svg: \
 		-xn \
 		-y$4_avg -y$4_bnd \
 		--legend \
-		-L'3,$4_avg=lfs3 (no bmap)' \
+		-L'3,$4_avg=lfs3 (no bmap)%n$\
+			- bs=$(EMMC_BLOCK_SIZE)%n$\
+			- bs=$(NOR_BLOCK_SIZE)%n$\
+			- bs=$(NAND_BLOCK_SIZE)' \
 		-L'3,$4_bnd=' \
-		-L'2,$4_avg=lfs2' \
+		-L'2,$4_avg=lfs2%n$\
+			- bs=$(EMMC_LFS2_BLOCK_SIZE)%n$\
+			- bs=$(NOR_LFS2_BLOCK_SIZE)%n$\
+			- bs=$(NAND_LFS2_BLOCK_SIZE)' \
 		-L'2,$4_bnd=' \
 		$$(call PLOT_VS_LFS2_FLAGS,$5,$6,$7) \
 		$8 \
