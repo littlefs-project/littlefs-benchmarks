@@ -1,0 +1,76 @@
+<html>
+<head>
+    <title>littlefs3-benchmarks</title>
+    <link rel="icon" href="favicon.ico">
+    <style>
+    body {
+        background-color: #443333;
+        color: #ffffff;
+        max-width: 750px;
+        margin: 0 auto;
+    }
+    a {
+        color: #7997b7;
+    }
+    .codemaps {
+        text-align: center;
+    }
+    .codemaps:img {
+        display: inline-block;
+    }
+    </style>
+</head>
+<body>
+    <h1 align="center">littlefs v3 benchmarks</h1>
+    <div class="codemaps">
+        <a href="plots/codemap_lfs1.svg"
+            ><img src="plots/codemap_lfs1_tiny.svg"></a>
+        <a href="plots/codemap_lfs2.svg"
+            ><img src="plots/codemap_lfs2_tiny.svg"></a>
+        <a href="plots/codemap_lfs3.svg"
+            ><img src="plots/codemap_lfs3_tiny.svg"></a>
+    </div>
+    <img src="favicon.ico"/>
+    <ul>
+        <li>
+            <a href="bench_codemap.html">bench_codemap</a>
+            - Codemaps for exploring code cost
+        </li>
+        <li>
+            <a href="bench_internal.html">bench_internal</a>
+            - Internal data-structure benchmarks
+        </li>
+        <hr/>
+        <li>
+            <a href="bench_many.html">bench_many</a>
+            - File/dir creation benchmarks
+        </li>
+        <li>
+            <a href="bench_fwrite.html">bench_fwrite</a>
+            - File writing benchmarks
+        </li>
+        <li>
+            <a href="bench_fwrite_tune.html">bench_fwrite_tune</a>
+            - File writing benchmarks with tuneable configs
+        </li>
+        <hr/>
+        <li>
+            <a href="bench_vs_lfs2.html">bench_vs_lfs2</a>
+            - Benchmarks comparing littlefs v3 vs v2
+        </li>
+        <li>
+            <a href="bench_vs_lfs2_ops.html">bench_vs_lfs2_ops</a>
+            - Benchmarks v3 vs v2 with low-level details
+        </li>
+        <hr/>
+        <li>
+            <a href="bench_vs_lfs2_1M.html">bench_vs_lfs2_1M</a>
+            - Benchmarks comparing littlefs v3 vs v2 - 1MiB files
+        </li>
+        <li>
+            <a href="bench_vs_lfs2_1M_ops.html">bench_vs_lfs2_1M_ops</a>
+            - Benchmarks v3 vs v2 with low-level details - 1MiB files
+        </li>
+    </ul>
+</body>
+</html>

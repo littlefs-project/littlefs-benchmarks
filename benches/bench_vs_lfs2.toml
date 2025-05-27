@@ -1,0 +1,700 @@
+# Compare littlefs v3 vs v2
+
+# keep track of version in results
+defines.V = 'BENCH_IFDEF_LFS3(3, 2)'
+
+# littlefs v2 needs a callback for traversal
+code = '''
+int usage_bmap_cb(void *ctx, lfs_block_t block) {
+    uint8_t *usage_bmap = ctx;
+    usage_bmap[block/8] |= 1 << (block % 8);
+    return 0;
+}
+'''
+
+
+[cases.bench_vs_lfs2_counter]
+defines.N = 1024
+defines.SEED = 42
+code = '''
+    #ifdef LFS3
+    lfs_t lfs;
+    lfsr_format(&lfs, LFS_F_RDWR, CFG) => 0;
+    lfsr_mount(&lfs, LFS_M_RDWR, CFG) => 0;
+    #else
+    lfs2_t lfs;
+    lfs2_format(&lfs, (const struct lfs2_config*)CFG) => 0;
+    lfs2_mount(&lfs, (const struct lfs2_config*)CFG) => 0;
+    #endif
+
+    // go ahead and make consistent to avoid lazy mount operations
+    // messing with the benchmark
+    #ifdef LFS3
+    lfsr_fs_mkconsistent(&lfs) => 0;
+    #else
+    lfs2_fs_mkconsistent(&lfs) => 0;
+    #endif
+
+    // allocate a bitmap for disk usage
+    uint8_t *usage_bmap = malloc((BLOCK_COUNT+8-1)/8);
+
+    for (lfs_off_t i = 0; i < N; i++) {
+        // increment a simple counter, this measures the minimum circuitry
+        // necessary to update a file
+        BENCH_START("creat", i+1);
+        #ifdef LFS3
+        lfsr_file_t file;
+        lfsr_file_open(&lfs, &file, "count",
+                LFS_O_RDWR | LFS_O_CREAT) => 0;
+
+        uint32_t count;
+        lfs_ssize_t size = lfsr_file_read(&lfs, &file,
+                &count, sizeof(uint32_t));
+        assert(size == 0 || size == sizeof(uint32_t));
+
+        count += 1;
+
+        lfsr_file_rewind(&lfs, &file) => 0;
+        lfsr_file_write(&lfs, &file,
+                &count, sizeof(uint32_t)) => sizeof(uint32_t);
+        lfsr_file_close(&lfs, &file) => 0;
+        #else
+        lfs2_file_t file;
+        lfs2_file_open(&lfs, &file, "count",
+                LFS2_O_RDWR | LFS2_O_CREAT) => 0;
+
+        uint32_t count;
+        lfs2_ssize_t size = lfs2_file_read(&lfs, &file,
+                &count, sizeof(uint32_t));
+        assert(size == 0 || size == sizeof(uint32_t));
+
+        count += 1;
+
+        lfs2_file_rewind(&lfs, &file) => 0;
+        lfs2_file_write(&lfs, &file,
+                &count, sizeof(uint32_t)) => sizeof(uint32_t);
+        lfs2_file_close(&lfs, &file) => 0;
+        #endif
+        BENCH_STOP("creat");
+
+        // measure disk usage
+        //
+        // littlefs can be a dag, so build a bitmap to find the
+        // exact disk usage
+        memset(usage_bmap, 0, (BLOCK_COUNT+8-1)/8);
+        #ifdef LFS3
+        lfsr_traversal_t t;
+        lfsr_traversal_open(&lfs, &t, 0) => 0;
+        while (true) {
+            struct lfs_tinfo tinfo;
+            int err = lfsr_traversal_read(&lfs, &t, &tinfo);
+            assert(!err || err == LFS_ERR_NOENT);
+            if (err == LFS_ERR_NOENT) {
+                break;
+            }
+
+            usage_bmap[tinfo.block/8] |= 1 << (tinfo.block % 8);
+        }
+        lfsr_traversal_close(&lfs, &t) => 0;
+        #else
+        lfs2_fs_traverse(&lfs, usage_bmap_cb, usage_bmap) => 0;
+        #endif
+        lfs_size_t usage = 0;
+        for (lfs_size_t j = 0; j < BLOCK_COUNT; j++) {
+            if (usage_bmap[j / 8] & (1 << (j % 8))) {
+                usage += 1;
+            }
+        }
+        BENCH_RESULT("usage", i+1,
+                (uintmax_t)usage * (uintmax_t)CFG->block_size);
+    }
+
+    free(usage_bmap);
+
+    #ifdef LFS3
+    lfsr_unmount(&lfs) => 0;
+    #else
+    lfs2_unmount(&lfs) => 0;
+    #endif
+'''
+
+[cases.bench_vs_lfs2_many]
+# 0 = in-order
+# 1 = reversed-order
+# 2 = random-order
+defines.ORDER = 2
+defines.N = 1024
+defines.STEP = 1
+defines.SEED = 42
+defines.SIZE = 4
+code = '''
+    #ifdef LFS3
+    lfs_t lfs;
+    lfsr_format(&lfs, LFS_F_RDWR, CFG) => 0;
+    lfsr_mount(&lfs, LFS_M_RDWR, CFG) => 0;
+    #else
+    lfs2_t lfs;
+    lfs2_format(&lfs, (const struct lfs2_config*)CFG) => 0;
+    lfs2_mount(&lfs, (const struct lfs2_config*)CFG) => 0;
+    #endif
+
+    // go ahead and make consistent to avoid lazy mount operations
+    // messing with the benchmark
+    #ifdef LFS3
+    lfsr_fs_mkconsistent(&lfs) => 0;
+    #else
+    lfs2_fs_mkconsistent(&lfs) => 0;
+    #endif
+
+    // allocate a bitmap for disk usage
+    uint8_t *usage_bmap = malloc((BLOCK_COUNT+8-1)/8);
+
+    // create a filesystem with N files
+    uint32_t prng = SEED;
+    for (lfs_size_t i = 0; i < N; i++) {
+        lfsr_mid_t i_
+                = (ORDER == 0) ? i
+                : (ORDER == 1) ? N-1-i
+                : BENCH_PRNG(&prng) % N;
+        char name[256];
+        sprintf(name, "file%05d", i_);
+        uint8_t wbuf[SIZE];
+        memset(wbuf, 'a'+(BENCH_PRNG(&prng) % 26), SIZE);
+
+        BENCH_START("creat", i+1);
+        #ifdef LFS3
+        lfsr_file_t file;
+        int err = lfsr_file_open(&lfs, &file, name,
+                LFS_O_WRONLY | LFS_O_CREAT | LFS_O_EXCL);
+        assert(!err || err == LFS_ERR_EXIST);
+        if (!err) {
+            lfsr_file_write(&lfs, &file, &wbuf, SIZE) => SIZE;
+            lfsr_file_close(&lfs, &file) => 0;
+        }
+        #else
+        lfs2_file_t file;
+        int err = lfs2_file_open(&lfs, &file, name,
+                LFS2_O_WRONLY | LFS2_O_CREAT | LFS2_O_EXCL);
+        assert(!err || err == LFS2_ERR_EXIST);
+        if (!err) {
+            lfs2_file_write(&lfs, &file, &wbuf, SIZE) => SIZE;
+            lfs2_file_close(&lfs, &file) => 0;
+        }
+        #endif
+        BENCH_STOP("creat");
+
+        // measure open+read
+        BENCH_START("open", i+1);
+        lfsr_mid_t i__ = BENCH_PRNG(&prng) % N;
+        sprintf(name, "file%05d", i__);
+        #ifdef LFS3
+        err = lfsr_file_open(&lfs, &file, name, LFS_O_RDONLY);
+        assert(!err || err == LFS_ERR_NOENT);
+        if (!err) {
+            uint8_t rbuf[SIZE];
+            lfsr_file_read(&lfs, &file, rbuf, SIZE) => SIZE;
+            lfsr_file_close(&lfs, &file) => 0;
+        }
+        #else
+        err = lfs2_file_open(&lfs, &file, name, LFS2_O_RDONLY);
+        assert(!err || err == LFS2_ERR_NOENT);
+        if (!err) {
+            uint8_t rbuf[SIZE];
+            lfs2_file_read(&lfs, &file, rbuf, SIZE) => SIZE;
+            lfs2_file_close(&lfs, &file) => 0;
+        }
+        #endif
+        BENCH_STOP("open");
+
+        // measure disk usage
+        //
+        // littlefs can be a dag, so build a bitmap to find the
+        // exact disk usage
+        memset(usage_bmap, 0, (BLOCK_COUNT+8-1)/8);
+        #ifdef LFS3
+        lfsr_traversal_t t;
+        lfsr_traversal_open(&lfs, &t, 0) => 0;
+        while (true) {
+            struct lfs_tinfo tinfo;
+            int err = lfsr_traversal_read(&lfs, &t, &tinfo);
+            assert(!err || err == LFS_ERR_NOENT);
+            if (err == LFS_ERR_NOENT) {
+                break;
+            }
+
+            usage_bmap[tinfo.block/8] |= 1 << (tinfo.block % 8);
+        }
+        lfsr_traversal_close(&lfs, &t) => 0;
+        #else
+        lfs2_fs_traverse(&lfs, usage_bmap_cb, usage_bmap) => 0;
+        #endif
+        lfs_size_t usage = 0;
+        for (lfs_size_t j = 0; j < BLOCK_COUNT; j++) {
+            if (usage_bmap[j / 8] & (1 << (j % 8))) {
+                usage += 1;
+            }
+        }
+        BENCH_RESULT("usage", i+1,
+                (uintmax_t)usage * (uintmax_t)CFG->block_size);
+    }
+
+    free(usage_bmap);
+
+    #ifdef LFS3
+    lfsr_unmount(&lfs) => 0;
+    #else
+    lfs2_unmount(&lfs) => 0;
+    #endif
+'''
+
+[cases.bench_vs_lfs2_fwrite]
+# 0 = linear write, no-sync
+# 1 = linear read
+# 2 = linear usage
+# 3 = random write
+# 4 = random read
+# 5 = random usage
+defines.MODE = [0, 1, 2, 3, 4, 5]
+# alternative for 1MiB file
+# defines.DISK_SIZE = '64*1024*1024'
+# defines.SIZE = '64*16384'
+# defines.CHUNK = 32
+# defines.STEP = '64*1'
+defines.SIZE = 32768
+defines.CHUNK = 32
+defines.STEP = 1
+defines.SEED = 42
+defines.ALIGNED = false
+defines.SYNC = 'MODE != 0'
+code = '''
+    #ifdef LFS3
+    lfs_t lfs;
+    lfsr_format(&lfs, LFS_F_RDWR, CFG) => 0;
+    lfsr_mount(&lfs, LFS_M_RDWR, CFG) => 0;
+    #else
+    lfs2_t lfs;
+    lfs2_format(&lfs, (const struct lfs2_config*)CFG) => 0;
+    lfs2_mount(&lfs, (const struct lfs2_config*)CFG) => 0;
+    #endif
+    uint32_t prng = SEED;
+
+    // go ahead and make consistent to avoid lazy mount operations
+    // messing with the benchmark
+    #ifdef LFS3
+    lfsr_fs_mkconsistent(&lfs) => 0;
+    #else
+    lfs2_fs_mkconsistent(&lfs) => 0;
+    #endif
+
+    // find the baseline usage after format
+    uint8_t *usage_bmap = malloc((BLOCK_COUNT+8-1)/8);
+    memset(usage_bmap, 0, (BLOCK_COUNT+8-1)/8);
+    #ifdef LFS3
+    lfsr_traversal_t t;
+    lfsr_traversal_open(&lfs, &t, 0) => 0;
+    while (true) {
+        struct lfs_tinfo tinfo;
+        int err = lfsr_traversal_read(&lfs, &t, &tinfo);
+        assert(!err || err == LFS_ERR_NOENT);
+        if (err == LFS_ERR_NOENT) {
+            break;
+        }
+
+        usage_bmap[tinfo.block/8] |= 1 << (tinfo.block % 8);
+    }
+    lfsr_traversal_close(&lfs, &t) => 0;
+    #else
+    lfs2_fs_traverse(&lfs, usage_bmap_cb, usage_bmap) => 0;
+    #endif
+    lfs_size_t usage_baseline = 0;
+    for (lfs_size_t j = 0; j < BLOCK_COUNT; j++) {
+        if (usage_bmap[j / 8] & (1 << (j % 8))) {
+            usage_baseline += 1;
+        }
+    }
+
+    // write our file
+    if (MODE == 0) {
+        BENCH_START("write", 0*CHUNK+CHUNK);
+    }
+    #ifdef LFS3
+    lfsr_file_t file;
+    lfsr_file_open(&lfs, &file, "bench_file",
+            LFS_O_RDWR | LFS_O_CREAT | LFS_O_EXCL) => 0;
+    #else
+    lfs2_file_t file;
+    lfs2_file_open(&lfs, &file, "bench_file",
+            LFS2_O_RDWR | LFS2_O_CREAT | LFS2_O_EXCL) => 0;
+    #endif
+    for (lfs_size_t i = 0; i < (SIZE+(CHUNK-1))/CHUNK; i++) {
+        lfs_off_t i_ = i*CHUNK;
+
+        // seek to where we want to write
+        #ifdef LFS3
+        lfsr_file_seek(&lfs, &file, i_, LFS_SEEK_SET) => i_;
+        #else
+        lfs2_file_seek(&lfs, &file, i_, LFS2_SEEK_SET) => i_;
+        #endif
+
+        // actually write
+        uint8_t wbuf[CHUNK];
+        for (lfs_size_t j = 0; j < CHUNK; j++) {
+            wbuf[j] = 'a' + (BENCH_PRNG(&prng) % 26);
+        }
+        #ifdef LFS3
+        lfsr_file_write(&lfs, &file, wbuf, CHUNK) => CHUNK;
+        #else
+        lfs2_file_write(&lfs, &file, wbuf, CHUNK) => CHUNK;
+        #endif
+
+        // sync?
+        if (SYNC) {
+            #ifdef LFS3
+            lfsr_file_sync(&lfs, &file) => 0;
+            #else
+            lfs2_file_sync(&lfs, &file) => 0;
+            #endif
+        }
+
+        // a little bit weird, but this incrementally measures linear
+        // writes, including open and close costs
+        if ((MODE == 0)
+                && (i+1) % STEP == 0
+                && (i+1) < (SIZE+(CHUNK-1))/CHUNK) {
+            BENCH_STOP("write");
+            BENCH_START("write", (i+1)*CHUNK+CHUNK);
+        }
+
+        if ((MODE == 3 || MODE == 5) && (i+1) % STEP == 0) {
+            // measure a random chunk-sized rewrite
+            lfs_off_t i__ = (ALIGNED)
+                    ? (BENCH_PRNG(&prng) % (
+                        (BENCH_IFDEF_LFS3(
+                                    lfsr_file_size(&lfs, &file),
+                                    lfs2_file_size(&lfs, &file))
+                                + (CHUNK-1))/CHUNK))
+                            * CHUNK
+                    : BENCH_PRNG(&prng) % (
+                        lfs_max(BENCH_IFDEF_LFS3(
+                                    lfsr_file_size(&lfs, &file),
+                                    lfs2_file_size(&lfs, &file)),
+                                CHUNK)
+                            - (CHUNK-1));
+            BENCH_START("write", i*CHUNK+CHUNK);
+            // seek to where we want to write
+            #ifdef LFS3
+            lfsr_file_seek(&lfs, &file, i__, LFS_SEEK_SET) => i__;
+            #else
+            lfs2_file_seek(&lfs, &file, i__, LFS2_SEEK_SET) => i__;
+            #endif
+
+            // actually write
+            uint8_t wbuf[CHUNK];
+            for (lfs_size_t j = 0; j < CHUNK; j++) {
+                wbuf[j] = 'a' + (BENCH_PRNG(&prng) % 26);
+            }
+            #ifdef LFS3
+            lfsr_file_write(&lfs, &file, wbuf, CHUNK) => CHUNK;
+            #else
+            lfs2_file_write(&lfs, &file, wbuf, CHUNK) => CHUNK;
+            #endif
+
+            // sync?
+            if (SYNC) {
+                #ifdef LFS3
+                lfsr_file_sync(&lfs, &file) => 0;
+                #else
+                lfs2_file_sync(&lfs, &file) => 0;
+                #endif
+            }
+            BENCH_STOP("write");
+        }
+
+        if ((MODE == 1) && (i+1) % STEP == 0) {
+            // measure rereading the entire file
+            BENCH_START("read", i*CHUNK+CHUNK);
+            #ifdef LFS3
+            lfsr_file_rewind(&lfs, &file) => 0;
+            #else
+            lfs2_file_rewind(&lfs, &file) => 0;
+            #endif
+
+            for (lfs_size_t i__ = 0;
+                    i__ < (lfs_off_t)BENCH_IFDEF_LFS3(
+                        lfsr_file_size(&lfs, &file),
+                        lfs2_file_size(&lfs, &file));
+                    i__ += CHUNK) {
+                uint8_t rbuf[CHUNK];
+                #ifdef LFS3
+                lfsr_file_read(&lfs, &file, rbuf, CHUNK) => CHUNK;
+                #else
+                lfs2_file_read(&lfs, &file, rbuf, CHUNK) => CHUNK;
+                #endif
+            }
+            BENCH_STOP("read");
+        }
+
+        if ((MODE == 4) && (i+1) % STEP == 0) {
+            // measure a random chunk-sized read
+            lfs_off_t i__ = (ALIGNED)
+                    ? (BENCH_PRNG(&prng) % (
+                        (BENCH_IFDEF_LFS3(
+                                    lfsr_file_size(&lfs, &file),
+                                    lfs2_file_size(&lfs, &file))
+                                + (CHUNK-1))/CHUNK))
+                            * CHUNK
+                    : BENCH_PRNG(&prng) % (
+                        lfs_max(BENCH_IFDEF_LFS3(
+                                    lfsr_file_size(&lfs, &file),
+                                    lfs2_file_size(&lfs, &file)),
+                                CHUNK)
+                            - (CHUNK-1));
+            BENCH_START("read", i*CHUNK+CHUNK);
+            #ifdef LFS3
+            lfsr_file_seek(&lfs, &file, i__, LFS_SEEK_SET) => i__;
+            #else
+            lfs2_file_seek(&lfs, &file, i__, LFS2_SEEK_SET) => i__;
+            #endif
+
+            uint8_t rbuf[CHUNK];
+            #ifdef LFS3
+            lfsr_file_read(&lfs, &file, rbuf, CHUNK) => CHUNK;
+            #else
+            lfs2_file_read(&lfs, &file, rbuf, CHUNK) => CHUNK;
+            #endif
+            BENCH_STOP("read");
+        }
+
+        if ((MODE == 2 || MODE == 5) && (i+1) % STEP == 0) {
+            // measure disk usage
+            //
+            // littlefs can be a dag, so build a bitmap to find the exact
+            // disk usage
+            memset(usage_bmap, 0, (BLOCK_COUNT+8-1)/8);
+            #ifdef LFS3
+            lfsr_traversal_open(&lfs, &t, 0) => 0;
+            while (true) {
+                struct lfs_tinfo tinfo;
+                int err = lfsr_traversal_read(&lfs, &t, &tinfo);
+                assert(!err || err == LFS_ERR_NOENT);
+                if (err == LFS_ERR_NOENT) {
+                    break;
+                }
+
+                usage_bmap[tinfo.block/8] |= 1 << (tinfo.block % 8);
+            }
+            lfsr_traversal_close(&lfs, &t) => 0;
+            #else
+            lfs2_fs_traverse(&lfs, usage_bmap_cb, usage_bmap) => 0;
+            #endif
+            lfs_size_t usage = 0;
+            for (lfs_size_t j = 0; j < BLOCK_COUNT; j++) {
+                if (usage_bmap[j / 8] & (1 << (j % 8))) {
+                    usage += 1;
+                }
+            }
+            BENCH_RESULT("usage", i*CHUNK+CHUNK,
+                    (uintmax_t)(usage - usage_baseline)
+                        * (uintmax_t)CFG->block_size);
+        }
+    }
+    #ifdef LFS3
+    lfsr_file_close(&lfs, &file) => 0;
+    #else
+    lfs2_file_close(&lfs, &file) => 0;
+    #endif
+    if (MODE == 0) {
+        BENCH_STOP("write");
+    }
+
+    free(usage_bmap);
+
+    #ifdef LFS3
+    lfsr_unmount(&lfs) => 0;
+    #else
+    lfs2_unmount(&lfs) => 0;
+    #endif
+'''
+
+[cases.bench_vs_lfs2_logging]
+# 0 = write
+# 1 = usage
+defines.MODE = [0, 1]
+# alternative for 1MiB file
+# defines.DISK_SIZE = '64*1024*1024'
+# defines.SIZE = '64*16384'
+# defines.REPEAT = 3
+# defines.CHUNK = 32
+# defines.STEP = '64*1'
+defines.SIZE = 32768
+defines.REPEAT = 4
+defines.CHUNK = 32
+defines.STEP = 1
+defines.SEED = 42
+defines.SYNC = true
+code = '''
+    #ifdef LFS3
+    lfs_t lfs;
+    lfsr_format(&lfs, LFS_F_RDWR, CFG) => 0;
+    lfsr_mount(&lfs, LFS_M_RDWR, CFG) => 0;
+    #else
+    lfs2_t lfs;
+    lfs2_format(&lfs, (const struct lfs2_config*)CFG) => 0;
+    lfs2_mount(&lfs, (const struct lfs2_config*)CFG) => 0;
+    #endif
+    uint32_t prng = SEED;
+
+    // go ahead and make consistent to avoid lazy mount operations
+    // messing with the benchmark
+    #ifdef LFS3
+    lfsr_fs_mkconsistent(&lfs) => 0;
+    #else
+    lfs2_fs_mkconsistent(&lfs) => 0;
+    #endif
+
+    // find the baseline usage after format
+    uint8_t *usage_bmap = malloc((BLOCK_COUNT+8-1)/8);
+    memset(usage_bmap, 0, (BLOCK_COUNT+8-1)/8);
+    #ifdef LFS3
+    lfsr_traversal_t t;
+    lfsr_traversal_open(&lfs, &t, 0) => 0;
+    while (true) {
+        struct lfs_tinfo tinfo;
+        int err = lfsr_traversal_read(&lfs, &t, &tinfo);
+        assert(!err || err == LFS_ERR_NOENT);
+        if (err == LFS_ERR_NOENT) {
+            break;
+        }
+
+        usage_bmap[tinfo.block/8] |= 1 << (tinfo.block % 8);
+    }
+    lfsr_traversal_close(&lfs, &t) => 0;
+    #else
+    lfs2_fs_traverse(&lfs, usage_bmap_cb, usage_bmap) => 0;
+    #endif
+    lfs_size_t usage_baseline = 0;
+    for (lfs_size_t j = 0; j < BLOCK_COUNT; j++) {
+        if (usage_bmap[j / 8] & (1 << (j % 8))) {
+            usage_baseline += 1;
+        }
+    }
+
+    // write to a log
+    //
+    // for littlefs v2, we rotate the log file when full, for
+    // littlefs v3, we can just use lfsr_file_fruncate
+    //
+    if (MODE == 0) {
+        BENCH_START("write", 0*CHUNK+CHUNK);
+    }
+    #ifdef LFS3
+    lfsr_file_t file;
+    lfsr_file_open(&lfs, &file, "bench_log",
+            LFS_O_RDWR | LFS_O_CREAT | LFS_O_EXCL | LFS_O_APPEND) => 0;
+    #else
+    lfs2_file_t file;
+    lfs2_file_open(&lfs, &file, "bench_log",
+            LFS2_O_RDWR | LFS2_O_CREAT | LFS2_O_EXCL | LFS2_O_APPEND) => 0;
+    #endif
+    for (lfs_size_t i = 0; i < (REPEAT*SIZE+(CHUNK-1))/CHUNK; i++) {
+        // append to log
+        uint8_t wbuf[CHUNK];
+        for (lfs_size_t j = 0; j < CHUNK; j++) {
+            wbuf[j] = 'a' + (BENCH_PRNG(&prng) % 26);
+        }
+        #ifdef LFS3
+        lfsr_file_write(&lfs, &file, wbuf, CHUNK) => CHUNK;
+        #else
+        lfs2_file_write(&lfs, &file, wbuf, CHUNK) => CHUNK;
+        #endif
+
+        // sync?
+        if (SYNC) {
+            #ifdef LFS3
+            lfsr_file_sync(&lfs, &file) => 0;
+            #else
+            lfs2_file_sync(&lfs, &file) => 0;
+            #endif
+        }
+
+        // for v3, fruncate, for v2, rotate if full
+        #ifdef LFS3
+        lfs_soff_t size = lfsr_file_size(&lfs, &file);
+        assert(size >= 0);
+        if (size > SIZE) {
+            lfsr_file_fruncate(&lfs, &file, SIZE) => 0;
+        }
+        #else
+        lfs_soff_t size = lfs2_file_size(&lfs, &file);
+        assert(size >= 0);
+        if (size >= SIZE) {
+            lfs2_file_close(&lfs, &file) => 0;
+            lfs2_rename(&lfs, "bench_log", "bench_log.1") => 0;
+            lfs2_file_open(&lfs, &file, "bench_log",
+                    LFS2_O_RDWR
+                        | LFS2_O_CREAT
+                        | LFS2_O_EXCL
+                        | LFS2_O_APPEND) => 0;
+        }
+        #endif
+
+        // a little bit weird, but this incrementally measures linear
+        // writes, including open and close costs
+        if ((MODE == 0)
+                && (i+1) % STEP == 0
+                && (i+1) < (REPEAT*SIZE+(CHUNK-1))/CHUNK) {
+            BENCH_STOP("write");
+            BENCH_START("write", (i+1)*CHUNK+CHUNK);
+        }
+
+        if (MODE == 1 && (i+1) % STEP == 0) {
+            // measure disk usage
+            //
+            // littlefs can be a dag, so build a bitmap to find the exact
+            // disk usage
+            memset(usage_bmap, 0, (BLOCK_COUNT+8-1)/8);
+            #ifdef LFS3
+            lfsr_traversal_open(&lfs, &t, 0) => 0;
+            while (true) {
+                struct lfs_tinfo tinfo;
+                int err = lfsr_traversal_read(&lfs, &t, &tinfo);
+                assert(!err || err == LFS_ERR_NOENT);
+                if (err == LFS_ERR_NOENT) {
+                    break;
+                }
+
+                usage_bmap[tinfo.block/8] |= 1 << (tinfo.block % 8);
+            }
+            lfsr_traversal_close(&lfs, &t) => 0;
+            #else
+            lfs2_fs_traverse(&lfs, usage_bmap_cb, usage_bmap) => 0;
+            #endif
+            lfs_size_t usage = 0;
+            for (lfs_size_t j = 0; j < BLOCK_COUNT; j++) {
+                if (usage_bmap[j / 8] & (1 << (j % 8))) {
+                    usage += 1;
+                }
+            }
+            BENCH_RESULT("usage", i*CHUNK+CHUNK,
+                    (uintmax_t)(usage - usage_baseline)
+                        * (uintmax_t)CFG->block_size);
+        }
+    }
+    #ifdef LFS3
+    lfsr_file_close(&lfs, &file) => 0;
+    #else
+    lfs2_file_close(&lfs, &file) => 0;
+    #endif
+    if (MODE == 0) {
+        BENCH_STOP("write");
+    }
+
+    free(usage_bmap);
+
+    #ifdef LFS3
+    lfsr_unmount(&lfs) => 0;
+    #else
+    lfs2_unmount(&lfs) => 0;
+    #endif
+'''
+
