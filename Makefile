@@ -1142,7 +1142,7 @@ PLOT_RBYD_FLAGS += \
 			--subplot-below=\" \
 				-Dm=$2 \
 				-ybench_proged_avg \
-				-ybench_proged_bnd\""if
+				-ybench_proged_bnd\"" \
 		--subplot-right=" \
 				-Dm=fetch+per \
 				-ybench_readed_avg \
