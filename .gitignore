@@ -1,5 +1,6 @@
 # Build stuff
-build/
+build*/
+results*/
 
 # Intermediate csv files
 *.avg.csv
@@ -9,4 +10,5 @@ build/
 # Misc
 tags
 clip
+disk
 .gdb_history
