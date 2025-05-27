@@ -1,0 +1,301 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0,0,131,131" width="131" height="131" style="font: 10px sans-serif; background-color: #00000000; user-select: auto;"><g id="c-lfs2_dir_fetchmatch" class="tile code" transform="translate(1,1)" ><rect width="38" height="28" opacity="0"></rect><title>lfs2_dir_fetchmatch
+code 1124
+stack 280
+ctx 322</title><rect id="c-tile-0" fill="#bfbe7a" width="37" height="27"></rect></g><g id="c-lfs2_dir_relocatingcommit" class="tile code" transform="translate(1,29)" ><rect width="38" height="28" opacity="0"></rect><title>lfs2_dir_relocatingcommit
+code 1068
+stack 824
+ctx 352</title><rect id="c-tile-1" fill="#bfbe7a" width="37" height="27"></rect></g><g id="c-lfs2_dir_orphaningcommit" class="tile code" transform="translate(39,1)" ><rect width="27" height="29" opacity="0"></rect><title>lfs2_dir_orphaningcommit
+code 784
+stack 968
+ctx 308</title><rect id="c-tile-2" fill="#bfbe7a" width="26" height="28"></rect></g><g id="c-lfs2_dir_traverse" class="tile code" transform="translate(39,30)" ><rect width="27" height="27" opacity="0"></rect><title>lfs2_dir_traverse
+code 712
+stack 288
+ctx 338</title><rect id="c-tile-3" fill="#bfbe7a" width="26" height="26"></rect></g><g id="c-lfs2_dir_compact" class="tile code" transform="translate(66,1)" ><rect width="31" height="16" opacity="0"></rect><title>lfs2_dir_compact
+code 540
+stack 584
+ctx 348</title><rect id="c-tile-4" fill="#bfbe7a" width="30" height="15"></rect></g><g id="c-lfs2_dir_commitcrc" class="tile code" transform="translate(66,17)" ><rect width="31" height="17" opacity="0"></rect><title>lfs2_dir_commitcrc
+code 520
+stack 408
+ctx 284</title><rect id="c-tile-5" fill="#bfbe7a" width="30" height="16"></rect></g><g id="c-lfs2_dir_find" class="tile code" transform="translate(66,34)" ><rect width="16" height="23" opacity="0"></rect><title>lfs2_dir_find
+code 388
+stack 376
+ctx 307</title><rect id="c-tile-6" fill="#bfbe7a" width="15" height="22"></rect></g><g id="c-lfs2_dir_getslice" class="tile code" transform="translate(82,34)" ><rect width="15" height="23" opacity="0"></rect><title>lfs2_dir_getslice
+code 352
+stack 136
+ctx 312</title><rect id="c-tile-7" fill="#bfbe7a" width="14" height="22"></rect></g><g id="c-lfs2_dir_commitattr" class="tile code" transform="translate(97,1)" ><rect width="15" height="13" opacity="0"></rect><title>lfs2_dir_commitattr
+code 210
+stack 336
+ctx 292</title><rect id="c-tile-8" fill="#bfbe7a" width="14" height="12"></rect></g><g id="c-lfs2_dir_getread" class="tile code" transform="translate(97,14)" ><rect width="15" height="14" opacity="0"></rect><title>lfs2_dir_getread
+code 200
+stack 200
+ctx 358</title><rect id="c-tile-9" fill="#bfbe7a" width="14" height="13"></rect></g><g id="c-lfs2_dir_getinfo" class="tile code" transform="translate(112,1)" ><rect width="19" height="9" opacity="0"></rect><title>lfs2_dir_getinfo
+code 172
+stack 208
+ctx 562</title><rect id="c-tile-10" fill="#bfbe7a" width="18" height="8"></rect></g><g id="c-lfs2_dir_open" class="tile code" transform="translate(112,10)" ><rect width="10" height="18" opacity="0"></rect><title>lfs2_dir_open
+code 168
+stack 424
+ctx 317</title><rect id="c-tile-11" fill="#bfbe7a" width="9" height="17"></rect></g><g id="c-lfs2_dir_split" class="tile code" transform="translate(122,10)" ><rect width="9" height="18" opacity="0"></rect><title>lfs2_dir_split
+code 160
+stack 688
+ctx 348</title><rect id="c-tile-12" fill="#bfbe7a" width="8" height="17"></rect></g><g id="c-lfs2_dir_seek" class="tile code" transform="translate(97,28)" ><rect width="9" height="15" opacity="0"></rect><title>lfs2_dir_seek
+code 146
+stack 344
+ctx 316</title><rect id="c-tile-13" fill="#bfbe7a" width="8" height="14"></rect></g><g id="c-lfs2_dir_read" class="tile code" transform="translate(106,28)" ><rect width="9" height="15" opacity="0"></rect><title>lfs2_dir_read
+code 140
+stack 328
+ctx 580</title><rect id="c-tile-14" fill="#bfbe7a" width="8" height="14"></rect></g><g id="c-lfs2_dir_alloc" class="tile code" transform="translate(97,43)" ><rect width="9" height="14" opacity="0"></rect><title>lfs2_dir_alloc
+code 122
+stack 480
+ctx 292</title><rect id="c-tile-15" fill="#bfbe7a" width="8" height="13"></rect></g><g id="c-lfs2_dir_traverse_filter" class="tile code" transform="translate(106,43)" ><rect width="9" height="14" opacity="0"></rect><title>lfs2_dir_traverse_filter
+code 118
+stack 16
+ctx 12</title><rect id="c-tile-16" fill="#bfbe7a" width="8" height="13"></rect></g><g id="c-lfs2_dir_drop" class="tile code" transform="translate(115,28)" ><rect width="6" height="14" opacity="0"></rect><title>lfs2_dir_drop
+code 92
+stack 1176
+ctx 328</title><rect id="c-tile-17" fill="#bfbe7a" width="5" height="13"></rect></g><g id="c-lfs2_dir_getgstate" class="tile code" transform="translate(121,28)" ><rect width="10" height="8" opacity="0"></rect><title>lfs2_dir_getgstate
+code 80
+stack 200
+ctx 308</title><rect id="c-tile-18" fill="#bfbe7a" width="9" height="7"></rect></g><g id="c-lfs2_dir_commitprog" class="tile code" transform="translate(121,36)" ><rect width="10" height="6" opacity="0"></rect><title>lfs2_dir_commitprog
+code 62
+stack 264
+ctx 292</title><rect id="c-tile-19" fill="#bfbe7a" width="9" height="5"></rect></g><g id="c-lfs2_dir_find_match" class="tile code" transform="translate(115,42)" ><rect width="8" height="8" opacity="0"></rect><title>lfs2_dir_find_match
+code 60
+stack 168
+ctx 12</title><rect id="c-tile-20" fill="#bfbe7a" width="7" height="7"></rect></g><g id="c-lfs2_dir_close" class="tile code" transform="translate(115,50)" ><rect width="4" height="7" opacity="0"></rect><title>lfs2_dir_close
+code 28
+stack 0
+ctx 312</title><rect id="c-tile-21" fill="#bfbe7a" width="3" height="6"></rect></g><g id="c-lfs2_dir_commit" class="tile code" transform="translate(119,50)" ><rect width="4" height="7" opacity="0"></rect><title>lfs2_dir_commit
+code 24
+stack 1144
+ctx 308</title><rect id="c-tile-22" fill="#bfbe7a" width="3" height="6"></rect></g><g id="c-lfs2_dir_fetch" class="tile code" transform="translate(123,42)" ><rect width="4" height="7" opacity="0"></rect><title>lfs2_dir_fetch
+code 24
+stack 304
+ctx 300</title><rect id="c-tile-23" fill="#bfbe7a" width="3" height="6"></rect></g><g id="c-lfs2_dir_get" class="tile code" transform="translate(127,42)" ><rect width="4" height="7" opacity="0"></rect><title>lfs2_dir_get
+code 24
+stack 160
+ctx 304</title><rect id="c-tile-24" fill="#bfbe7a" width="3" height="6"></rect></g><g id="c-lfs2_dir_rewind" class="tile code" transform="translate(123,49)" ><rect width="8" height="3" opacity="0"></rect><title>lfs2_dir_rewind
+code 24
+stack 312
+ctx 312</title><rect id="c-tile-25" fill="#bfbe7a" width="7" height="2"></rect></g><g id="c-lfs2_dir_commit_size" class="tile code" transform="translate(123,52)" ><rect width="4" height="5" opacity="0"></rect><title>lfs2_dir_commit_size
+code 20
+stack 8
+ctx 12</title><rect id="c-tile-26" fill="#bfbe7a" width="3" height="4"></rect></g><g id="c-lfs2_dir_commit_commit" class="tile code" transform="translate(127,52)" ><rect width="4" height="3" opacity="0"></rect><title>lfs2_dir_commit_commit
+code 14
+stack 344
+ctx 12</title><rect id="c-tile-27" fill="#bfbe7a" width="3" height="2"></rect></g><g id="c-lfs2_dir_tell" class="tile code" transform="translate(127,55)" ><rect width="4" height="2" opacity="0"></rect><title>lfs2_dir_tell
+code 4
+stack 0
+ctx 312</title><rect id="c-tile-28" fill="#bfbe7a" width="3" height="1"></rect></g><g id="c-lfs2_file_flushedwrite" class="tile code" transform="translate(1,57)" ><rect width="33" height="18" opacity="0"></rect><title>lfs2_file_flushedwrite
+code 636
+stack 608
+ctx 376</title><rect id="c-tile-29" fill="#6aac79" width="32" height="17"></rect></g><g id="c-lfs2_file_opencfg_" class="tile code" transform="translate(1,75)" ><rect width="22" height="26" opacity="0"></rect><title>lfs2_file_opencfg_
+code 588
+stack 1296
+ctx 405</title><rect id="c-tile-30" fill="#6aac79" width="21" height="25"></rect></g><g id="c-lfs2_file_truncate" class="tile code" transform="translate(23,75)" ><rect width="11" height="26" opacity="0"></rect><title>lfs2_file_truncate
+code 292
+stack 824
+ctx 372</title><rect id="c-tile-31" fill="#6aac79" width="10" height="25"></rect></g><g id="c-lfs2_file_relocate" class="tile code" transform="translate(34,57)" ><rect width="13" height="22" opacity="0"></rect><title>lfs2_file_relocate
+code 282
+stack 512
+ctx 368</title><rect id="c-tile-32" fill="#6aac79" width="12" height="21"></rect></g><g id="c-lfs2_file_flush" class="tile code" transform="translate(47,57)" ><rect width="11" height="22" opacity="0"></rect><title>lfs2_file_flush
+code 262
+stack 728
+ctx 368</title><rect id="c-tile-33" fill="#6aac79" width="10" height="21"></rect></g><g id="c-lfs2_file_flushedread" class="tile code" transform="translate(58,57)" ><rect width="11" height="22" opacity="0"></rect><title>lfs2_file_flushedread
+code 248
+stack 256
+ctx 376</title><rect id="c-tile-34" fill="#6aac79" width="10" height="21"></rect></g><g id="c-lfs2_file_sync_" class="tile code" transform="translate(34,79)" ><rect width="19" height="13" opacity="0"></rect><title>lfs2_file_sync_
+code 248
+stack 1200
+ctx 368</title><rect id="c-tile-35" fill="#6aac79" width="18" height="12"></rect></g><g id="c-lfs2_file_seek_" class="tile code" transform="translate(34,92)" ><rect width="19" height="9" opacity="0"></rect><title>lfs2_file_seek_
+code 184
+stack 776
+ctx 376</title><rect id="c-tile-36" fill="#6aac79" width="18" height="8"></rect></g><g id="c-lfs2_file_write_" class="tile code" transform="translate(53,79)" ><rect width="16" height="10" opacity="0"></rect><title>lfs2_file_write_
+code 168
+stack 768
+ctx 376</title><rect id="c-tile-37" fill="#6aac79" width="15" height="9"></rect></g><g id="c-lfs2_file_close_" class="tile code" transform="translate(53,89)" ><rect width="8" height="7" opacity="0"></rect><title>lfs2_file_close_
+code 54
+stack 1216
+ctx 368</title><rect id="c-tile-38" fill="#6aac79" width="7" height="6"></rect></g><g id="c-lfs2_file_read" class="tile code" transform="translate(53,96)" ><rect width="8" height="5" opacity="0"></rect><title>lfs2_file_read
+code 40
+stack 752
+ctx 376</title><rect id="c-tile-39" fill="#6aac79" width="7" height="4"></rect></g><g id="c-lfs2_file_open" class="tile code" transform="translate(61,89)" ><rect width="3" height="7" opacity="0"></rect><title>lfs2_file_open
+code 20
+stack 1312
+ctx 377</title><rect id="c-tile-40" fill="#6aac79" width="2" height="6"></rect></g><g id="c-lfs2_file_size" class="tile code" transform="translate(64,89)" ><rect width="5" height="3" opacity="0"></rect><title>lfs2_file_size
+code 20
+stack 0
+ctx 368</title><rect id="c-tile-41" fill="#6aac79" width="4" height="2"></rect></g><g id="c-lfs2_file_rewind" class="tile code" transform="translate(64,92)" ><rect width="5" height="4" opacity="0"></rect><title>lfs2_file_rewind
+code 18
+stack 784
+ctx 368</title><rect id="c-tile-42" fill="#6aac79" width="4" height="3"></rect></g><g id="c-lfs2_file_opencfg" class="tile code" transform="translate(61,96)" ><rect width="5" height="2" opacity="0"></rect><title>lfs2_file_opencfg
+code 12
+stack 1312
+ctx 405</title><rect id="c-tile-43" fill="#6aac79" width="4" height="1"></rect></g><g id="c-lfs2_file_close" class="tile code" transform="translate(61,98)" ><rect width="2" height="3" opacity="0"></rect><title>lfs2_file_close
+code 8
+stack 1224
+ctx 368</title><rect id="c-tile-44" fill="#6aac79" width="1" height="2"></rect></g><g id="c-lfs2_file_seek" class="tile code" transform="translate(63,98)" ><rect width="3" height="3" opacity="0"></rect><title>lfs2_file_seek
+code 8
+stack 784
+ctx 376</title><rect id="c-tile-45" fill="#6aac79" width="2" height="2"></rect></g><g id="c-lfs2_file_sync" class="tile code" transform="translate(66,96)" ><rect width="3" height="2" opacity="0"></rect><title>lfs2_file_sync
+code 8
+stack 1208
+ctx 368</title><rect id="c-tile-46" fill="#6aac79" width="2" height="1"></rect></g><g id="c-lfs2_file_write" class="tile code" transform="translate(66,98)" ><rect width="2" height="3" opacity="0"></rect><title>lfs2_file_write
+code 8
+stack 776
+ctx 376</title><rect id="c-tile-47" fill="#6aac79" width="1" height="2"></rect></g><g id="c-lfs2_fs_deorphan" class="tile code" transform="translate(1,101)" ><rect width="14" height="30" opacity="0"></rect><title>lfs2_fs_deorphan
+code 428
+stack 1136
+ctx 257</title><rect id="c-tile-49" fill="#a68c74" width="13" height="29"></rect></g><g id="c-lfs2_fs_traverse_" class="tile code" transform="translate(15,101)" ><rect width="20" height="19" opacity="0"></rect><title>lfs2_fs_traverse_
+code 372
+stack 416
+ctx 265</title><rect id="c-tile-50" fill="#a68c74" width="19" height="18"></rect></g><g id="c-lfs2_fs_forceconsistency" class="tile code" transform="translate(15,120)" ><rect width="20" height="11" opacity="0"></rect><title>lfs2_fs_forceconsistency
+code 220
+stack 1224
+ctx 256</title><rect id="c-tile-51" fill="#a68c74" width="19" height="10"></rect></g><g id="c-lfs2_fs_gc" class="tile code" transform="translate(35,101)" ><rect width="15" height="11" opacity="0"></rect><title>lfs2_fs_gc
+code 172
+stack 1280
+ctx 256</title><rect id="c-tile-52" fill="#a68c74" width="14" height="10"></rect></g><g id="c-lfs2_fs_parent" class="tile code" transform="translate(35,112)" ><rect width="15" height="10" opacity="0"></rect><title>lfs2_fs_parent
+code 160
+stack 360
+ctx 300</title><rect id="c-tile-53" fill="#a68c74" width="14" height="9"></rect></g><g id="c-lfs2_fs_pred" class="tile code" transform="translate(35,122)" ><rect width="15" height="9" opacity="0"></rect><title>lfs2_fs_pred
+code 136
+stack 360
+ctx 300</title><rect id="c-tile-54" fill="#a68c74" width="14" height="8"></rect></g><g id="c-lfs2_fs_stat" class="tile code" transform="translate(50,101)" ><rect width="10" height="13" opacity="0"></rect><title>lfs2_fs_stat
+code 126
+stack 392
+ctx 284</title><rect id="c-tile-55" fill="#a68c74" width="9" height="12"></rect></g><g id="c-lfs2_fs_mkconsistent" class="tile code" transform="translate(60,101)" ><rect width="9" height="13" opacity="0"></rect><title>lfs2_fs_mkconsistent
+code 122
+stack 1288
+ctx 256</title><rect id="c-tile-56" fill="#a68c74" width="8" height="12"></rect></g><g id="c-lfs2_fs_grow" class="tile code" transform="translate(50,114)" ><rect width="7" height="17" opacity="0"></rect><title>lfs2_fs_grow
+code 116
+stack 1240
+ctx 260</title><rect id="c-tile-57" fill="#a68c74" width="6" height="16"></rect></g><g id="c-lfs2_fs_parent_match" class="tile code" transform="translate(57,114)" ><rect width="12" height="8" opacity="0"></rect><title>lfs2_fs_parent_match
+code 90
+stack 112
+ctx 12</title><rect id="c-tile-58" fill="#a68c74" width="11" height="7"></rect></g><g id="c-lfs2_fs_size_" class="tile code" transform="translate(57,122)" ><rect width="7" height="9" opacity="0"></rect><title>lfs2_fs_size_
+code 58
+stack 432
+ctx 256</title><rect id="c-tile-59" fill="#a68c74" width="6" height="8"></rect></g><g id="c-lfs2_fs_preporphans" class="tile code" transform="translate(64,122)" ><rect width="5" height="4" opacity="0"></rect><title>lfs2_fs_preporphans
+code 24
+stack 0
+ctx 257</title><rect id="c-tile-60" fill="#a68c74" width="4" height="3"></rect></g><g id="c-lfs2_fs_size_count" class="tile code" transform="translate(64,126)" ><rect width="2" height="5" opacity="0"></rect><title>lfs2_fs_size_count
+code 10
+stack 0
+ctx 8</title><rect id="c-tile-61" fill="#a68c74" width="1" height="4"></rect></g><g id="c-lfs2_fs_traverse" class="tile code" transform="translate(66,126)" ><rect width="3" height="2" opacity="0"></rect><title>lfs2_fs_traverse
+code 10
+stack 424
+ctx 264</title><rect id="c-tile-62" fill="#a68c74" width="2" height="1"></rect></g><g id="c-lfs2_fs_size" class="tile code" transform="translate(66,128)" ><rect width="3" height="3" opacity="0"></rect><title>lfs2_fs_size
+code 8
+stack 440
+ctx 256</title><rect id="c-tile-63" fill="#a68c74" width="2" height="2"></rect></g><g id="c-lfs2_bd_read" class="tile code" transform="translate(69,57)" ><rect width="17" height="22" opacity="0"></rect><title>lfs2_bd_read
+code 382
+stack 64
+ctx 318</title><rect id="c-tile-64" fill="#9b9b9b" width="16" height="21"></rect></g><g id="c-lfs2_bd_prog" class="tile code" transform="translate(86,57)" ><rect width="7" height="22" opacity="0"></rect><title>lfs2_bd_prog
+code 146
+stack 224
+ctx 315</title><rect id="c-tile-65" fill="#9b9b9b" width="6" height="21"></rect></g><g id="c-lfs2_bd_cmp" class="tile code" transform="translate(69,79)" ><rect width="8" height="16" opacity="0"></rect><title>lfs2_bd_cmp
+code 132
+stack 136
+ctx 318</title><rect id="c-tile-66" fill="#9b9b9b" width="7" height="15"></rect></g><g id="c-lfs2_bd_flush" class="tile code" transform="translate(77,79)" ><rect width="16" height="8" opacity="0"></rect><title>lfs2_bd_flush
+code 128
+stack 192
+ctx 299</title><rect id="c-tile-67" fill="#9b9b9b" width="15" height="7"></rect></g><g id="c-lfs2_bd_crc" class="tile code" transform="translate(77,87)" ><rect width="15" height="8" opacity="0"></rect><title>lfs2_bd_crc
+code 120
+stack 136
+ctx 322</title><rect id="c-tile-68" fill="#9b9b9b" width="14" height="7"></rect></g><g id="c-lfs2_rename" class="tile code" transform="translate(93,57)" ><rect width="38" height="17" opacity="0"></rect><title>lfs2_rename
+code 656
+stack 1440
+ctx 266</title><rect id="c-tile-70" fill="#9c8cbf" width="37" height="16"></rect></g><g id="c-lfs2_ctz_find" class="tile code" transform="translate(93,74)" ><rect width="19" height="9" opacity="0"></rect><title>lfs2_ctz_find
+code 178
+stack 136
+ctx 326</title><rect id="c-tile-71" fill="#7995c4" width="18" height="8"></rect></g><g id="c-lfs2_ctz_traverse" class="tile code" transform="translate(93,83)" ><rect width="14" height="12" opacity="0"></rect><title>lfs2_ctz_traverse
+code 168
+stack 136
+ctx 314</title><rect id="c-tile-72" fill="#7995c4" width="13" height="11"></rect></g><g id="c-lfs2_ctz_index" class="tile code" transform="translate(107,83)" ><rect width="5" height="12" opacity="0"></rect><title>lfs2_ctz_index
+code 62
+stack 24
+ctx 264</title><rect id="c-tile-73" fill="#7995c4" width="4" height="11"></rect></g><g id="c-lfs2_mount" class="tile code" transform="translate(112,74)" ><rect width="19" height="21" opacity="0"></rect><title>lfs2_mount
+code 392
+stack 408
+ctx 344</title><rect id="c-tile-74" fill="#8bb5b4" width="18" height="20"></rect></g><g id="c-lfs2_mkdir" class="tile code" transform="translate(69,95)" ><rect width="18" height="20" opacity="0"></rect><title>lfs2_mkdir
+code 362
+stack 1416
+ctx 261</title><rect id="c-tile-75" fill="#bfbe7a" width="17" height="19"></rect></g><g id="c-lfs2_remove" class="tile code" transform="translate(87,95)" ><rect width="13" height="20" opacity="0"></rect><title>lfs2_remove
+code 256
+stack 1344
+ctx 261</title><rect id="c-tile-76" fill="#6aac79" width="12" height="19"></rect></g><g id="c-lfs2_alloc" class="tile code" transform="translate(69,115)" ><rect width="16" height="8" opacity="0"></rect><title>lfs2_alloc
+code 124
+stack 448
+ctx 264</title><rect id="c-tile-77" fill="#9c8cbf" width="15" height="7"></rect></g><g id="c-lfs2_alloc_scan" class="tile code" transform="translate(69,123)" ><rect width="10" height="8" opacity="0"></rect><title>lfs2_alloc_scan
+code 80
+stack 424
+ctx 256</title><rect id="c-tile-78" fill="#9c8cbf" width="9" height="7"></rect></g><g id="c-lfs2_alloc_lookahead" class="tile code" transform="translate(79,123)" ><rect width="6" height="8" opacity="0"></rect><title>lfs2_alloc_lookahead
+code 46
+stack 8
+ctx 8</title><rect id="c-tile-79" fill="#9c8cbf" width="5" height="7"></rect></g><g id="c-lfs2_init" class="tile code" transform="translate(85,115)" ><rect width="15" height="16" opacity="0"></rect><title>lfs2_init
+code 246
+stack 24
+ctx 344</title><rect id="c-tile-80" fill="#9b9b9b" width="14" height="15"></rect></g><g id="c-lfs2_format" class="tile code" transform="translate(100,95)" ><rect width="12" height="19" opacity="0"></rect><title>lfs2_format
+code 228
+stack 1256
+ctx 344</title><rect id="c-tile-81" fill="#bf7774" width="11" height="18"></rect></g><g id="c-lfs2_getattr" class="tile code" transform="translate(112,95)" ><rect width="19" height="7" opacity="0"></rect><title>lfs2_getattr
+code 148
+stack 440
+ctx 270</title><rect id="c-tile-82" fill="#a68c74" width="18" height="6"></rect></g><g id="c-lfs2_commitattr" class="tile code" transform="translate(112,102)" ><rect width="10" height="12" opacity="0"></rect><title>lfs2_commitattr
+code 122
+stack 1216
+ctx 270</title><rect id="c-tile-83" fill="#9b9b9b" width="9" height="11"></rect></g><g id="c-lfs2_stat" class="tile code" transform="translate(122,102)" ><rect width="9" height="12" opacity="0"></rect><title>lfs2_stat
+code 100
+stack 432
+ctx 529</title><rect id="c-tile-84" fill="#bb84ab" width="8" height="11"></rect></g><g id="c-lfs2_gstate_hasmovehere" class="tile code" transform="translate(100,114)" ><rect width="8" height="3" opacity="0"></rect><title>lfs2_gstate_hasmovehere
+code 30
+stack 16
+ctx 24</title><rect id="c-tile-85" fill="#bb84ab" width="7" height="2"></rect></g><g id="c-lfs2_gstate_xor" class="tile code" transform="translate(100,117)" ><rect width="4" height="6" opacity="0"></rect><title>lfs2_gstate_xor
+code 26
+stack 0
+ctx 32</title><rect id="c-tile-86" fill="#bb84ab" width="3" height="5"></rect></g><g id="c-lfs2_gstate_iszero" class="tile code" transform="translate(104,117)" ><rect width="4" height="6" opacity="0"></rect><title>lfs2_gstate_iszero
+code 24
+stack 0
+ctx 16</title><rect id="c-tile-87" fill="#bb84ab" width="3" height="5"></rect></g><g id="c-lfs2_tortoise_detectcycles" class="tile code" transform="translate(108,114)" ><rect width="7" height="9" opacity="0"></rect><title>lfs2_tortoise_detectcycles
+code 66
+stack 12
+ctx 56</title><rect id="c-tile-88" fill="#bfbe7a" width="6" height="8"></rect></g><g id="c-rtable" class="tile code" transform="translate(100,123)" ><rect width="8" height="8" opacity="0"></rect><title>rtable
+code 64
+stack 0
+ctx 0</title><rect id="c-tile-89" fill="#9b9b9b" width="7" height="7"></rect></g><g id="c-lfs2_pair_cmp" class="tile code" transform="translate(108,123)" ><rect width="7" height="5" opacity="0"></rect><title>lfs2_pair_cmp
+code 34
+stack 8
+ctx 16</title><rect id="c-tile-90" fill="#7997b7" width="6" height="4"></rect></g><g id="c-lfs2_pair_isnull" class="tile code" transform="translate(108,128)" ><rect width="7" height="3" opacity="0"></rect><title>lfs2_pair_isnull
+code 20
+stack 0
+ctx 8</title><rect id="c-tile-91" fill="#7997b7" width="6" height="2"></rect></g><g id="c-lfs2_crc" class="tile code" transform="translate(115,114)" ><rect width="6" height="9" opacity="0"></rect><title>lfs2_crc
+code 52
+stack 16
+ctx 12</title><rect id="c-tile-92" fill="#bfbe7a" width="5" height="8"></rect></g><g id="c-lfs2_deinit" class="tile code" transform="translate(121,114)" ><rect width="5" height="9" opacity="0"></rect><title>lfs2_deinit
+code 50
+stack 8
+ctx 256</title><rect id="c-tile-93" fill="#7997b7" width="4" height="8"></rect></g><g id="c-lfs2_path_islast" class="tile code" transform="translate(126,114)" ><rect width="5" height="9" opacity="0"></rect><title>lfs2_path_islast
+code 38
+stack 16
+ctx 5</title><rect id="c-tile-94" fill="#bf8761" width="4" height="8"></rect></g><g id="c-lfs2_setattr" class="tile code" transform="translate(115,123)" ><rect width="4" height="8" opacity="0"></rect><title>lfs2_setattr
+code 24
+stack 1240
+ctx 270</title><rect id="c-tile-95" fill="#a68c74" width="3" height="7"></rect></g><g id="c-lfs2_cache_zero" class="tile code" transform="translate(119,123)" ><rect width="5" height="4" opacity="0"></rect><title>lfs2_cache_zero
+code 22
+stack 8
+ctx 277</title><rect id="c-tile-96" fill="#bb84ab" width="4" height="3"></rect></g><g id="c-lfs2_tag_dsize" class="tile code" transform="translate(119,127)" ><rect width="5" height="4" opacity="0"></rect><title>lfs2_tag_dsize
+code 22
+stack 0
+ctx 4</title><rect id="c-tile-97" fill="#9b9b9b" width="4" height="3"></rect></g><g id="c-lfs2_removeattr" class="tile code" transform="translate(124,123)" ><rect width="7" height="3" opacity="0"></rect><title>lfs2_removeattr
+code 20
+stack 1232
+ctx 262</title><rect id="c-tile-98" fill="#bf7774" width="6" height="2"></rect></g><g id="c-defaults" class="tile code" transform="translate(124,126)" ><rect width="3" height="5" opacity="0"></rect><title>defaults
+code 12
+stack 0
+ctx 0</title><rect id="c-tile-99" fill="#bf7774" width="2" height="4"></rect></g><g id="c-lfs2_unmount" class="tile code" transform="translate(127,126)" ><rect width="4" height="2" opacity="0"></rect><title>lfs2_unmount
+code 8
+stack 16
+ctx 256</title><rect id="c-tile-100" fill="#8bb5b4" width="3" height="1"></rect></g><g id="c-lfs2_unmount_" class="tile code" transform="translate(127,128)" ><rect width="4" height="3" opacity="0"></rect><title>lfs2_unmount_
+code 8
+stack 0
+ctx 256</title><rect id="c-tile-101" fill="#7997b7" width="3" height="2"></rect></g></svg>
