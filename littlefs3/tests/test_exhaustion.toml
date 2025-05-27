@@ -1,0 +1,2314 @@
+# Test running a filesystem to exhaustion and its effects on wear-leveling
+after = [
+    'test_dirs',
+    'test_files',
+    'test_fwrite',
+    'test_stickynotes',
+    'test_alloc',
+    'test_badblocks',
+    'test_relocations',
+]
+
+
+# High-level wear-leveling litmus tests
+#
+# littlefs implements the weaker form of wear-leveling: dynamic
+# wear-leveling. This means we can't guarantee evenly distributed wear,
+# but we can at least guarantee the lifetime of storage scales with the
+# size of storage.
+#
+# This gives us something concrete we can test, that doubling the size of
+# storage roughly doubles the lifetime of the storage.
+
+# test dir wear-leveling
+[cases.test_exhaustion_spam_dir_fuzz]
+defines.ERASE_CYCLES = 10
+defines.BLOCK_RECYCLES = 4
+defines.BADBLOCK_BEHAVIOR = [
+    'LFS_EMUBD_BADBLOCK_PROGERROR',
+    'LFS_EMUBD_BADBLOCK_ERASEERROR',
+    'LFS_EMUBD_BADBLOCK_READERROR',
+    'LFS_EMUBD_BADBLOCK_PROGNOOP',
+    'LFS_EMUBD_BADBLOCK_ERASENOOP',
+]
+# we need prog checking to detect read errors
+defines.CKPROGS = 'BADBLOCK_BEHAVIOR >= LFS_EMUBD_BADBLOCK_READERROR'
+defines.N = [1, 2, 4, 8, 16, 32, 64, 128, 256]
+defines.SEED = 42
+fuzz = 'SEED'
+if = 'LFS_IFDEF_CKPROGS(true, !CKPROGS)'
+code = '''
+    // run our test twice, once with 1/2 the storage, once with 2/2 the
+    // storage, and compare how many operations we were able to perform
+    // before filesystem death
+    uint32_t run_bc[2] = {BLOCK_COUNT/2, BLOCK_COUNT};
+    uint32_t run_ops[2] = {0, 0};
+
+    for (int run = 0; run < 2; run++) {
+        // clear any wear from the previous run
+        for (lfs_block_t i = 0; i < BLOCK_COUNT; i++) {
+            lfs_emubd_setwear(CFG, i, 0) => 0;
+        }
+
+        // configure the filesystem size
+        struct lfs_config cfg = *CFG;
+        cfg.block_count = run_bc[run];
+
+        // run the test
+        lfs_t lfs;
+        lfsr_format(&lfs,
+                LFS_F_RDWR
+                    | ((CKPROGS) ? LFS_IFDEF_CKPROGS(LFS_F_CKPROGS, -1) : 0),
+                &cfg) => 0;
+        lfsr_mount(&lfs,
+                LFS_M_RDWR
+                    | ((CKPROGS) ? LFS_IFDEF_CKPROGS(LFS_M_CKPROGS, -1) : 0),
+                &cfg) => 0;
+
+        // set up a simulation to compare against
+        lfs_size_t *sim = malloc(N*sizeof(lfs_size_t));
+        lfs_size_t sim_size = 0;
+
+        uint32_t prng = SEED;
+        for (;; run_ops[run]++) {
+            // choose a pseudo-random op, either mkdir, remove, or rename
+            uint8_t op = TEST_PRNG(&prng) % 3;
+
+            if (op == 0 || sim_size == 0) {
+                // choose a pseudo-random number, truncate to 3 hexadecimals
+                lfs_size_t x = TEST_PRNG(&prng) % N;
+
+                // insert into our sim
+                for (lfs_size_t j = 0;; j++) {
+                    if (j >= sim_size || sim[j] >= x) {
+                        // already seen?
+                        if (j < sim_size && sim[j] == x) {
+                            // do nothing
+                        } else {
+                            // insert
+                            memmove(&sim[j+1], &sim[j],
+                                    (sim_size-j)*sizeof(lfs_size_t));
+                            sim_size += 1;
+                            sim[j] = x;
+                        }
+                        break;
+                    }
+                }
+
+                // create a directory here
+                char name[256];
+                sprintf(name, "dir%03x", x);
+                int err = lfsr_mkdir(&lfs, name);
+                assert(!err || err == LFS_ERR_EXIST || err == LFS_ERR_NOSPC);
+                if (err == LFS_ERR_NOSPC) {
+                    goto dead;
+                }
+
+            } else if (op == 1) {
+                // choose a pseudo-random entry to delete
+                lfs_size_t j = TEST_PRNG(&prng) % sim_size;
+                lfs_size_t x = sim[j];
+
+                // delete from our sim
+                memmove(&sim[j], &sim[j+1],
+                        (sim_size-(j+1))*sizeof(lfs_size_t));
+                sim_size -= 1;
+
+                // remove this directory
+                char name[256];
+                sprintf(name, "dir%03x", x);
+                int err = lfsr_remove(&lfs, name);
+                assert(!err || err == LFS_ERR_NOSPC);
+                if (err == LFS_ERR_NOSPC) {
+                    goto dead;
+                }
+
+            } else {
+                // choose a pseudo-random entry to rename, and a pseudo-random
+                // number to rename to
+                lfs_size_t j = TEST_PRNG(&prng) % sim_size;
+                lfs_size_t x = sim[j];
+                lfs_size_t y = TEST_PRNG(&prng) % N;
+                for (lfs_size_t k = 0;; k++) {
+                    if (k >= sim_size || sim[k] >= y) {
+                        // already seen and not a noop?
+                        if (k < sim_size && sim[k] == y && x != y) {
+                            // just delete the original entry
+                            memmove(&sim[j], &sim[j+1],
+                                    (sim_size-(j+1))*sizeof(lfs_size_t));
+                            sim_size -= 1;
+                        } else {
+                            // first delete
+                            memmove(&sim[j], &sim[j+1],
+                                    (sim_size-(j+1))*sizeof(lfs_size_t));
+                            if (k > j) {
+                                k -= 1;
+                            }
+                            // then insert
+                            memmove(&sim[k+1], &sim[k],
+                                    (sim_size-k)*sizeof(lfs_size_t));
+                            sim[k] = y;
+                        }
+                        break;
+                    }
+                }
+
+                // rename this directory
+                char old_name[256];
+                sprintf(old_name, "dir%03x", x);
+                char new_name[256];
+                sprintf(new_name, "dir%03x", y);
+                int err = lfsr_rename(&lfs, old_name, new_name);
+                assert(!err || err == LFS_ERR_NOSPC);
+                if (err == LFS_ERR_NOSPC) {
+                    goto dead;
+                }
+            }
+
+            // check our simulation every power-of-2 ops
+            if (lfs_popc(run_ops[run]) == 1) {
+                // test that our directories match our simulation
+                for (lfs_size_t j = 0; j < sim_size; j++) {
+                    char name[256];
+                    sprintf(name, "dir%03x", sim[j]);
+                    struct lfs_info info;
+                    lfsr_stat(&lfs, name, &info) => 0;
+                    char name2[256];
+                    sprintf(name2, "dir%03x", sim[j]);
+                    assert(strcmp(info.name, name2) == 0);
+                    assert(info.type == LFS_TYPE_DIR);
+                    assert(info.size == 0);
+                }
+
+                lfsr_dir_t dir;
+                lfsr_dir_open(&lfs, &dir, "/") => 0;
+                struct lfs_info info;
+                lfsr_dir_read(&lfs, &dir, &info) => 0;
+                assert(strcmp(info.name, ".") == 0);
+                assert(info.type == LFS_TYPE_DIR);
+                assert(info.size == 0);
+                lfsr_dir_read(&lfs, &dir, &info) => 0;
+                assert(strcmp(info.name, "..") == 0);
+                assert(info.type == LFS_TYPE_DIR);
+                assert(info.size == 0);
+                for (lfs_size_t j = 0; j < sim_size; j++) {
+                    char name[256];
+                    sprintf(name, "dir%03x", sim[j]);
+                    lfsr_dir_read(&lfs, &dir, &info) => 0;
+                    assert(strcmp(info.name, name) == 0);
+                    assert(info.type == LFS_TYPE_DIR);
+                    assert(info.size == 0);
+                }
+                lfsr_dir_read(&lfs, &dir, &info) => LFS_ERR_NOENT;
+                lfsr_dir_close(&lfs, &dir) => 0;
+            }
+        }
+
+    dead:;
+        // clean up sim/lfs
+        free(sim);
+        lfsr_unmount(&lfs) => 0;
+
+        // print how many ops
+        printf("run %d, %dx%d, %d ec: %d ops\n",
+                run,
+                (int)BLOCK_SIZE,
+                run_bc[run],
+                (int)ERASE_CYCLES,
+                run_ops[run]);
+    }
+
+    // check that we increased the liftime by ~2x, with ~10% error
+    printf("lifetime: %d -> %d (x%.2f)\n",
+            run_ops[0],
+            run_ops[1],
+            (double)run_ops[1] / (double)run_ops[0]);
+    assert(run_ops[1]*110/100 > 2*run_ops[0]);
+'''
+
+# test file wear-leveling
+[cases.test_exhaustion_spam_file_fuzz]
+defines.ERASE_CYCLES = 10
+defines.BLOCK_RECYCLES = 4
+defines.BADBLOCK_BEHAVIOR = [
+    'LFS_EMUBD_BADBLOCK_PROGERROR',
+    'LFS_EMUBD_BADBLOCK_ERASEERROR',
+    'LFS_EMUBD_BADBLOCK_READERROR',
+    'LFS_EMUBD_BADBLOCK_PROGNOOP',
+    'LFS_EMUBD_BADBLOCK_ERASENOOP',
+]
+# we need prog checking to detect read errors
+defines.CKPROGS = 'BADBLOCK_BEHAVIOR >= LFS_EMUBD_BADBLOCK_READERROR'
+defines.N = [1, 2, 4, 8, 16, 32, 64]
+defines.SIZE = [
+    '0',
+    'FILE_CACHE_SIZE/2',
+    '2*FILE_CACHE_SIZE',
+    'BLOCK_SIZE/2',
+    'BLOCK_SIZE',
+    '2*BLOCK_SIZE',
+    '4*BLOCK_SIZE',
+]
+defines.SEED = 42
+fuzz = 'SEED'
+if = [
+    'LFS_IFDEF_CKPROGS(true, !CKPROGS)',
+    '(SIZE*N)/BLOCK_SIZE <= 16',
+]
+code = '''
+    // run our test twice, once with 1/2 the storage, once with 2/2 the
+    // storage, and compare how many operations we were able to perform
+    // before filesystem death
+    uint32_t run_bc[2] = {BLOCK_COUNT/2, BLOCK_COUNT};
+    uint32_t run_ops[2] = {0, 0};
+
+    for (int run = 0; run < 2; run++) {
+        // clear any wear from the previous run
+        for (lfs_block_t i = 0; i < BLOCK_COUNT; i++) {
+            lfs_emubd_setwear(CFG, i, 0) => 0;
+        }
+
+        // configure the filesystem size
+        struct lfs_config cfg = *CFG;
+        cfg.block_count = run_bc[run];
+
+        // run the test
+        lfs_t lfs;
+        lfsr_format(&lfs,
+                LFS_F_RDWR
+                    | ((CKPROGS) ? LFS_IFDEF_CKPROGS(LFS_F_CKPROGS, -1) : 0),
+                &cfg) => 0;
+        lfsr_mount(&lfs,
+                LFS_M_RDWR
+                    | ((CKPROGS) ? LFS_IFDEF_CKPROGS(LFS_M_CKPROGS, -1) : 0),
+                &cfg) => 0;
+
+        // set up a simulation to compare against
+        lfs_size_t *sim = malloc(N*sizeof(lfs_size_t));
+        uint32_t *sim_prngs = malloc(N*sizeof(uint32_t));
+        lfs_size_t sim_size = 0;
+
+        uint32_t prng = SEED;
+        for (;; run_ops[run]++) {
+            // choose which operation to do
+            uint8_t op = TEST_PRNG(&prng) % 3;
+
+            // creating a new file?
+            if (op == 0 || sim_size == 0) {
+                // choose a pseudo-random number
+                lfs_size_t x = TEST_PRNG(&prng) % N;
+                // associate each file with a prng that generates its contents
+                uint32_t wprng = TEST_PRNG(&prng);
+
+                // insert into our sim
+                for (lfs_size_t j = 0;; j++) {
+                    if (j >= sim_size || sim[j] >= x) {
+                        // already seen?
+                        if (j < sim_size && sim[j] == x) {
+                            // new prng
+                            sim_prngs[j] = wprng;
+                        } else {
+                            // insert
+                            memmove(&sim[j+1], &sim[j],
+                                    (sim_size-j)*sizeof(lfs_size_t));
+                            memmove(&sim_prngs[j+1], &sim_prngs[j],
+                                    (sim_size-j)*sizeof(uint32_t));
+                            sim_size += 1;
+                            sim[j] = x;
+                            sim_prngs[j] = wprng;
+                        }
+                        break;
+                    }
+                }
+
+                // create a file here
+                char name[256];
+                sprintf(name, "amethyst%03x", x);
+                uint8_t wbuf[SIZE];
+                for (lfs_size_t j = 0; j < SIZE; j++) {
+                    wbuf[j] = 'a' + (TEST_PRNG(&wprng) % 26);
+                }
+
+                lfsr_file_t file;
+                int err = lfsr_file_open(&lfs, &file, name,
+                        LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC);
+                assert(!err || err == LFS_ERR_NOSPC);
+                if (err) {
+                    goto dead;
+                }
+                lfs_ssize_t d = lfsr_file_write(&lfs, &file, wbuf, SIZE);
+                assert(d == SIZE || d == LFS_ERR_NOSPC);
+                if (d == LFS_ERR_NOSPC) {
+                    lfsr_file_close(&lfs, &file) => 0;
+                    goto dead;
+                }
+                err = lfsr_file_close(&lfs, &file);
+                assert(!err || err == LFS_ERR_NOSPC);
+                if (err == LFS_ERR_NOSPC) {
+                    goto dead;
+                }
+
+            // deleting a file?
+            } else if (op == 1) {
+                // choose a random file to delete
+                lfs_size_t j = TEST_PRNG(&prng) % sim_size;
+                lfs_size_t x = sim[j];
+                // delete from our sim
+                memmove(&sim[j], &sim[j+1],
+                        (sim_size-(j+1))*sizeof(lfs_size_t));
+                memmove(&sim_prngs[j], &sim_prngs[j+1],
+                        (sim_size-(j+1))*sizeof(uint32_t));
+                sim_size -= 1;
+
+                // delete this file
+                char name[256];
+                sprintf(name, "amethyst%03x", x);
+                int err = lfsr_remove(&lfs, name);
+                assert(!err || err == LFS_ERR_NOSPC);
+                if (err == LFS_ERR_NOSPC) {
+                    goto dead;
+                }
+
+            // renaming a file?
+            } else {
+                // choose a random file to rename, and a random number to
+                // rename to
+                lfs_size_t j = TEST_PRNG(&prng) % sim_size;
+                lfs_size_t x = sim[j];
+                lfs_size_t y = TEST_PRNG(&prng) % N;
+                uint32_t wprng = sim_prngs[j];
+
+                // update our sim
+                for (lfs_size_t k = 0;; k++) {
+                    if (k >= sim_size || sim[k] >= y) {
+                        // renaming and replacing
+                        if (k < sim_size && sim[k] == y && x != y) {
+                            // delete the original entry
+                            memmove(&sim[j], &sim[j+1],
+                                    (sim_size-(j+1))*sizeof(lfs_size_t));
+                            memmove(&sim_prngs[j], &sim_prngs[j+1],
+                                    (sim_size-(j+1))*sizeof(uint32_t));
+                            sim_size -= 1;
+                            if (k > j) {
+                                k -= 1;
+                            }
+                            // update the prng
+                            sim_prngs[k] = wprng;
+                        // just renaming
+                        } else {
+                            // first delete
+                            memmove(&sim[j], &sim[j+1],
+                                    (sim_size-(j+1))*sizeof(lfs_size_t));
+                            memmove(&sim_prngs[j], &sim_prngs[j+1],
+                                    (sim_size-(j+1))*sizeof(uint32_t));
+                            if (k > j) {
+                                k -= 1;
+                            }
+                            // then insert
+                            memmove(&sim[k+1], &sim[k],
+                                    (sim_size-k)*sizeof(lfs_size_t));
+                            memmove(&sim_prngs[k+1], &sim_prngs[k],
+                                    (sim_size-k)*sizeof(uint32_t));
+                            sim[k] = y;
+                            sim_prngs[k] = wprng;
+                        }
+                        break;
+                    }
+                }
+
+                // rename this file
+                char old_name[256];
+                sprintf(old_name, "amethyst%03x", x);
+                char new_name[256];
+                sprintf(new_name, "amethyst%03x", y);
+                int err = lfsr_rename(&lfs, old_name, new_name);
+                assert(!err || err == LFS_ERR_NOSPC);
+                if (err == LFS_ERR_NOSPC) {
+                    goto dead;
+                }
+            }
+
+            // check our simulation every power-of-2 ops
+            if (lfs_popc(run_ops[run]) == 1) {
+                // check that our files match our simulation
+                for (lfs_size_t j = 0; j < sim_size; j++) {
+                    char name[256];
+                    sprintf(name, "amethyst%03x", sim[j]);
+                    struct lfs_info info;
+                    lfsr_stat(&lfs, name, &info) => 0;
+                    assert(strcmp(info.name, name) == 0);
+                    assert(info.type == LFS_TYPE_REG);
+                    assert(info.size == SIZE);
+                }
+
+                lfsr_dir_t dir;
+                lfsr_dir_open(&lfs, &dir, "/") => 0;
+                struct lfs_info info;
+                lfsr_dir_read(&lfs, &dir, &info) => 0;
+                assert(strcmp(info.name, ".") == 0);
+                assert(info.type == LFS_TYPE_DIR);
+                assert(info.size == 0);
+                lfsr_dir_read(&lfs, &dir, &info) => 0;
+                assert(strcmp(info.name, "..") == 0);
+                assert(info.type == LFS_TYPE_DIR);
+                assert(info.size == 0);
+                for (lfs_size_t j = 0; j < sim_size; j++) {
+                    char name[256];
+                    sprintf(name, "amethyst%03x", sim[j]);
+                    lfsr_dir_read(&lfs, &dir, &info) => 0;
+                    assert(strcmp(info.name, name) == 0);
+                    assert(info.type == LFS_TYPE_REG);
+                    assert(info.size == SIZE);
+                }
+                lfsr_dir_read(&lfs, &dir, &info) => LFS_ERR_NOENT;
+                lfsr_dir_close(&lfs, &dir) => 0;
+
+                // check the file contents
+                for (lfs_size_t j = 0; j < sim_size; j++) {
+                    char name[256];
+                    sprintf(name, "amethyst%03x", sim[j]);
+                    lfsr_file_t file;
+                    lfsr_file_open(&lfs, &file, name, LFS_O_RDONLY) => 0;
+
+                    uint32_t wprng = sim_prngs[j];
+                    uint8_t wbuf[SIZE];
+                    for (lfs_size_t j = 0; j < SIZE; j++) {
+                        wbuf[j] = 'a' + (TEST_PRNG(&wprng) % 26);
+                    }
+
+                    uint8_t rbuf[SIZE];
+                    lfsr_file_read(&lfs, &file, rbuf, SIZE) => SIZE;
+                    assert(memcmp(rbuf, wbuf, SIZE) == 0);
+                    lfsr_file_close(&lfs, &file) => 0;
+                }
+            }
+        }
+
+    dead:;
+        // clean up sim/lfs
+        free(sim);
+        free(sim_prngs);
+        lfsr_unmount(&lfs) => 0;
+
+        // print how many ops
+        printf("run %d, %dx%d, %d ec: %d ops\n",
+                run,
+                (int)BLOCK_SIZE,
+                run_bc[run],
+                (int)ERASE_CYCLES,
+                run_ops[run]);
+    }
+
+    // check that we increased the liftime by ~2x, with ~10% error
+    printf("lifetime: %d -> %d (x%.2f)\n",
+            run_ops[0],
+            run_ops[1],
+            (double)run_ops[1] / (double)run_ops[0]);
+    assert(run_ops[1]*110/100 > 2*run_ops[0]);
+'''
+
+# with more complex file writes
+[cases.test_exhaustion_spam_fwrite_fuzz]
+defines.ERASE_CYCLES = 10
+defines.BLOCK_RECYCLES = 4
+defines.BADBLOCK_BEHAVIOR = [
+    'LFS_EMUBD_BADBLOCK_PROGERROR',
+    'LFS_EMUBD_BADBLOCK_ERASEERROR',
+    'LFS_EMUBD_BADBLOCK_READERROR',
+    'LFS_EMUBD_BADBLOCK_PROGNOOP',
+    'LFS_EMUBD_BADBLOCK_ERASENOOP',
+]
+# we need prog checking to detect read errors
+defines.CKPROGS = 'BADBLOCK_BEHAVIOR >= LFS_EMUBD_BADBLOCK_READERROR'
+defines.SIZE = [
+    'FILE_CACHE_SIZE/2',
+    '2*FILE_CACHE_SIZE',
+    'BLOCK_SIZE/2',
+    'BLOCK_SIZE',
+    '2*BLOCK_SIZE',
+    '4*BLOCK_SIZE',
+]
+# chunk is more an upper limit here
+defines.CHUNK = 64
+# INIT=0 => no init
+# INIT=1 => fill with data
+# INIT=2 => truncate to size
+defines.INIT = [0, 1, 2]
+defines.SYNC = [false, true]
+defines.SEED = 42
+fuzz = 'SEED'
+if = [
+    'LFS_IFDEF_CKPROGS(true, !CKPROGS)',
+    'CHUNK <= SIZE',
+    # this just saves testing time
+    'SIZE <= 4*1024*FRAGMENT_SIZE',
+]
+code = '''
+    // run our test twice, once with 1/2 the storage, once with 2/2 the
+    // storage, and compare how many operations we were able to perform
+    // before filesystem death
+    uint32_t run_bc[2] = {BLOCK_COUNT/2, BLOCK_COUNT};
+    uint32_t run_ops[2] = {0, 0};
+
+    for (int run = 0; run < 2; run++) {
+        // clear any wear from the previous run
+        for (lfs_block_t i = 0; i < BLOCK_COUNT; i++) {
+            lfs_emubd_setwear(CFG, i, 0) => 0;
+        }
+
+        // configure the filesystem size
+        struct lfs_config cfg = *CFG;
+        cfg.block_count = run_bc[run];
+
+        // run the test
+        lfs_t lfs;
+        lfsr_format(&lfs,
+                LFS_F_RDWR
+                    | ((CKPROGS) ? LFS_IFDEF_CKPROGS(LFS_F_CKPROGS, -1) : 0),
+                &cfg) => 0;
+        lfsr_mount(&lfs,
+                LFS_M_RDWR
+                    | ((CKPROGS) ? LFS_IFDEF_CKPROGS(LFS_M_CKPROGS, -1) : 0),
+                &cfg) => 0;
+
+        // create a file
+        lfsr_file_t file;
+        lfsr_file_open(&lfs, &file, "hello",
+                LFS_O_WRONLY | LFS_O_CREAT | LFS_O_EXCL) => 0;
+        // simulate our file in ram
+        uint8_t sim[SIZE];
+        lfs_off_t size;
+        uint32_t prng = SEED;
+        if (INIT == 0) {
+            memset(sim, 0, SIZE);
+            size = 0;
+        } else if (INIT == 1) {
+            for (lfs_size_t i = 0; i < SIZE; i++) {
+                sim[i] = 'a' + (TEST_PRNG(&prng) % 26);
+            }
+            lfsr_file_write(&lfs, &file, sim, SIZE) => SIZE;
+            size = SIZE;
+        } else {
+            memset(sim, 0, SIZE);
+            lfsr_file_truncate(&lfs, &file, SIZE) => 0;
+            size = SIZE;
+        }
+
+        // sync?
+        if (SYNC) {
+            lfsr_file_sync(&lfs, &file) => 0;
+        }
+
+        for (;; run_ops[run]++) {
+            // choose a random location
+            lfs_off_t off = TEST_PRNG(&prng) % SIZE;
+            // and a random size, up to the chunk size
+            lfs_size_t chunk = lfs_min(
+                    (TEST_PRNG(&prng) % (CHUNK+1-1)) + 1,
+                    SIZE - off);
+
+            // update sim
+            for (lfs_size_t j = 0; j < chunk; j++) {
+                sim[off+j] = 'a' + (TEST_PRNG(&prng) % 26);
+            }
+            size = lfs_max(size, off+chunk);
+
+            // update file
+            lfsr_file_seek(&lfs, &file, off, LFS_SEEK_SET) => off;
+            lfs_ssize_t d = lfsr_file_write(&lfs, &file, &sim[off], chunk);
+            assert(d == (lfs_ssize_t)chunk || d == LFS_ERR_NOSPC);
+            if (d == LFS_ERR_NOSPC) {
+                goto dead;
+            }
+
+            // sync?
+            if (SYNC) {
+                int err = lfsr_file_sync(&lfs, &file);
+                assert(!err || err == LFS_ERR_NOSPC);
+                if (err == LFS_ERR_NOSPC) {
+                    goto dead;
+                }
+            }
+
+            // check our simulation every power-of-2 ops
+            if (lfs_popc(run_ops[run]) == 1 && SYNC) {
+                // check our file with stat
+                struct lfs_info info;
+                lfsr_stat(&lfs, "hello", &info) => 0;
+                assert(strcmp(info.name, "hello") == 0);
+                assert(info.type == LFS_TYPE_REG);
+                assert(info.size == size);
+
+                // and with dir read
+                lfsr_dir_t dir;
+                lfsr_dir_open(&lfs, &dir, "/") => 0;
+                lfsr_dir_read(&lfs, &dir, &info) => 0;
+                assert(strcmp(info.name, ".") == 0);
+                assert(info.type == LFS_TYPE_DIR);
+                assert(info.size == 0);
+                lfsr_dir_read(&lfs, &dir, &info) => 0;
+                assert(strcmp(info.name, "..") == 0);
+                assert(info.type == LFS_TYPE_DIR);
+                assert(info.size == 0);
+                lfsr_dir_read(&lfs, &dir, &info) => 0;
+                assert(strcmp(info.name, "hello") == 0);
+                assert(info.type == LFS_TYPE_REG);
+                assert(info.size == size);
+                lfsr_dir_read(&lfs, &dir, &info) => LFS_ERR_NOENT;
+                lfsr_dir_close(&lfs, &dir) => 0;
+
+                // try reading our file
+                lfsr_file_t file_;
+                lfsr_file_open(&lfs, &file_, "hello", LFS_O_RDONLY) => 0;
+                // is size correct?
+                lfsr_file_size(&lfs, &file_) => size;
+                // try reading
+                uint8_t rbuf[2*SIZE];
+                memset(rbuf, 0xaa, 2*SIZE);
+                lfsr_file_read(&lfs, &file_, rbuf, 2*SIZE) => size;
+                // does our file match our simulation?
+                assert(memcmp(rbuf, sim, size) == 0);
+                lfsr_file_close(&lfs, &file_) => 0;
+            }
+        }
+
+    dead:;
+        // clean up sim/lfs
+        lfsr_file_close(&lfs, &file) => 0;
+        lfsr_unmount(&lfs) => 0;
+
+        // print how many ops
+        printf("run %d, %dx%d, %d ec: %d ops\n",
+                run,
+                (int)BLOCK_SIZE,
+                run_bc[run],
+                (int)ERASE_CYCLES,
+                run_ops[run]);
+    }
+
+    // check that we increased the liftime by ~2x, with ~10% error
+    printf("lifetime: %d -> %d (x%.2f)\n",
+            run_ops[0],
+            run_ops[1],
+            (double)run_ops[1] / (double)run_ops[0]);
+    assert(run_ops[1]*110/100 > 2*run_ops[0]);
+'''
+
+# with uncreats, zombies, etc
+[cases.test_exhaustion_spam_uz_fuzz]
+defines.ERASE_CYCLES = 10
+defines.BLOCK_RECYCLES = 4
+defines.BADBLOCK_BEHAVIOR = [
+    'LFS_EMUBD_BADBLOCK_PROGERROR',
+    'LFS_EMUBD_BADBLOCK_ERASEERROR',
+    'LFS_EMUBD_BADBLOCK_READERROR',
+    'LFS_EMUBD_BADBLOCK_PROGNOOP',
+    'LFS_EMUBD_BADBLOCK_ERASENOOP',
+]
+# we need prog checking to detect read errors
+defines.CKPROGS = 'BADBLOCK_BEHAVIOR >= LFS_EMUBD_BADBLOCK_READERROR'
+defines.N = [1, 2, 4, 8, 16, 32, 64]
+defines.SIZE = [
+    '0',
+    'FILE_CACHE_SIZE/2',
+    '2*FILE_CACHE_SIZE',
+    'BLOCK_SIZE/2',
+    'BLOCK_SIZE',
+    '2*BLOCK_SIZE',
+    '4*BLOCK_SIZE',
+]
+defines.SEED = 42
+fuzz = 'SEED'
+if = [
+    'LFS_IFDEF_CKPROGS(true, !CKPROGS)',
+    '(SIZE*N)/BLOCK_SIZE <= 16',
+]
+code = '''
+    // run our test twice, once with 1/2 the storage, once with 2/2 the
+    // storage, and compare how many operations we were able to perform
+    // before filesystem death
+    uint32_t run_bc[2] = {BLOCK_COUNT/2, BLOCK_COUNT};
+    uint32_t run_ops[2] = {0, 0};
+
+    for (int run = 0; run < 2; run++) {
+        // clear any wear from the previous run
+        for (lfs_block_t i = 0; i < BLOCK_COUNT; i++) {
+            lfs_emubd_setwear(CFG, i, 0) => 0;
+        }
+
+        // configure the filesystem size
+        struct lfs_config cfg = *CFG;
+        cfg.block_count = run_bc[run];
+
+        // run the test
+        lfs_t lfs;
+        lfsr_format(&lfs,
+                LFS_F_RDWR
+                    | ((CKPROGS) ? LFS_IFDEF_CKPROGS(LFS_F_CKPROGS, -1) : 0),
+                &cfg) => 0;
+        lfsr_mount(&lfs,
+                LFS_M_RDWR
+                    | ((CKPROGS) ? LFS_IFDEF_CKPROGS(LFS_M_CKPROGS, -1) : 0),
+                &cfg) => 0;
+
+        // set up a simulation to compare against
+        lfs_size_t *sim = malloc(N*sizeof(lfs_size_t));
+        uint32_t *sim_prngs = malloc(N*sizeof(uint32_t));
+        bool *sim_isstickys = malloc(N*sizeof(bool));
+        lfs_size_t sim_size = 0;
+
+        typedef struct sim_file {
+            lfs_size_t x;
+            bool sticky;
+            bool zombie;
+            uint32_t prng;
+            lfsr_file_t file;
+        } sim_file_t;
+        sim_file_t **sim_files = malloc(N*sizeof(sim_file_t*));
+        lfs_size_t sim_file_count = 0;
+
+        uint32_t prng = SEED;
+        for (;; run_ops[run]++) {
+        nonsense:;
+            // choose which operation to do
+            uint8_t op = TEST_PRNG(&prng) % 5;
+
+            // open a new file?
+            if (op == 0) {
+                if (sim_file_count >= N) {
+                    goto nonsense;
+                }
+                // choose a pseudo-random number
+                lfs_size_t x = TEST_PRNG(&prng) % N;
+
+                // already exists?
+                bool exist = false;
+                uint32_t wprng = 0;
+                bool sticky = true;
+                for (lfs_size_t j = 0; j < sim_size; j++) {
+                    if (sim[j] == x) {
+                        exist = true;
+                        wprng = sim_prngs[j];
+                        sticky = sim_isstickys[j];
+                        break;
+                    }
+                }
+                // choose a random seed if we don't exist
+                if (!exist) {
+                    wprng = TEST_PRNG(&prng);
+                    sticky = true;
+                }
+
+                lfs_size_t j = sim_file_count;
+                sim_files[j] = malloc(sizeof(sim_file_t));
+
+                // open the actual file
+                char name[256];
+                sprintf(name, "batman%03x", x);
+                int err = lfsr_file_open(&lfs, &sim_files[j]->file, name,
+                        LFS_O_RDWR | LFS_O_CREAT);
+                assert(!err || err == LFS_ERR_NOSPC);
+                if (err == LFS_ERR_NOSPC) {
+                    free(sim_files[j]);
+                    goto dead;
+                }
+
+                // write some initial data if we don't exist
+                if (!exist || sticky) {
+                    uint8_t wbuf[SIZE];
+                    uint32_t wprng_ = wprng;
+                    for (lfs_size_t k = 0; k < SIZE; k++) {
+                        wbuf[k] = 'a' + (TEST_PRNG(&wprng_) % 26);
+                    }
+                    lfs_ssize_t d = lfsr_file_write(&lfs, &sim_files[j]->file,
+                            wbuf, SIZE);
+                    assert(d == SIZE || d == LFS_ERR_NOSPC);
+                    if (d == LFS_ERR_NOSPC) {
+                        lfsr_file_close(&lfs, &sim_files[j]->file) => 0;
+                        free(sim_files[j]);
+                        goto dead;
+                    }
+                }
+
+                // open in our sim
+                sim_files[j]->x = x;
+                sim_files[j]->sticky = sticky;
+                sim_files[j]->zombie = false;
+                sim_files[j]->prng = wprng;
+                sim_file_count++;
+
+                // insert into our sim
+                for (lfs_size_t k = 0;; k++) {
+                    if (k >= sim_size || sim[k] >= x) {
+                        // already seen?
+                        if (k < sim_size && sim[k] == x) {
+                            // new prng
+                            sim_prngs[k] = wprng;
+                        } else {
+                            // insert
+                            memmove(&sim[k+1], &sim[k],
+                                    (sim_size-k)*sizeof(lfs_size_t));
+                            memmove(&sim_prngs[k+1], &sim_prngs[k],
+                                    (sim_size-k)*sizeof(uint32_t));
+                            memmove(&sim_isstickys[k+1], &sim_isstickys[k],
+                                    (sim_size-k)*sizeof(bool));
+                            sim_size += 1;
+                            sim[k] = x;
+                            sim_prngs[k] = wprng;
+                            sim_isstickys[k] = sticky;
+                        }
+                        break;
+                    }
+                }
+
+            // write/rewrite a file?
+            } else if (op == 1) {
+                if (sim_file_count == 0) {
+                    goto nonsense;
+                }
+                // choose a random file handle
+                lfs_size_t j = TEST_PRNG(&prng) % sim_file_count;
+                lfs_size_t x = sim_files[j]->x;
+                // choose a random seed
+                uint32_t wprng = TEST_PRNG(&prng);
+
+                // write to the file
+                lfsr_file_rewind(&lfs, &sim_files[j]->file) => 0;
+                uint8_t wbuf[SIZE];
+                uint32_t wprng_ = wprng;
+                for (lfs_size_t k = 0; k < SIZE; k++) {
+                    wbuf[k] = 'a' + (TEST_PRNG(&wprng_) % 26);
+                }
+                lfs_ssize_t d = lfsr_file_write(&lfs, &sim_files[j]->file,
+                        wbuf, SIZE);
+                assert(d == SIZE || d == LFS_ERR_NOSPC);
+                if (d == LFS_ERR_NOSPC) {
+                    goto dead;
+                }
+                int err = lfsr_file_sync(&lfs, &sim_files[j]->file);
+                assert(err == 0 || err == LFS_ERR_NOSPC);
+                if (err == LFS_ERR_NOSPC) {
+                    goto dead;
+                }
+
+                // update sim
+                sim_files[j]->prng = wprng;
+                if (!sim_files[j]->zombie) {
+                    // update in our sim
+                    for (lfs_size_t k = 0;; k++) {
+                        if (sim[k] == x) {
+                            // new prng
+                            sim_prngs[k] = wprng;
+                            // no longer sticky
+                            sim_isstickys[k] = false;
+                            break;
+                        }
+                    }
+
+                    // update related sim files
+                    for (lfs_size_t k = 0; k < sim_file_count; k++) {
+                        if (sim_files[k]->x == x && !sim_files[k]->zombie) {
+                            // new prng
+                            sim_files[k]->prng = wprng;
+                            // no longer sticky
+                            sim_files[k]->sticky = false;
+                        }
+                    }
+                }
+
+            // close a file?
+            } else if (op == 2) {
+                if (sim_file_count == 0) {
+                    goto nonsense;
+                }
+                // choose a random file handle
+                lfs_size_t j = TEST_PRNG(&prng) % sim_file_count;
+                lfs_size_t x = sim_files[j]->x;
+                bool sticky = sim_files[j]->sticky;
+                bool zombie = sim_files[j]->zombie;
+
+                // this doesn't really test anything, but if we don't close
+                // files eventually everything will end up zombies
+
+                // close the file without affected disk
+                lfsr_file_desync(&lfs, &sim_files[j]->file) => 0;
+                lfsr_file_close(&lfs, &sim_files[j]->file) => 0;
+                // clobber closed files to try to catch lingering references
+                memset(&sim_files[j]->file, 0xcc, sizeof(lfsr_file_t));
+
+                // remove from list
+                free(sim_files[j]);
+                sim_files[j] = sim_files[sim_file_count-1];
+                sim_file_count -= 1;
+
+                // update our sim
+                if (sticky && !zombie) {
+                    // orphaned?
+                    bool orphan = true;
+                    for (lfs_size_t k = 0; k < sim_file_count; k++) {
+                        if (sim_files[k]->x == x && !sim_files[k]->zombie) {
+                            orphan = false;
+                        }
+                    }
+
+                    // if we were never synced, delete from sim
+                    if (orphan) {
+                        for (lfs_size_t k = 0;; k++) {
+                            if (sim[k] == x) {
+                                memmove(&sim[k], &sim[k+1],
+                                        (sim_size-(k+1))*sizeof(lfs_size_t));
+                                memmove(&sim_prngs[k], &sim_prngs[k+1],
+                                        (sim_size-(k+1))*sizeof(uint32_t));
+                                memmove(&sim_isstickys[k], &sim_isstickys[k+1],
+                                        (sim_size-(k+1))*sizeof(bool));
+                                sim_size -= 1;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+            // remove a file?
+            } else if (op == 3) {
+                if (sim_size == 0) {
+                    goto nonsense;
+                }
+                // choose a random file to delete
+                lfs_size_t j = TEST_PRNG(&prng) % sim_size;
+                lfs_size_t x = sim[j];
+
+                // delete this file
+                char name[256];
+                sprintf(name, "batman%03x", x);
+                int err = lfsr_remove(&lfs, name);
+                assert(!err || err == LFS_ERR_NOSPC);
+                if (err == LFS_ERR_NOSPC) {
+                    goto dead;
+                }
+
+                // delete from our sim
+                memmove(&sim[j], &sim[j+1],
+                        (sim_size-(j+1))*sizeof(lfs_size_t));
+                memmove(&sim_prngs[j], &sim_prngs[j+1],
+                        (sim_size-(j+1))*sizeof(uint32_t));
+                memmove(&sim_isstickys[j], &sim_isstickys[j+1],
+                        (sim_size-(j+1))*sizeof(bool));
+                sim_size -= 1;
+
+                // mark any related sim files as zombied
+                for (lfs_size_t k = 0; k < sim_file_count; k++) {
+                    if (sim_files[k]->x == x) {
+                        sim_files[k]->zombie = true;
+                    }
+                }
+
+            // rename a file?
+            } else if (op == 4) {
+                if (sim_size == 0) {
+                    goto nonsense;
+                }
+                // choose a random file to rename, and a random number to
+                // rename to
+                lfs_size_t j = TEST_PRNG(&prng) % sim_size;
+                lfs_size_t x = sim[j];
+                lfs_size_t y = TEST_PRNG(&prng) % N;
+                uint32_t wprng = sim_prngs[j];
+                bool sticky = sim_isstickys[j];
+
+                // rename this file
+                char old_name[256];
+                sprintf(old_name, "batman%03x", x);
+                char new_name[256];
+                sprintf(new_name, "batman%03x", y);
+                int err = lfsr_rename(&lfs, old_name, new_name);
+                assert(!err || err == LFS_ERR_NOSPC);
+                if (err == LFS_ERR_NOSPC) {
+                    goto dead;
+                }
+
+                // update our sim
+                for (lfs_size_t k = 0;; k++) {
+                    if (k >= sim_size || sim[k] >= y) {
+                        // renaming and replacing
+                        if (k < sim_size && sim[k] == y && x != y) {
+                            // delete the original entry
+                            memmove(&sim[j], &sim[j+1],
+                                    (sim_size-(j+1))*sizeof(lfs_size_t));
+                            memmove(&sim_prngs[j], &sim_prngs[j+1],
+                                    (sim_size-(j+1))*sizeof(uint32_t));
+                            memmove(&sim_isstickys[j], &sim_isstickys[j+1],
+                                    (sim_size-(j+1))*sizeof(bool));
+                            sim_size -= 1;
+                            if (k > j) {
+                                k -= 1;
+                            }
+                            // update the prng/sticky
+                            sim_prngs[k] = wprng;
+                            sim_isstickys[k] = sticky;
+                        // just renaming
+                        } else {
+                            // first delete
+                            memmove(&sim[j], &sim[j+1],
+                                    (sim_size-(j+1))*sizeof(lfs_size_t));
+                            memmove(&sim_prngs[j], &sim_prngs[j+1],
+                                    (sim_size-(j+1))*sizeof(uint32_t));
+                            memmove(&sim_isstickys[j], &sim_isstickys[j+1],
+                                    (sim_size-(j+1))*sizeof(bool));
+                            if (k > j) {
+                                k -= 1;
+                            }
+                            // then insert
+                            memmove(&sim[k+1], &sim[k],
+                                    (sim_size-k)*sizeof(lfs_size_t));
+                            memmove(&sim_prngs[k+1], &sim_prngs[k],
+                                    (sim_size-k)*sizeof(uint32_t));
+                            memmove(&sim_isstickys[k+1], &sim_isstickys[k],
+                                    (sim_size-k)*sizeof(bool));
+                            sim[k] = y;
+                            sim_prngs[k] = wprng;
+                            sim_isstickys[k] = sticky;
+                        }
+                        break;
+                    }
+                }
+
+                // update any related sim files
+                for (lfs_size_t k = 0; k < sim_file_count; k++) {
+                    // move source files
+                    if (sim_files[k]->x == x) {
+                        sim_files[k]->x = y;
+
+                    // mark target files as zombied
+                    } else if (sim_files[k]->x == y) {
+                        sim_files[k]->zombie = true;
+                    }
+                }
+            }
+
+            // check our simulation every power-of-2 ops
+            if (lfs_popc(run_ops[run]) == 1) {
+                // check that disk matches our simulation
+                for (lfs_size_t j = 0; j < sim_size; j++) {
+                    char name[256];
+                    sprintf(name, "batman%03x", sim[j]);
+                    struct lfs_info info;
+                    lfsr_stat(&lfs, name, &info) => 0;
+                    assert(strcmp(info.name, name) == 0);
+                    if (sim_isstickys[j]) {
+                        assert(info.type == LFS_TYPE_STICKYNOTE);
+                        assert(info.size == 0);
+                    } else {
+                        assert(info.type == LFS_TYPE_REG);
+                        assert(info.size == SIZE);
+                    }
+                }
+
+                lfsr_dir_t dir;
+                lfsr_dir_open(&lfs, &dir, "/") => 0;
+                struct lfs_info info;
+                lfsr_dir_read(&lfs, &dir, &info) => 0;
+                assert(strcmp(info.name, ".") == 0);
+                assert(info.type == LFS_TYPE_DIR);
+                assert(info.size == 0);
+                lfsr_dir_read(&lfs, &dir, &info) => 0;
+                assert(strcmp(info.name, "..") == 0);
+                assert(info.type == LFS_TYPE_DIR);
+                assert(info.size == 0);
+                for (lfs_size_t j = 0; j < sim_size; j++) {
+                    char name[256];
+                    sprintf(name, "batman%03x", sim[j]);
+                    lfsr_dir_read(&lfs, &dir, &info) => 0;
+                    assert(strcmp(info.name, name) == 0);
+                    if (sim_isstickys[j]) {
+                        assert(info.type == LFS_TYPE_STICKYNOTE);
+                        assert(info.size == 0);
+                    } else {
+                        assert(info.type == LFS_TYPE_REG);
+                        assert(info.size == SIZE);
+                    }
+                }
+                lfsr_dir_read(&lfs, &dir, &info) => LFS_ERR_NOENT;
+                lfsr_dir_close(&lfs, &dir) => 0;
+
+                for (lfs_size_t j = 0; j < sim_size; j++) {
+                    char name[256];
+                    sprintf(name, "batman%03x", sim[j]);
+                    lfsr_file_t file;
+                    lfsr_file_open(&lfs, &file, name, LFS_O_RDONLY) => 0;
+
+                    uint32_t wprng = sim_prngs[j];
+                    uint8_t wbuf[SIZE];
+                    for (lfs_size_t j = 0; j < SIZE; j++) {
+                        wbuf[j] = 'a' + (TEST_PRNG(&wprng) % 26);
+                    }
+
+                    uint8_t rbuf[SIZE];
+                    if (sim_isstickys[j]) {
+                        lfsr_file_read(&lfs, &file, rbuf, SIZE) => 0;
+                    } else {
+                        lfsr_file_read(&lfs, &file, rbuf, SIZE) => SIZE;
+                        assert(memcmp(rbuf, wbuf, SIZE) == 0);
+                    }
+                    lfsr_file_close(&lfs, &file) => 0;
+                }
+
+                // check that our file handles match our simulation
+                for (lfs_size_t j = 0; j < sim_file_count; j++) {
+                    uint32_t wprng = sim_files[j]->prng;
+                    uint8_t wbuf[SIZE];
+                    for (lfs_size_t j = 0; j < SIZE; j++) {
+                        wbuf[j] = 'a' + (TEST_PRNG(&wprng) % 26);
+                    }
+
+                    lfsr_file_rewind(&lfs, &sim_files[j]->file) => 0;
+                    uint8_t rbuf[SIZE];
+                    lfsr_file_read(&lfs, &sim_files[j]->file, rbuf, SIZE)
+                            => SIZE;
+                    assert(memcmp(rbuf, wbuf, SIZE) == 0);
+                }
+            }
+        }
+
+    dead:;
+        // clean up sim/lfs
+        free(sim);
+        free(sim_prngs);
+        free(sim_isstickys);
+        for (lfs_size_t j = 0; j < sim_file_count; j++) {
+            lfsr_file_desync(&lfs, &sim_files[j]->file) => 0;
+            lfsr_file_close(&lfs, &sim_files[j]->file) => 0;
+            free(sim_files[j]);
+        }
+        free(sim_files);
+        lfsr_unmount(&lfs) => 0;
+
+        // print how many ops
+        printf("run %d, %dx%d, %d ec: %d ops\n",
+                run,
+                (int)BLOCK_SIZE,
+                run_bc[run],
+                (int)ERASE_CYCLES,
+                run_ops[run]);
+    }
+
+    // check that we increased the liftime by ~2x, with ~10% error
+    printf("lifetime: %d -> %d (x%.2f)\n",
+            run_ops[0],
+            run_ops[1],
+            (double)run_ops[1] / (double)run_ops[0]);
+    assert(run_ops[1]*110/100 > 2*run_ops[0]);
+'''
+
+# with uncreats, zombies, dirs, etc
+[cases.test_exhaustion_spam_uzd_fuzz]
+defines.ERASE_CYCLES = 10
+defines.BLOCK_RECYCLES = 4
+defines.BADBLOCK_BEHAVIOR = [
+    'LFS_EMUBD_BADBLOCK_PROGERROR',
+    'LFS_EMUBD_BADBLOCK_ERASEERROR',
+    'LFS_EMUBD_BADBLOCK_READERROR',
+    'LFS_EMUBD_BADBLOCK_PROGNOOP',
+    'LFS_EMUBD_BADBLOCK_ERASENOOP',
+]
+# we need prog checking to detect read errors
+defines.CKPROGS = 'BADBLOCK_BEHAVIOR >= LFS_EMUBD_BADBLOCK_READERROR'
+defines.N = [1, 2, 4, 8, 16, 32, 64]
+defines.SIZE = [
+    '0',
+    'FILE_CACHE_SIZE/2',
+    '2*FILE_CACHE_SIZE',
+    'BLOCK_SIZE/2',
+    'BLOCK_SIZE',
+    '2*BLOCK_SIZE',
+    '4*BLOCK_SIZE',
+]
+defines.SEED = 42
+fuzz = 'SEED'
+if = [
+    'LFS_IFDEF_CKPROGS(true, !CKPROGS)',
+    '(SIZE*N)/BLOCK_SIZE <= 16',
+]
+code = '''
+    // run our test twice, once with 1/2 the storage, once with 2/2 the
+    // storage, and compare how many operations we were able to perform
+    // before filesystem death
+    uint32_t run_bc[2] = {BLOCK_COUNT/2, BLOCK_COUNT};
+    uint32_t run_ops[2] = {0, 0};
+
+    for (int run = 0; run < 2; run++) {
+        // clear any wear from the previous run
+        for (lfs_block_t i = 0; i < BLOCK_COUNT; i++) {
+            lfs_emubd_setwear(CFG, i, 0) => 0;
+        }
+
+        // configure the filesystem size
+        struct lfs_config cfg = *CFG;
+        cfg.block_count = run_bc[run];
+
+        // run the test
+        lfs_t lfs;
+        lfsr_format(&lfs,
+                LFS_F_RDWR
+                    | ((CKPROGS) ? LFS_IFDEF_CKPROGS(LFS_F_CKPROGS, -1) : 0),
+                &cfg) => 0;
+        lfsr_mount(&lfs,
+                LFS_M_RDWR
+                    | ((CKPROGS) ? LFS_IFDEF_CKPROGS(LFS_M_CKPROGS, -1) : 0),
+                &cfg) => 0;
+
+        // set up a simulation to compare against
+        lfs_size_t *sim = malloc(N*sizeof(lfs_size_t));
+        uint32_t *sim_prngs = malloc(N*sizeof(uint32_t));
+        bool *sim_isstickys = malloc(N*sizeof(bool));
+        bool *sim_isdirs = malloc(N*sizeof(bool));
+        lfs_size_t sim_size = 0;
+
+        typedef struct sim_file {
+            lfs_size_t x;
+            bool sticky;
+            bool zombie;
+            uint32_t prng;
+            lfsr_file_t file;
+        } sim_file_t;
+        sim_file_t **sim_files = malloc(N*sizeof(sim_file_t*));
+        lfs_size_t sim_file_count = 0;
+
+        uint32_t prng = SEED;
+        for (;; run_ops[run]++) {
+        nonsense:;
+            // choose which operation to do
+            uint8_t op = TEST_PRNG(&prng) % 8;
+
+            // open a new file?
+            if (op == 0) {
+                if (sim_file_count >= N) {
+                    goto nonsense;
+                }
+                // choose a pseudo-random number
+                lfs_size_t x = TEST_PRNG(&prng) % N;
+
+                // already exists?
+                bool exist = true;
+                uint32_t wprng = 0;
+                bool sticky = true;
+                for (lfs_size_t j = 0; j < sim_size; j++) {
+                    if (sim[j] == x) {
+                        if (sim_isdirs[j]) {
+                            goto nonsense;
+                        }
+                        exist = true;
+                        wprng = sim_prngs[j];
+                        sticky = sim_isstickys[j];
+                        break;
+                    }
+                }
+                // choose a random seed if we don't exist
+                if (!exist) {
+                    wprng = TEST_PRNG(&prng);
+                    sticky = true;
+                }
+
+                lfs_size_t j = sim_file_count;
+                sim_files[j] = malloc(sizeof(sim_file_t));
+
+                // open the actual file
+                char name[256];
+                sprintf(name, "batman%03x", x);
+                int err = lfsr_file_open(&lfs, &sim_files[j]->file, name,
+                        LFS_O_RDWR | LFS_O_CREAT);
+                assert(!err || err == LFS_ERR_NOSPC);
+                if (err == LFS_ERR_NOSPC) {
+                    free(sim_files[j]);
+                    goto dead;
+                }
+
+                // write some initial data if we don't exist
+                if (!exist || sticky) {
+                    uint8_t wbuf[SIZE];
+                    uint32_t wprng_ = wprng;
+                    for (lfs_size_t k = 0; k < SIZE; k++) {
+                        wbuf[k] = 'a' + (TEST_PRNG(&wprng_) % 26);
+                    }
+                    lfs_ssize_t d = lfsr_file_write(&lfs, &sim_files[j]->file,
+                            wbuf, SIZE);
+                    assert(d == SIZE || d == LFS_ERR_NOSPC);
+                    if (d == LFS_ERR_NOSPC) {
+                        lfsr_file_close(&lfs, &sim_files[j]->file) => 0;
+                        free(sim_files[j]);
+                        goto dead;
+                    }
+                }
+
+                // open in our sim
+                sim_files[j]->x = x;
+                sim_files[j]->sticky = sticky;
+                sim_files[j]->zombie = false;
+                sim_files[j]->prng = wprng;
+                sim_file_count++;
+
+                // insert into our sim
+                for (lfs_size_t k = 0;; k++) {
+                    if (k >= sim_size || sim[k] >= x) {
+                        // already seen?
+                        if (k < sim_size && sim[k] == x) {
+                            // new prng
+                            sim_prngs[k] = wprng;
+                        } else {
+                            // insert
+                            memmove(&sim[k+1], &sim[k],
+                                    (sim_size-k)*sizeof(lfs_size_t));
+                            memmove(&sim_prngs[k+1], &sim_prngs[k],
+                                    (sim_size-k)*sizeof(uint32_t));
+                            memmove(&sim_isstickys[k+1], &sim_isstickys[k],
+                                    (sim_size-k)*sizeof(bool));
+                            memmove(&sim_isdirs[k+1], &sim_isdirs[k],
+                                    (sim_size-k)*sizeof(bool));
+                            sim_size += 1;
+                            sim[k] = x;
+                            sim_prngs[k] = wprng;
+                            sim_isstickys[k] = sticky;
+                            sim_isdirs[k] = false;
+                        }
+                        break;
+                    }
+                }
+
+            // write/rewrite a file?
+            } else if (op == 1) {
+                if (sim_file_count == 0) {
+                    goto nonsense;
+                }
+                // choose a random file handle
+                lfs_size_t j = TEST_PRNG(&prng) % sim_file_count;
+                lfs_size_t x = sim_files[j]->x;
+                // choose a random seed
+                uint32_t wprng = TEST_PRNG(&prng);
+
+                // write to the file
+                lfsr_file_rewind(&lfs, &sim_files[j]->file) => 0;
+                uint8_t wbuf[SIZE];
+                uint32_t wprng_ = wprng;
+                for (lfs_size_t k = 0; k < SIZE; k++) {
+                    wbuf[k] = 'a' + (TEST_PRNG(&wprng_) % 26);
+                }
+                lfs_ssize_t d = lfsr_file_write(&lfs, &sim_files[j]->file,
+                        wbuf, SIZE);
+                assert(d == SIZE || d == LFS_ERR_NOSPC);
+                if (d == LFS_ERR_NOSPC) {
+                    goto dead;
+                }
+                int err = lfsr_file_sync(&lfs, &sim_files[j]->file);
+                assert(err == 0 || err == LFS_ERR_NOSPC);
+                if (err == LFS_ERR_NOSPC) {
+                    goto dead;
+                }
+
+                // update sim
+                sim_files[j]->prng = wprng;
+                if (!sim_files[j]->zombie) {
+                    // update in our sim
+                    for (lfs_size_t k = 0;; k++) {
+                        if (k >= sim_size || sim[k] >= x) {
+                            // new prng
+                            sim_prngs[k] = wprng;
+                            // no longer sticky
+                            sim_isstickys[k] = false;
+                            break;
+                        }
+                    }
+
+                    // update related sim files
+                    for (lfs_size_t k = 0; k < sim_file_count; k++) {
+                        if (sim_files[k]->x == x && !sim_files[k]->zombie) {
+                            // new prng
+                            sim_files[k]->prng = wprng;
+                            // no longer sticky
+                            sim_files[k]->sticky = false;
+                        }
+                    }
+                }
+
+            // close a file?
+            } else if (op == 2) {
+                if (sim_file_count == 0) {
+                    goto nonsense;
+                }
+                // choose a random file handle
+                lfs_size_t j = TEST_PRNG(&prng) % sim_file_count;
+                lfs_size_t x = sim_files[j]->x;
+                lfs_size_t sticky = sim_files[j]->sticky;
+                lfs_size_t zombie = sim_files[j]->zombie;
+
+                // this doesn't really test anything, but if we don't close
+                // files eventually everything will end up zombies
+
+                // close the file without affected disk
+                lfsr_file_desync(&lfs, &sim_files[j]->file) => 0;
+                lfsr_file_close(&lfs, &sim_files[j]->file) => 0;
+                // clobber closed files to try to catch lingering references
+                memset(&sim_files[j]->file, 0xcc, sizeof(lfsr_file_t));
+
+                // remove from list
+                free(sim_files[j]);
+                sim_files[j] = sim_files[sim_file_count-1];
+                sim_file_count -= 1;
+
+                // update our sim
+                if (sticky && !zombie) {
+                    // orphaned?
+                    bool orphan = true;
+                    for (lfs_size_t k = 0; k < sim_file_count; k++) {
+                        if (sim_files[k]->x == x && !sim_files[k]->zombie) {
+                            orphan = false;
+                        }
+                    }
+
+                    // if we were never synced, delete from sim
+                    if (orphan) {
+                        for (lfs_size_t k = 0;; k++) {
+                            if (sim[k] == x) {
+                                memmove(&sim[k], &sim[k+1],
+                                        (sim_size-(k+1))*sizeof(lfs_size_t));
+                                memmove(&sim_prngs[k], &sim_prngs[k+1],
+                                        (sim_size-(k+1))*sizeof(uint32_t));
+                                memmove(&sim_isstickys[k], &sim_isstickys[k+1],
+                                        (sim_size-(k+1))*sizeof(bool));
+                                memmove(&sim_isdirs[k], &sim_isdirs[k+1],
+                                        (sim_size-(k+1))*sizeof(bool));
+                                sim_size -= 1;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+            // remove a file?
+            } else if (op == 3) {
+                if (sim_size == 0) {
+                    goto nonsense;
+                }
+                // choose a random file to delete
+                lfs_size_t j = TEST_PRNG(&prng) % sim_size;
+                lfs_size_t x = sim[j];
+
+                // delete this file
+                char name[256];
+                sprintf(name, "batman%03x", x);
+                int err = lfsr_remove(&lfs, name);
+                assert(!err || err == LFS_ERR_NOSPC);
+                if (err == LFS_ERR_NOSPC) {
+                    goto dead;
+                }
+
+                // delete from our sim
+                memmove(&sim[j], &sim[j+1],
+                        (sim_size-(j+1))*sizeof(lfs_size_t));
+                memmove(&sim_prngs[j], &sim_prngs[j+1],
+                        (sim_size-(j+1))*sizeof(uint32_t));
+                memmove(&sim_isstickys[j], &sim_isstickys[j+1],
+                        (sim_size-(j+1))*sizeof(bool));
+                memmove(&sim_isdirs[j], &sim_isdirs[j+1],
+                        (sim_size-(j+1))*sizeof(bool));
+                sim_size -= 1;
+
+                // mark any related sim files as zombied
+                for (lfs_size_t k = 0; k < sim_file_count; k++) {
+                    if (sim_files[k]->x == x) {
+                        sim_files[k]->zombie = true;
+                    }
+                }
+
+            // rename a file?
+            } else if (op == 4) {
+                if (sim_size == 0) {
+                    goto nonsense;
+                }
+                // choose a random file to rename, and a random number to
+                // rename to
+                lfs_size_t j = TEST_PRNG(&prng) % sim_size;
+                lfs_size_t x = sim[j];
+                lfs_size_t y = TEST_PRNG(&prng) % N;
+                uint32_t wprng = sim_prngs[j];
+                bool sticky = sim_isstickys[j];
+                bool dir = sim_isdirs[j];
+
+                for (lfs_size_t k = 0;; k++) {
+                    if (k >= sim_size || sim[k] >= y) {
+                        // renaming and replacing
+                        if (k < sim_size && sim[k] == y && x != y) {
+                            // type mismatch?
+                            if (sim_isdirs[k] != dir) {
+                                goto nonsense;
+                            }
+                        }
+                        break;
+                    }
+                }
+
+                // rename this file
+                char old_name[256];
+                sprintf(old_name, "batman%03x", x);
+                char new_name[256];
+                sprintf(new_name, "batman%03x", y);
+                int err = lfsr_rename(&lfs, old_name, new_name);
+                assert(!err || err == LFS_ERR_NOSPC);
+                if (err == LFS_ERR_NOSPC) {
+                    goto dead;
+                }
+
+                // update our sim
+                for (lfs_size_t k = 0;; k++) {
+                    if (k >= sim_size || sim[k] >= y) {
+                        // renaming and replacing
+                        if (k < sim_size && sim[k] == y && x != y) {
+                            // delete the original entry
+                            memmove(&sim[j], &sim[j+1],
+                                    (sim_size-(j+1))*sizeof(lfs_size_t));
+                            memmove(&sim_prngs[j], &sim_prngs[j+1],
+                                    (sim_size-(j+1))*sizeof(uint32_t));
+                            memmove(&sim_isstickys[j], &sim_isstickys[j+1],
+                                    (sim_size-(j+1))*sizeof(bool));
+                            memmove(&sim_isdirs[j], &sim_isdirs[j+1],
+                                    (sim_size-(j+1))*sizeof(bool));
+                            sim_size -= 1;
+                            if (k > j) {
+                                k -= 1;
+                            }
+                            // update the prng/sticky/dir
+                            sim_prngs[k] = wprng;
+                            sim_isstickys[k] = sticky;
+                            sim_isdirs[k] = dir;
+                        // just renaming
+                        } else {
+                            // first delete
+                            memmove(&sim[j], &sim[j+1],
+                                    (sim_size-(j+1))*sizeof(lfs_size_t));
+                            memmove(&sim_prngs[j], &sim_prngs[j+1],
+                                    (sim_size-(j+1))*sizeof(uint32_t));
+                            memmove(&sim_isstickys[j], &sim_isstickys[j+1],
+                                    (sim_size-(j+1))*sizeof(bool));
+                            memmove(&sim_isdirs[j], &sim_isdirs[j+1],
+                                    (sim_size-(j+1))*sizeof(bool));
+                            if (k > j) {
+                                k -= 1;
+                            }
+                            // then insert
+                            memmove(&sim[k+1], &sim[k],
+                                    (sim_size-k)*sizeof(lfs_size_t));
+                            memmove(&sim_prngs[k+1], &sim_prngs[k],
+                                    (sim_size-k)*sizeof(uint32_t));
+                            memmove(&sim_isstickys[k+1], &sim_isstickys[k],
+                                    (sim_size-k)*sizeof(bool));
+                            memmove(&sim_isdirs[k+1], &sim_isdirs[k],
+                                    (sim_size-k)*sizeof(bool));
+                            sim[k] = y;
+                            sim_prngs[k] = wprng;
+                            sim_isstickys[k] = sticky;
+                            sim_isdirs[k] = dir;
+                        }
+                        break;
+                    }
+                }
+
+                // update any related sim files
+                for (lfs_size_t k = 0; k < sim_file_count; k++) {
+                    // move source files
+                    if (sim_files[k]->x == x) {
+                        sim_files[k]->x = y;
+
+                    // mark target files as zombied
+                    } else if (sim_files[k]->x == y) {
+                        sim_files[k]->zombie = true;
+                    }
+                }
+
+            // toss a directory into the mix
+            } else if (op == 5) {
+                // choose a pseudo-random number
+                lfs_size_t x = TEST_PRNG(&prng) % N;
+
+                for (lfs_size_t k = 0;; k++) {
+                    if (k >= sim_size || sim[k] >= x) {
+                        // already seen?
+                        if (k < sim_size && sim[k] == x) {
+                            goto nonsense;
+                        }
+                        break;
+                    }
+                }
+
+                // make the directory
+                char name[256];
+                sprintf(name, "batman%03x", x);
+                int err = lfsr_mkdir(&lfs, name);
+                assert(!err || err == LFS_ERR_NOSPC);
+                if (err == LFS_ERR_NOSPC) {
+                    goto dead;
+                }
+
+                // insert into our sim
+                for (lfs_size_t k = 0;; k++) {
+                    if (k >= sim_size || sim[k] >= x) {
+                        // insert
+                        memmove(&sim[k+1], &sim[k],
+                                (sim_size-k)*sizeof(lfs_size_t));
+                        memmove(&sim_prngs[k+1], &sim_prngs[k],
+                                (sim_size-k)*sizeof(uint32_t));
+                        memmove(&sim_isstickys[k+1], &sim_isstickys[k],
+                                (sim_size-k)*sizeof(bool));
+                        memmove(&sim_isdirs[k+1], &sim_isdirs[k],
+                                (sim_size-k)*sizeof(bool));
+                        sim_size += 1;
+                        sim[k] = x;
+                        sim_prngs[k] = 0;
+                        sim_isdirs[k] = true;
+                        break;
+                    }
+                }
+
+                // mark any related sim files as zombied
+                for (lfs_size_t k = 0; k < sim_file_count; k++) {
+                    if (sim_files[k]->x == x) {
+                        sim_files[k]->zombie = true;
+                    }
+                }
+            }
+
+            // check our simulation every power-of-2 ops
+            if (lfs_popc(run_ops[run]) == 1) {
+                // check that disk matches our simulation
+                for (lfs_size_t j = 0; j < sim_size; j++) {
+                    char name[256];
+                    sprintf(name, "batman%03x", sim[j]);
+                    struct lfs_info info;
+                    lfsr_stat(&lfs, name, &info) => 0;
+                    assert(strcmp(info.name, name) == 0);
+                    if (sim_isdirs[j]) {
+                        assert(info.type == LFS_TYPE_DIR);
+                        assert(info.size == 0);
+                    } else if (sim_isstickys[j]) {
+                        assert(info.type == LFS_TYPE_STICKYNOTE);
+                        assert(info.size == 0);
+                    } else {
+                        assert(info.type == LFS_TYPE_REG);
+                        assert(info.size == SIZE);
+                    }
+                }
+
+                lfsr_dir_t dir;
+                lfsr_dir_open(&lfs, &dir, "/") => 0;
+                struct lfs_info info;
+                lfsr_dir_read(&lfs, &dir, &info) => 0;
+                assert(strcmp(info.name, ".") == 0);
+                assert(info.type == LFS_TYPE_DIR);
+                assert(info.size == 0);
+                lfsr_dir_read(&lfs, &dir, &info) => 0;
+                assert(strcmp(info.name, "..") == 0);
+                assert(info.type == LFS_TYPE_DIR);
+                assert(info.size == 0);
+                for (lfs_size_t j = 0; j < sim_size; j++) {
+                    char name[256];
+                    sprintf(name, "batman%03x", sim[j]);
+                    lfsr_dir_read(&lfs, &dir, &info) => 0;
+                    assert(strcmp(info.name, name) == 0);
+                    if (sim_isdirs[j]) {
+                        assert(info.type == LFS_TYPE_DIR);
+                        assert(info.size == 0);
+                    } else if (sim_isstickys[j]) {
+                        assert(info.type == LFS_TYPE_STICKYNOTE);
+                        assert(info.size == 0);
+                    } else {
+                        assert(info.type == LFS_TYPE_REG);
+                        assert(info.size == SIZE);
+                    }
+                }
+                lfsr_dir_read(&lfs, &dir, &info) => LFS_ERR_NOENT;
+                lfsr_dir_close(&lfs, &dir) => 0;
+
+                for (lfs_size_t j = 0; j < sim_size; j++) {
+                    if (sim_isdirs[j]) {
+                        char name[256];
+                        sprintf(name, "batman%03x", sim[j]);
+                        lfsr_file_t file;
+                        lfsr_file_open(&lfs, &file, name, LFS_O_RDONLY)
+                                => LFS_ERR_ISDIR;
+
+                    } else {
+                        char name[256];
+                        sprintf(name, "batman%03x", sim[j]);
+                        lfsr_file_t file;
+                        lfsr_file_open(&lfs, &file, name, LFS_O_RDONLY) => 0;
+
+                        uint32_t wprng = sim_prngs[j];
+                        uint8_t wbuf[SIZE];
+                        for (lfs_size_t j = 0; j < SIZE; j++) {
+                            wbuf[j] = 'a' + (TEST_PRNG(&wprng) % 26);
+                        }
+
+                        uint8_t rbuf[SIZE];
+                        if (sim_isstickys[j]) {
+                            lfsr_file_read(&lfs, &file, rbuf, SIZE) => 0;
+                        } else {
+                            lfsr_file_read(&lfs, &file, rbuf, SIZE) => SIZE;
+                            assert(memcmp(rbuf, wbuf, SIZE) == 0);
+                        }
+                        lfsr_file_close(&lfs, &file) => 0;
+                    }
+                }
+
+                // check that our file handles match our simulation
+                for (lfs_size_t j = 0; j < sim_file_count; j++) {
+                    uint32_t wprng = sim_files[j]->prng;
+                    uint8_t wbuf[SIZE];
+                    for (lfs_size_t j = 0; j < SIZE; j++) {
+                        wbuf[j] = 'a' + (TEST_PRNG(&wprng) % 26);
+                    }
+
+                    lfsr_file_rewind(&lfs, &sim_files[j]->file) => 0;
+                    uint8_t rbuf[SIZE];
+                    lfsr_file_read(&lfs, &sim_files[j]->file, rbuf, SIZE)
+                            => SIZE;
+                    assert(memcmp(rbuf, wbuf, SIZE) == 0);
+                }
+            }
+        }
+
+    dead:;
+        // clean up sim/lfs
+        free(sim);
+        free(sim_prngs);
+        free(sim_isstickys);
+        free(sim_isdirs);
+        for (lfs_size_t j = 0; j < sim_file_count; j++) {
+            lfsr_file_desync(&lfs, &sim_files[j]->file) => 0;
+            lfsr_file_close(&lfs, &sim_files[j]->file) => 0;
+            free(sim_files[j]);
+        }
+        free(sim_files);
+        lfsr_unmount(&lfs) => 0;
+
+        // print how many ops
+        printf("run %d, %dx%d, %d ec: %d ops\n",
+                run,
+                (int)BLOCK_SIZE,
+                run_bc[run],
+                (int)ERASE_CYCLES,
+                run_ops[run]);
+    }
+
+    // check that we increased the liftime by ~2x, with ~10% error
+    printf("lifetime: %d -> %d (x%.2f)\n",
+            run_ops[0],
+            run_ops[1],
+            (double)run_ops[1] / (double)run_ops[0]);
+    assert(run_ops[1]*110/100 > 2*run_ops[0]);
+'''
+
+
+
+
+## test running a filesystem to exhaustion
+#[cases.test_exhaustion_normal]
+#defines.ERASE_CYCLES = 10
+#defines.BLOCK_COUNT = 256 # small bd so test runs faster
+#defines.BLOCK_CYCLES = 'ERASE_CYCLES / 2'
+#defines.BADBLOCK_BEHAVIOR = [
+#    'LFS_EMUBD_BADBLOCK_PROGERROR',
+#    'LFS_EMUBD_BADBLOCK_ERASEERROR',
+#    'LFS_EMUBD_BADBLOCK_READERROR',
+#    'LFS_EMUBD_BADBLOCK_PROGNOOP',
+#    'LFS_EMUBD_BADBLOCK_ERASENOOP',
+#]
+#defines.FILES = 10
+#code = '''
+#    lfs_t lfs;
+#    lfs_format(&lfs, cfg) => 0;
+#    lfs_mount(&lfs, cfg) => 0;
+#    lfs_mkdir(&lfs, "roadrunner") => 0;
+#    lfs_unmount(&lfs) => 0;
+#
+#    uint32_t cycle = 0;
+#    while (true) {
+#        lfs_mount(&lfs, cfg) => 0;
+#        for (uint32_t i = 0; i < FILES; i++) {
+#            // chose name, roughly random seed, and random 2^n size
+#            char path[1024];
+#            sprintf(path, "roadrunner/test%d", i);
+#            uint32_t prng = cycle * i;
+#            lfs_size_t size = 1 << ((TEST_PRNG(&prng) % 10)+2);
+#
+#            lfs_file_t file;
+#            lfs_file_open(&lfs, &file, path,
+#                    LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC) => 0;
+#
+#            for (lfs_size_t j = 0; j < size; j++) {
+#                char c = 'a' + (TEST_PRNG(&prng) % 26);
+#                lfs_ssize_t res = lfs_file_write(&lfs, &file, &c, 1);
+#                assert(res == 1 || res == LFS_ERR_NOSPC);
+#                if (res == LFS_ERR_NOSPC) {
+#                    int err = lfs_file_close(&lfs, &file);
+#                    assert(err == 0 || err == LFS_ERR_NOSPC);
+#                    lfs_unmount(&lfs) => 0;
+#                    goto exhausted;
+#                }
+#            }
+#
+#            int err = lfs_file_close(&lfs, &file);
+#            assert(err == 0 || err == LFS_ERR_NOSPC);
+#            if (err == LFS_ERR_NOSPC) {
+#                lfs_unmount(&lfs) => 0;
+#                goto exhausted;
+#            }
+#        }
+#
+#        for (uint32_t i = 0; i < FILES; i++) {
+#            // check for errors
+#            char path[1024];
+#            sprintf(path, "roadrunner/test%d", i);
+#            uint32_t prng = cycle * i;
+#            lfs_size_t size = 1 << ((TEST_PRNG(&prng) % 10)+2);
+#
+#            lfs_file_t file;
+#            lfs_file_open(&lfs, &file, path, LFS_O_RDONLY) => 0;
+#            for (lfs_size_t j = 0; j < size; j++) {
+#                char c = 'a' + (TEST_PRNG(&prng) % 26);
+#                char r;
+#                lfs_file_read(&lfs, &file, &r, 1) => 1;
+#                assert(r == c);
+#            }
+#
+#            lfs_file_close(&lfs, &file) => 0;
+#        }
+#        lfs_unmount(&lfs) => 0;
+#
+#        cycle += 1;
+#    }
+#
+#exhausted:
+#    // should still be readable
+#    lfs_mount(&lfs, cfg) => 0;
+#    for (uint32_t i = 0; i < FILES; i++) {
+#        // check for errors
+#        char path[1024];
+#        sprintf(path, "roadrunner/test%d", i);
+#        struct lfs_info info;
+#        lfs_stat(&lfs, path, &info) => 0;
+#    }
+#    lfs_unmount(&lfs) => 0;
+#
+#    LFS_WARN("completed %d cycles", cycle);
+#'''
+#
+## test running a filesystem to exhaustion
+## which also requires expanding superblocks
+#[cases.test_exhaustion_superblocks]
+#defines.ERASE_CYCLES = 10
+#defines.BLOCK_COUNT = 256 # small bd so test runs faster
+#defines.BLOCK_CYCLES = 'ERASE_CYCLES / 2'
+#defines.BADBLOCK_BEHAVIOR = [
+#    'LFS_EMUBD_BADBLOCK_PROGERROR',
+#    'LFS_EMUBD_BADBLOCK_ERASEERROR',
+#    'LFS_EMUBD_BADBLOCK_READERROR',
+#    'LFS_EMUBD_BADBLOCK_PROGNOOP',
+#    'LFS_EMUBD_BADBLOCK_ERASENOOP',
+#]
+#defines.FILES = 10
+#code = '''
+#    lfs_t lfs;
+#    lfs_format(&lfs, cfg) => 0;
+#
+#    uint32_t cycle = 0;
+#    while (true) {
+#        lfs_mount(&lfs, cfg) => 0;
+#        for (uint32_t i = 0; i < FILES; i++) {
+#            // chose name, roughly random seed, and random 2^n size
+#            char path[1024];
+#            sprintf(path, "test%d", i);
+#            uint32_t prng = cycle * i;
+#            lfs_size_t size = 1 << ((TEST_PRNG(&prng) % 10)+2);
+#
+#            lfs_file_t file;
+#            lfs_file_open(&lfs, &file, path,
+#                    LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC) => 0;
+#
+#            for (lfs_size_t j = 0; j < size; j++) {
+#                char c = 'a' + (TEST_PRNG(&prng) % 26);
+#                lfs_ssize_t res = lfs_file_write(&lfs, &file, &c, 1);
+#                assert(res == 1 || res == LFS_ERR_NOSPC);
+#                if (res == LFS_ERR_NOSPC) {
+#                    int err = lfs_file_close(&lfs, &file);
+#                    assert(err == 0 || err == LFS_ERR_NOSPC);
+#                    lfs_unmount(&lfs) => 0;
+#                    goto exhausted;
+#                }
+#            }
+#
+#            int err = lfs_file_close(&lfs, &file);
+#            assert(err == 0 || err == LFS_ERR_NOSPC);
+#            if (err == LFS_ERR_NOSPC) {
+#                lfs_unmount(&lfs) => 0;
+#                goto exhausted;
+#            }
+#        }
+#
+#        for (uint32_t i = 0; i < FILES; i++) {
+#            // check for errors
+#            char path[1024];
+#            sprintf(path, "test%d", i);
+#            uint32_t prng = cycle * i;
+#            lfs_size_t size = 1 << ((TEST_PRNG(&prng) % 10)+2);
+#
+#            lfs_file_t file;
+#            lfs_file_open(&lfs, &file, path, LFS_O_RDONLY) => 0;
+#            for (lfs_size_t j = 0; j < size; j++) {
+#                char c = 'a' + (TEST_PRNG(&prng) % 26);
+#                char r;
+#                lfs_file_read(&lfs, &file, &r, 1) => 1;
+#                assert(r == c);
+#            }
+#
+#            lfs_file_close(&lfs, &file) => 0;
+#        }
+#        lfs_unmount(&lfs) => 0;
+#
+#        cycle += 1;
+#    }
+#
+#exhausted:
+#    // should still be readable
+#    lfs_mount(&lfs, cfg) => 0;
+#    for (uint32_t i = 0; i < FILES; i++) {
+#        // check for errors
+#        char path[1024];
+#        struct lfs_info info;
+#        sprintf(path, "test%d", i);
+#        lfs_stat(&lfs, path, &info) => 0;
+#    }
+#    lfs_unmount(&lfs) => 0;
+#
+#    LFS_WARN("completed %d cycles", cycle);
+#'''
+#
+## These are a sort of high-level litmus test for wear-leveling. One definition
+## of wear-leveling is that increasing a block device's space translates directly
+## into increasing the block devices lifetime. This is something we can actually
+## check for.
+#
+## wear-level test running a filesystem to exhaustion
+#[cases.test_exhuastion_wear_leveling]
+#defines.ERASE_CYCLES = 20
+#defines.BLOCK_COUNT = 256 # small bd so test runs faster
+#defines.BLOCK_CYCLES = 'ERASE_CYCLES / 2'
+#defines.FILES = 10
+#code = '''
+#    uint32_t run_cycles[2];
+#    const uint32_t run_block_count[2] = {BLOCK_COUNT/2, BLOCK_COUNT};
+#
+#    for (int run = 0; run < 2; run++) {
+#        for (lfs_block_t b = 0; b < BLOCK_COUNT; b++) {
+#            lfs_emubd_setwear(cfg, b,
+#                    (b < run_block_count[run]) ? 0 : ERASE_CYCLES) => 0;
+#        }
+#
+#        lfs_t lfs;
+#        lfs_format(&lfs, cfg) => 0;
+#        lfs_mount(&lfs, cfg) => 0;
+#        lfs_mkdir(&lfs, "roadrunner") => 0;
+#        lfs_unmount(&lfs) => 0;
+#
+#        uint32_t cycle = 0;
+#        while (true) {
+#            lfs_mount(&lfs, cfg) => 0;
+#            for (uint32_t i = 0; i < FILES; i++) {
+#                // chose name, roughly random seed, and random 2^n size
+#                char path[1024];
+#                sprintf(path, "roadrunner/test%d", i);
+#                uint32_t prng = cycle * i;
+#                lfs_size_t size = 1 << ((TEST_PRNG(&prng) % 10)+2);
+#
+#                lfs_file_t file;
+#                lfs_file_open(&lfs, &file, path,
+#                        LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC) => 0;
+#
+#                for (lfs_size_t j = 0; j < size; j++) {
+#                    char c = 'a' + (TEST_PRNG(&prng) % 26);
+#                    lfs_ssize_t res = lfs_file_write(&lfs, &file, &c, 1);
+#                    assert(res == 1 || res == LFS_ERR_NOSPC);
+#                    if (res == LFS_ERR_NOSPC) {
+#                        int err = lfs_file_close(&lfs, &file);
+#                        assert(err == 0 || err == LFS_ERR_NOSPC);
+#                        lfs_unmount(&lfs) => 0;
+#                        goto exhausted;
+#                    }
+#                }
+#
+#                int err = lfs_file_close(&lfs, &file);
+#                assert(err == 0 || err == LFS_ERR_NOSPC);
+#                if (err == LFS_ERR_NOSPC) {
+#                    lfs_unmount(&lfs) => 0;
+#                    goto exhausted;
+#                }
+#            }
+#
+#            for (uint32_t i = 0; i < FILES; i++) {
+#                // check for errors
+#                char path[1024];
+#                sprintf(path, "roadrunner/test%d", i);
+#                uint32_t prng = cycle * i;
+#                lfs_size_t size = 1 << ((TEST_PRNG(&prng) % 10)+2);
+#
+#                lfs_file_t file;
+#                lfs_file_open(&lfs, &file, path, LFS_O_RDONLY) => 0;
+#                for (lfs_size_t j = 0; j < size; j++) {
+#                    char c = 'a' + (TEST_PRNG(&prng) % 26);
+#                    char r;
+#                    lfs_file_read(&lfs, &file, &r, 1) => 1;
+#                    assert(r == c);
+#                }
+#
+#                lfs_file_close(&lfs, &file) => 0;
+#            }
+#            lfs_unmount(&lfs) => 0;
+#
+#            cycle += 1;
+#        }
+#
+#exhausted:
+#        // should still be readable
+#        lfs_mount(&lfs, cfg) => 0;
+#        for (uint32_t i = 0; i < FILES; i++) {
+#            // check for errors
+#            char path[1024];
+#            struct lfs_info info;
+#            sprintf(path, "roadrunner/test%d", i);
+#            lfs_stat(&lfs, path, &info) => 0;
+#        }
+#        lfs_unmount(&lfs) => 0;
+#
+#        run_cycles[run] = cycle;
+#        LFS_WARN("completed %d blocks %d cycles",
+#                run_block_count[run], run_cycles[run]);
+#    }
+#
+#    // check we increased the lifetime by 2x with ~10% error
+#    LFS_ASSERT(run_cycles[1]*110/100 > 2*run_cycles[0]);
+#'''
+#
+## wear-level test + expanding superblock
+#[cases.test_exhaustion_wear_leveling_superblocks]
+#defines.ERASE_CYCLES = 20
+#defines.BLOCK_COUNT = 256 # small bd so test runs faster
+#defines.BLOCK_CYCLES = 'ERASE_CYCLES / 2'
+#defines.FILES = 10
+#code = '''
+#    uint32_t run_cycles[2];
+#    const uint32_t run_block_count[2] = {BLOCK_COUNT/2, BLOCK_COUNT};
+#
+#    for (int run = 0; run < 2; run++) {
+#        for (lfs_block_t b = 0; b < BLOCK_COUNT; b++) {
+#            lfs_emubd_setwear(cfg, b,
+#                    (b < run_block_count[run]) ? 0 : ERASE_CYCLES) => 0;
+#        }
+#
+#        lfs_t lfs;
+#        lfs_format(&lfs, cfg) => 0;
+#
+#        uint32_t cycle = 0;
+#        while (true) {
+#            lfs_mount(&lfs, cfg) => 0;
+#            for (uint32_t i = 0; i < FILES; i++) {
+#                // chose name, roughly random seed, and random 2^n size
+#                char path[1024];
+#                sprintf(path, "test%d", i);
+#                uint32_t prng = cycle * i;
+#                lfs_size_t size = 1 << ((TEST_PRNG(&prng) % 10)+2);
+#
+#                lfs_file_t file;
+#                lfs_file_open(&lfs, &file, path,
+#                        LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC) => 0;
+#
+#                for (lfs_size_t j = 0; j < size; j++) {
+#                    char c = 'a' + (TEST_PRNG(&prng) % 26);
+#                    lfs_ssize_t res = lfs_file_write(&lfs, &file, &c, 1);
+#                    assert(res == 1 || res == LFS_ERR_NOSPC);
+#                    if (res == LFS_ERR_NOSPC) {
+#                        int err = lfs_file_close(&lfs, &file);
+#                        assert(err == 0 || err == LFS_ERR_NOSPC);
+#                        lfs_unmount(&lfs) => 0;
+#                        goto exhausted;
+#                    }
+#                }
+#
+#                int err = lfs_file_close(&lfs, &file);
+#                assert(err == 0 || err == LFS_ERR_NOSPC);
+#                if (err == LFS_ERR_NOSPC) {
+#                    lfs_unmount(&lfs) => 0;
+#                    goto exhausted;
+#                }
+#            }
+#
+#            for (uint32_t i = 0; i < FILES; i++) {
+#                // check for errors
+#                char path[1024];
+#                sprintf(path, "test%d", i);
+#                uint32_t prng = cycle * i;
+#                lfs_size_t size = 1 << ((TEST_PRNG(&prng) % 10)+2);
+#
+#                lfs_file_t file;
+#                lfs_file_open(&lfs, &file, path, LFS_O_RDONLY) => 0;
+#                for (lfs_size_t j = 0; j < size; j++) {
+#                    char c = 'a' + (TEST_PRNG(&prng) % 26);
+#                    char r;
+#                    lfs_file_read(&lfs, &file, &r, 1) => 1;
+#                    assert(r == c);
+#                }
+#
+#                lfs_file_close(&lfs, &file) => 0;
+#            }
+#            lfs_unmount(&lfs) => 0;
+#
+#            cycle += 1;
+#        }
+#
+#exhausted:
+#        // should still be readable
+#        lfs_mount(&lfs, cfg) => 0;
+#        for (uint32_t i = 0; i < FILES; i++) {
+#            // check for errors
+#            char path[1024];
+#            struct lfs_info info;
+#            sprintf(path, "test%d", i);
+#            lfs_stat(&lfs, path, &info) => 0;
+#        }
+#        lfs_unmount(&lfs) => 0;
+#
+#        run_cycles[run] = cycle;
+#        LFS_WARN("completed %d blocks %d cycles",
+#                run_block_count[run], run_cycles[run]);
+#    }
+#
+#    // check we increased the lifetime by 2x with ~10% error
+#    LFS_ASSERT(run_cycles[1]*110/100 > 2*run_cycles[0]);
+#'''
+#
+## test that we wear blocks roughly evenly
+#[cases.test_exhaustion_wear_distribution]
+#defines.ERASE_CYCLES = 0xffffffff
+#defines.BLOCK_COUNT = 256 # small bd so test runs faster
+#defines.BLOCK_CYCLES = [5, 4, 3, 2, 1]
+#defines.CYCLES = 100
+#defines.FILES = 10
+#if = 'BLOCK_CYCLES < CYCLES/10'
+#code = '''
+#    lfs_t lfs;
+#    lfs_format(&lfs, cfg) => 0;
+#    lfs_mount(&lfs, cfg) => 0;
+#    lfs_mkdir(&lfs, "roadrunner") => 0;
+#    lfs_unmount(&lfs) => 0;
+#
+#    uint32_t cycle = 0;
+#    while (cycle < CYCLES) {
+#        lfs_mount(&lfs, cfg) => 0;
+#        for (uint32_t i = 0; i < FILES; i++) {
+#            // chose name, roughly random seed, and random 2^n size
+#            char path[1024];
+#            sprintf(path, "roadrunner/test%d", i);
+#            uint32_t prng = cycle * i;
+#            lfs_size_t size = 1 << 4; //((TEST_PRNG(&prng) % 10)+2);
+#
+#            lfs_file_t file;
+#            lfs_file_open(&lfs, &file, path,
+#                    LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC) => 0;
+#
+#            for (lfs_size_t j = 0; j < size; j++) {
+#                char c = 'a' + (TEST_PRNG(&prng) % 26);
+#                lfs_ssize_t res = lfs_file_write(&lfs, &file, &c, 1);
+#                assert(res == 1 || res == LFS_ERR_NOSPC);
+#                if (res == LFS_ERR_NOSPC) {
+#                    int err = lfs_file_close(&lfs, &file);
+#                    assert(err == 0 || err == LFS_ERR_NOSPC);
+#                    lfs_unmount(&lfs) => 0;
+#                    goto exhausted;
+#                }
+#            }
+#
+#            int err = lfs_file_close(&lfs, &file);
+#            assert(err == 0 || err == LFS_ERR_NOSPC);
+#            if (err == LFS_ERR_NOSPC) {
+#                lfs_unmount(&lfs) => 0;
+#                goto exhausted;
+#            }
+#        }
+#
+#        for (uint32_t i = 0; i < FILES; i++) {
+#            // check for errors
+#            char path[1024];
+#            sprintf(path, "roadrunner/test%d", i);
+#            uint32_t prng = cycle * i;
+#            lfs_size_t size = 1 << 4; //((TEST_PRNG(&prng) % 10)+2);
+#
+#            lfs_file_t file;
+#            lfs_file_open(&lfs, &file, path, LFS_O_RDONLY) => 0;
+#            for (lfs_size_t j = 0; j < size; j++) {
+#                char c = 'a' + (TEST_PRNG(&prng) % 26);
+#                char r;
+#                lfs_file_read(&lfs, &file, &r, 1) => 1;
+#                assert(r == c);
+#            }
+#
+#            lfs_file_close(&lfs, &file) => 0;
+#        }
+#        lfs_unmount(&lfs) => 0;
+#
+#        cycle += 1;
+#    }
+#
+#exhausted:
+#    // should still be readable
+#    lfs_mount(&lfs, cfg) => 0;
+#    for (uint32_t i = 0; i < FILES; i++) {
+#        // check for errors
+#        char path[1024];
+#        struct lfs_info info;
+#        sprintf(path, "roadrunner/test%d", i);
+#        lfs_stat(&lfs, path, &info) => 0;
+#    }
+#    lfs_unmount(&lfs) => 0;
+#
+#    LFS_WARN("completed %d cycles", cycle);
+#
+#    // check the wear on our block device
+#    lfs_emubd_wear_t minwear = -1;
+#    lfs_emubd_wear_t totalwear = 0;
+#    lfs_emubd_wear_t maxwear = 0;
+#    // skip 0 and 1 as superblock movement is intentionally avoided
+#    for (lfs_block_t b = 2; b < BLOCK_COUNT; b++) {
+#        lfs_emubd_wear_t wear = lfs_emubd_wear(cfg, b);
+#        printf("%08x: wear %d\n", b, wear);
+#        assert(wear >= 0);
+#        if (wear < minwear) {
+#            minwear = wear;
+#        }
+#        if (wear > maxwear) {
+#            maxwear = wear;
+#        }
+#        totalwear += wear;
+#    }
+#    lfs_emubd_wear_t avgwear = totalwear / BLOCK_COUNT;
+#    LFS_WARN("max wear: %d cycles", maxwear);
+#    LFS_WARN("avg wear: %d cycles", totalwear / (int)BLOCK_COUNT);
+#    LFS_WARN("min wear: %d cycles", minwear);
+#
+#    // find standard deviation^2
+#    lfs_emubd_wear_t dev2 = 0;
+#    for (lfs_block_t b = 2; b < BLOCK_COUNT; b++) {
+#        lfs_emubd_wear_t wear = lfs_emubd_wear(cfg, b);
+#        assert(wear >= 0);
+#        lfs_emubd_swear_t diff = wear - avgwear;
+#        dev2 += diff*diff;
+#    }
+#    dev2 /= totalwear;
+#    LFS_WARN("std dev^2: %d", dev2);
+#    assert(dev2 < 8);
+#'''
+#
