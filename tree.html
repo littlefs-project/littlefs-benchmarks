@@ -1,0 +1,125 @@
+<html>
+<head>
+    <title>littlefs3-benchmarks</title>
+    <link rel="icon" href="favicon.ico">
+    <style>
+    body {
+        background-color: #443333;
+        color: #ffffff;
+    }
+    a {
+        color: #7997b7;
+    }
+    </style>
+    <script>
+    // GitHub doesn't seem to provide a way to serve svg files without
+    // the image/svg+xml mimetype, which prevents in-svg javascript from
+    // running.
+    //
+    // To get around this, this page parses the url's "hash" part for a
+    // specific commit + path, and loads it into our own html.
+    //
+    // Worst case, the url still encodes the commit hash and path,
+    // keeping track of the version when committed/published elsewhere.
+
+    // hardcoded repo
+    const hub = 'https://github.com';
+    const raw = 'https://raw.githubusercontent.com';
+    const repo = 'littlefs-project/littlefs-benchmarks';
+    let backup_thing = null;
+
+    function parse_query(hash) {
+        let qs = hash.split(/[#?&]/);
+        let kvs = {};
+        for (q of qs) {
+            kv = q.split('=');
+            if (kv.length >= 2) {
+                kvs[kv[0]] = kv.slice(1).join('=');
+            }
+        }
+        return kvs;
+    }
+
+    function cb() {
+        // parse the commit/path
+        let hash = window.location.hash;
+        let query = parse_query(hash);
+        console.log('query:', query);
+
+        let thing = document.getElementById('thing');
+        if (!backup_thing) {
+            backup_thing = thing;
+        }
+
+        // need commit and path
+        if (!query['commit'] || !query['path']) {
+            thing.replaceWith(backup_thing);
+            return;
+        }
+        let commit = query['commit'];
+        let path = query['path'];
+
+        // create url
+        let url = [raw, repo, commit, path].join('/');
+
+        // send request
+        let x = new XMLHttpRequest();
+        x.onreadystatechange = function() {
+            if (this.readyState == 4) {
+                if (this.status != 200) {
+                    thing.replaceWith(backup_thing);
+                    return;
+                }
+
+                // convert to base64
+                let data_ = new TextEncoder()
+                        .encode(this.responseText)
+                        .toBase64();
+
+                // replace html node
+                let thing_ = document.createElement('p');
+                thing_.setAttribute('id', 'thing');
+
+                let a_ = document.createElement('a');
+                a_.setAttribute('href',
+                        [hub, repo, 'tree', commit].join('/'));
+                a_.appendChild(document.createTextNode(commit));
+
+                thing_.appendChild(a_);
+                thing_.appendChild(document.createTextNode(' '));
+                thing_.appendChild(document.createTextNode(path));
+                thing_.appendChild(document.createTextNode(' ('));
+                a_ = document.createElement('a');
+                a_.setAttribute('href',
+                        [raw, repo, commit, path].join('/'));
+                a_.appendChild(document.createTextNode('raw'));
+                thing_.appendChild(a_);
+                thing_.appendChild(document.createTextNode(', '));
+                a_ = document.createElement('a');
+                a_.setAttribute('href',
+                        [hub, repo, 'blob', commit, path].join('/'));
+                a_.appendChild(document.createTextNode('github'));
+                thing_.appendChild(a_);
+                thing_.appendChild(document.createTextNode('):'));
+
+                thing_.appendChild(document.createElement('br'));
+                let object_ = document.createElement('object');
+                object_.setAttribute('data',
+                        'data:image/svg+xml;base64,' + data_);
+                thing_.appendChild(object_);
+
+                thing.replaceWith(thing_);
+            }
+        };
+        x.open("GET", url, true);
+        x.send();
+    }
+    window.addEventListener('load', cb);
+    window.addEventListener('hashchange', cb);
+    </script>
+</head>
+<body>
+    <p id="thing">
+    Needs query params and javascript, sorry :(
+    </p>
+</body>
