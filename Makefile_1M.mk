@@ -2,6 +2,8 @@
 export BUILDDIR ?= build_1M
 # overrideable results dir, default to ./results_1M
 export RESULTSDIR ?= results_1M
+# overrideable codemaps dir, defaults to ./codemaps_1M
+export CODEMAPSDIR ?= codemaps_1M
 # overrideable plots dir, defaults ./plots_1M
 export PLOTSDIR ?= plots_1M
 

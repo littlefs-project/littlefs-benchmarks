@@ -13,16 +13,16 @@ defines.N = 1024
 defines.STEP = 1
 defines.SEED = 42
 defines.SIZE = 4
-in = 'littlefs3/lfs.c'
+in = 'littlefs3/lfs3.c'
 code = '''
-    lfs_t lfs;
-    lfsr_format(&lfs, LFS_F_RDWR, CFG) => 0;
-    lfsr_mount(&lfs, LFS_M_RDWR, CFG) => 0;
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
 
     // create an mtree with N entries
     uint32_t prng = SEED;
-    for (lfs_size_t i = 0; i < N; i++) {
-        lfsr_mid_t i_
+    for (lfs3_size_t i = 0; i < N; i++) {
+        lfs3_mid_t i_
                 = (ORDER == 0) ? i
                 : (ORDER == 1) ? N-1-i
                 : BENCH_PRNG(&prng) % N;
@@ -34,28 +34,28 @@ code = '''
         if ((i+1) % STEP == 0) {
             BENCH_START("commit", i+1);
         }
-        lfsr_mdir_t mdir;
-        lfsr_tag_t tag;
-        lfsr_data_t data;
-        int err = lfsr_mtree_namelookup(&lfs,
+        lfs3_mdir_t mdir;
+        lfs3_tag_t tag;
+        lfs3_data_t data;
+        int err = lfs3_mtree_namelookup(&lfs3,
                 0, name, strlen(name),
                 &mdir, &tag, &data);
-        assert(!err || err == LFS_ERR_NOENT);
+        assert(!err || err == LFS3_ERR_NOENT);
         // new entry?
-        if (err == LFS_ERR_NOENT) {
-            lfsr_mdir_commit(&lfs, &mdir, LFSR_RATTRS(
-                    LFSR_RATTR_NAME(
-                        LFSR_TAG_REG, +1,
+        if (err == LFS3_ERR_NOENT) {
+            lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+                    LFS3_RATTR_NAME(
+                        LFS3_TAG_REG, +1,
                         0, name, strlen(name)),
-                    LFSR_RATTR_BUF(
-                        LFSR_TAG_DATA, 0,
+                    LFS3_RATTR_BUF(
+                        LFS3_TAG_DATA, 0,
                         wbuf, SIZE))) => 0;
             
         // collision?
         } else {
-            lfsr_mdir_commit(&lfs, &mdir, LFSR_RATTRS(
-                    LFSR_RATTR_BUF(
-                        LFSR_TAG_DATA, 0,
+            lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+                    LFS3_RATTR_BUF(
+                        LFS3_TAG_DATA, 0,
                         wbuf, SIZE))) => 0;
         }
         if ((i+1) % STEP == 0) {
@@ -65,17 +65,17 @@ code = '''
         if ((i+1) % STEP == 0) {
             // measure name lookups
             BENCH_START("namelookup", i+1);
-            lfsr_mid_t i_ = BENCH_PRNG(&prng) % N;
+            lfs3_mid_t i_ = BENCH_PRNG(&prng) % N;
             sprintf(name, "e%05d", i_);
-            lfsr_mdir_t mdir;
-            lfsr_tag_t tag;
-            lfsr_data_t data;
-            int err = lfsr_mtree_namelookup(&lfs,
+            lfs3_mdir_t mdir;
+            lfs3_tag_t tag;
+            lfs3_data_t data;
+            int err = lfs3_mtree_namelookup(&lfs3,
                     0, name, strlen(name),
                     &mdir, &tag, &data);
-            assert(!err || err == LFS_ERR_NOENT);
+            assert(!err || err == LFS3_ERR_NOENT);
             if (!err) {
-                assert(tag == LFSR_TAG_REG);
+                assert(tag == LFS3_TAG_REG);
             }
             BENCH_STOP("namelookup");
 
@@ -83,47 +83,47 @@ code = '''
             //
             // we use mid found by name lookup so we know mid is valid
             BENCH_START("lookup", i+1);
-            lfsr_mtree_lookup(&lfs, mdir.mid,
+            lfs3_mtree_lookup(&lfs3, mdir.mid,
                     &mdir) => 0;
             BENCH_STOP("lookup");
 
             // measure traversal cost
             BENCH_START("traversal", i+1);
-            lfsr_traversal_t t;
-            lfsr_traversal_open(&lfs, &t, 0) => 0;
+            lfs3_traversal_t t;
+            lfs3_traversal_open(&lfs3, &t, 0) => 0;
             while (true) {
-                struct lfs_tinfo tinfo;
-                int err = lfsr_traversal_read(&lfs, &t,
+                struct lfs3_tinfo tinfo;
+                int err = lfs3_traversal_read(&lfs3, &t,
                         &tinfo);
-                assert(!err || err == LFS_ERR_NOENT);
-                if (err == LFS_ERR_NOENT) {
+                assert(!err || err == LFS3_ERR_NOENT);
+                if (err == LFS3_ERR_NOENT) {
                     break;
                 }
             }
-            lfsr_traversal_close(&lfs, &t) => 0;
+            lfs3_traversal_close(&lfs3, &t) => 0;
             BENCH_STOP("traversal");
 
             // measure disk usage
-            lfs_off_t count = 0;
+            lfs3_off_t count = 0;
 
-            lfsr_traversal_open(&lfs, &t, 0) => 0;
+            lfs3_traversal_open(&lfs3, &t, 0) => 0;
             while (true) {
-                struct lfs_tinfo tinfo;
-                int err = lfsr_traversal_read(&lfs, &t,
+                struct lfs3_tinfo tinfo;
+                int err = lfs3_traversal_read(&lfs3, &t,
                         &tinfo);
-                assert(!err || err == LFS_ERR_NOENT);
-                if (err == LFS_ERR_NOENT) {
+                assert(!err || err == LFS3_ERR_NOENT);
+                if (err == LFS3_ERR_NOENT) {
                     break;
                 }
 
                 count += 1;
             }
-            lfsr_traversal_close(&lfs, &t) => 0;
+            lfs3_traversal_close(&lfs3, &t) => 0;
 
             BENCH_RESULT("usage", i+1,
                     (uintmax_t)count * CFG->block_size);
         }
     }
 
-    lfsr_unmount(&lfs) => 0;
+    lfs3_unmount(&lfs3) => 0;
 '''

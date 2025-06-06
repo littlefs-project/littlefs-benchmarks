@@ -8,16 +8,18 @@
 #define BENCH_RUNNER_H
 
 
-// override LFS_TRACE
+// override LFS3_TRACE
 void bench_trace(const char *fmt, ...);
 
-#define LFS_TRACE_(fmt, ...) \
+#define LFS3_TRACE_(fmt, ...) \
     bench_trace("%s:%d:trace: " fmt "%s\n", \
         __FILE__, \
         __LINE__, \
         __VA_ARGS__)
-#define LFS_TRACE(...) LFS_TRACE_(__VA_ARGS__, "")
-#define LFS_EMUBD_TRACE(...) LFS_TRACE_(__VA_ARGS__, "")
+#define LFS3_TRACE(...) LFS3_TRACE_(__VA_ARGS__, "")
+#define LFS2_TRACE(...) LFS3_TRACE_(__VA_ARGS__, "")
+#define LFS3_EMUBD_TRACE(...) LFS3_TRACE_(__VA_ARGS__, "")
+#define LFS2_EMUBD_TRACE(...) LFS3_TRACE_(__VA_ARGS__, "")
 
 // BENCH_START/BENCH_STOP macros measure readed/proged/erased bytes
 // through emubd
@@ -37,11 +39,11 @@ void bench_fresult(const char *m, uintmax_t n, double result);
 
 // note these are indirectly included in any generated files
 #ifdef LFS3
-#include "lfs.h"
+#include "lfs3.h"
 #else
 #include "lfs2.h"
 #endif
-#include "bd/lfs_emubd.h"
+#include "bd/lfs3_emubd.h"
 #include <stdio.h>
 
 // give source a chance to define feature macros
@@ -50,7 +52,7 @@ void bench_fresult(const char *m, uintmax_t n, double result);
 
 
 // generated bench configurations
-struct lfs_config;
+struct lfs3_config;
 
 enum bench_flags {
     BENCH_INTERNAL  = 0x1,
@@ -74,7 +76,7 @@ struct bench_case {
     size_t permutations;
 
     bool (*if_)(void);
-    void (*run)(struct lfs_config *cfg);
+    void (*run)(struct lfs3_config *cfg);
 };
 
 struct bench_suite {
@@ -124,26 +126,26 @@ void bench_permutation(size_t i, uint32_t *buffer, size_t size);
     BENCH_DEFINE(BLOCK_COUNT,        DISK_SIZE/BLOCK_SIZE                   ) \
     BENCH_DEFINE(DISK_SIZE,          2*1024*1024                            ) \
     BENCH_DEFINE(BLOCK_RECYCLES,     -1                                     ) \
-    BENCH_DEFINE(RCACHE_SIZE,        LFS_MAX(16, READ_SIZE)                 ) \
-    BENCH_DEFINE(PCACHE_SIZE,        LFS_MAX(16, PROG_SIZE)                 ) \
+    BENCH_DEFINE(RCACHE_SIZE,        LFS3_MAX(16, READ_SIZE)                ) \
+    BENCH_DEFINE(PCACHE_SIZE,        LFS3_MAX(16, PROG_SIZE)                ) \
     /* NOTE this max is not necessary, but levels the playing field        */ \
     /* vs littlefs v2                                                      */ \
-    BENCH_DEFINE(FILE_CACHE_SIZE,    LFS_MAX(16, \
-                                        LFS_MAX(READ_SIZE, PROG_SIZE))      ) \
+    BENCH_DEFINE(FILE_CACHE_SIZE,    LFS3_MAX(16, \
+                                        LFS3_MAX(READ_SIZE, PROG_SIZE))     ) \
     BENCH_DEFINE(LOOKAHEAD_SIZE,     16                                     ) \
     BENCH_DEFINE(GC_FLAGS,           0                                      ) \
     BENCH_DEFINE(GC_STEPS,           0                                      ) \
     BENCH_DEFINE(GC_COMPACT_THRESH,  0                                      ) \
     BENCH_DEFINE(INLINE_SIZE,        BLOCK_SIZE/4                           ) \
     /* TODO crystal/fragment_thresh 1/16 or 1/8? */                           \
-    BENCH_DEFINE(FRAGMENT_SIZE,      LFS_MIN(BLOCK_SIZE/16, 512)            ) \
-    /* TODO should max-prog_size be enforced in lfs_init? */                  \
-    BENCH_DEFINE(CRYSTAL_THRESH,     LFS_MAX(BLOCK_SIZE/16, PROG_SIZE)      ) \
+    BENCH_DEFINE(FRAGMENT_SIZE,      LFS3_MIN(BLOCK_SIZE/16, 512)           ) \
+    /* TODO should max-prog_size be enforced in lfs3_init? */                 \
+    BENCH_DEFINE(CRYSTAL_THRESH,     LFS3_MAX(BLOCK_SIZE/16, PROG_SIZE)     ) \
     BENCH_DEFINE(FRAGMENT_THRESH,    -1                                     ) \
     BENCH_DEFINE(ERASE_VALUE,        0xff                                   ) \
     BENCH_DEFINE(ERASE_CYCLES,       0                                      ) \
-    BENCH_DEFINE(BADBLOCK_BEHAVIOR,  LFS_EMUBD_BADBLOCK_PROGERROR           ) \
-    BENCH_DEFINE(POWERLOSS_BEHAVIOR, LFS_EMUBD_POWERLOSS_ATOMIC             ) \
+    BENCH_DEFINE(BADBLOCK_BEHAVIOR,  LFS3_EMUBD_BADBLOCK_PROGERROR          ) \
+    BENCH_DEFINE(POWERLOSS_BEHAVIOR, LFS3_EMUBD_POWERLOSS_ATOMIC            ) \
     BENCH_DEFINE(EMUBD_SEED,         0                                      )
 #else
 #define BENCH_IMPLICIT_DEFINES \
@@ -154,16 +156,16 @@ void bench_permutation(size_t i, uint32_t *buffer, size_t size);
     BENCH_DEFINE(BLOCK_COUNT,        DISK_SIZE/BLOCK_SIZE                   ) \
     BENCH_DEFINE(DISK_SIZE,          2*1024*1024                            ) \
     BENCH_DEFINE(BLOCK_CYCLES,       -1                                     ) \
-    BENCH_DEFINE(CACHE_SIZE,         LFS_MAX(16, \
-                                        LFS_MAX(READ_SIZE, PROG_SIZE))      ) \
+    BENCH_DEFINE(CACHE_SIZE,         LFS3_MAX(16, \
+                                        LFS3_MAX(READ_SIZE, PROG_SIZE))     ) \
     BENCH_DEFINE(LOOKAHEAD_SIZE,     16                                     ) \
     BENCH_DEFINE(COMPACT_THRESH,     0                                      ) \
     BENCH_DEFINE(METADATA_MAX,       0                                      ) \
     BENCH_DEFINE(INLINE_MAX,         0                                      ) \
     BENCH_DEFINE(ERASE_VALUE,        0xff                                   ) \
     BENCH_DEFINE(ERASE_CYCLES,       0                                      ) \
-    BENCH_DEFINE(BADBLOCK_BEHAVIOR,  LFS_EMUBD_BADBLOCK_PROGERROR           ) \
-    BENCH_DEFINE(POWERLOSS_BEHAVIOR, LFS_EMUBD_POWERLOSS_ATOMIC             ) \
+    BENCH_DEFINE(BADBLOCK_BEHAVIOR,  LFS3_EMUBD_BADBLOCK_PROGERROR          ) \
+    BENCH_DEFINE(POWERLOSS_BEHAVIOR, LFS3_EMUBD_POWERLOSS_ATOMIC            ) \
     BENCH_DEFINE(EMUBD_SEED,         0                                      )
 #endif
 
@@ -193,7 +195,7 @@ void bench_permutation(size_t i, uint32_t *buffer, size_t size);
     .crystal_thresh     = CRYSTAL_THRESH,       \
     .fragment_thresh    = FRAGMENT_THRESH,
 
-#ifdef LFS_GC
+#ifdef LFS3_GC
 #define BENCH_GC_CFG                            \
     .gc_flags           = GC_FLAGS,             \
     .gc_steps           = GC_STEPS,

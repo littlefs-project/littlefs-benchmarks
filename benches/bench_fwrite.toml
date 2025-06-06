@@ -15,29 +15,29 @@ defines.SEED = 42
 defines.REWRITE = [0, 1, 2]
 defines.SYNC = true
 code = '''
-    lfs_t lfs;
-    lfsr_format(&lfs, LFS_F_RDWR, CFG) => 0;
-    lfsr_mount(&lfs, LFS_M_RDWR | LFS_M_MKCONSISTENT, CFG) => 0;
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | LFS3_M_MKCONSISTENT, CFG) => 0;
     uint32_t prng = SEED;
 
     // find the baseline usage after format
     uint8_t *usage_bmap = malloc((BLOCK_COUNT+8-1)/8);
     memset(usage_bmap, 0, (BLOCK_COUNT+8-1)/8);
-    lfsr_traversal_t t;
-    lfsr_traversal_open(&lfs, &t, 0) => 0;
+    lfs3_traversal_t t;
+    lfs3_traversal_open(&lfs3, &t, 0) => 0;
     while (true) {
-        struct lfs_tinfo tinfo;
-        int err = lfsr_traversal_read(&lfs, &t, &tinfo);
-        assert(!err || err == LFS_ERR_NOENT);
-        if (err == LFS_ERR_NOENT) {
+        struct lfs3_tinfo tinfo;
+        int err = lfs3_traversal_read(&lfs3, &t, &tinfo);
+        assert(!err || err == LFS3_ERR_NOENT);
+        if (err == LFS3_ERR_NOENT) {
             break;
         }
 
         usage_bmap[tinfo.block/8] |= 1 << (tinfo.block % 8);
     }
-    lfsr_traversal_close(&lfs, &t) => 0;
-    lfs_size_t usage_baseline = 0;
-    for (lfs_size_t j = 0; j < BLOCK_COUNT; j++) {
+    lfs3_traversal_close(&lfs3, &t) => 0;
+    lfs3_size_t usage_baseline = 0;
+    for (lfs3_size_t j = 0; j < BLOCK_COUNT; j++) {
         if (usage_bmap[j / 8] & (1 << (j % 8))) {
             usage_baseline += 1;
         }
@@ -45,25 +45,25 @@ code = '''
 
     // create an initial file to rewrite?
     if (REWRITE == 1) {
-        lfsr_file_t file;
-        lfsr_file_open(&lfs, &file, "bench_file",
-                LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC) => 0;
-        for (lfs_size_t i = 0; i < (SIZE+(CHUNK-1))/CHUNK; i++) {
+        lfs3_file_t file;
+        lfs3_file_open(&lfs3, &file, "bench_file",
+                LFS3_O_WRONLY | LFS3_O_CREAT | LFS3_O_TRUNC) => 0;
+        for (lfs3_size_t i = 0; i < (SIZE+(CHUNK-1))/CHUNK; i++) {
             uint8_t wbuf[CHUNK];
-            for (lfs_size_t j = 0; j < CHUNK; j++) {
+            for (lfs3_size_t j = 0; j < CHUNK; j++) {
                 wbuf[j] = 'a' + (BENCH_PRNG(&prng) % 26);
             }
-            lfsr_file_write(&lfs, &file, wbuf, CHUNK) => CHUNK;
+            lfs3_file_write(&lfs3, &file, wbuf, CHUNK) => CHUNK;
         }
-        lfsr_file_close(&lfs, &file) => 0;
+        lfs3_file_close(&lfs3, &file) => 0;
     }
 
     // write our file
-    lfsr_file_t file;
-    lfsr_file_open(&lfs, &file, "bench_file",
-            LFS_O_RDWR | LFS_O_CREAT) => 0;
-    for (lfs_size_t i = 0; i < (SIZE+(CHUNK-1))/CHUNK; i++) {
-        lfs_off_t i_
+    lfs3_file_t file;
+    lfs3_file_open(&lfs3, &file, "bench_file",
+            LFS3_O_RDWR | LFS3_O_CREAT) => 0;
+    for (lfs3_size_t i = 0; i < (SIZE+(CHUNK-1))/CHUNK; i++) {
+        lfs3_off_t i_
                 = (REWRITE == 2 || ORDER == 0)
                     ? i*CHUNK
                 : (ORDER == 1)
@@ -73,25 +73,25 @@ code = '''
                         (SIZE+(CHUNK-1))/CHUNK))
                             * CHUNK
                     : BENCH_PRNG(&prng) % (
-                        lfs_max(SIZE, CHUNK)
+                        lfs3_max(SIZE, CHUNK)
                             - (CHUNK-1));
 
         if (REWRITE <= 1) {
             BENCH_START("write", i*CHUNK+CHUNK);
         }
         // seek to where we want to write
-        lfsr_file_seek(&lfs, &file, i_, LFS_SEEK_SET) => i_;
+        lfs3_file_seek(&lfs3, &file, i_, LFS3_SEEK_SET) => i_;
 
         // actually write
         uint8_t wbuf[CHUNK];
-        for (lfs_size_t j = 0; j < CHUNK; j++) {
+        for (lfs3_size_t j = 0; j < CHUNK; j++) {
             wbuf[j] = 'a' + (BENCH_PRNG(&prng) % 26);
         }
-        lfsr_file_write(&lfs, &file, wbuf, CHUNK) => CHUNK;
+        lfs3_file_write(&lfs3, &file, wbuf, CHUNK) => CHUNK;
 
         // sync?
         if (SYNC) {
-            lfsr_file_sync(&lfs, &file) => 0;
+            lfs3_file_sync(&lfs3, &file) => 0;
         }
         if (REWRITE <= 1) {
             BENCH_STOP("write");
@@ -99,44 +99,44 @@ code = '''
 
         if (REWRITE == 2) {
             // measure a random chunk-sized rewrite
-            lfs_off_t i__
+            lfs3_off_t i__
                     = (ORDER == 0)
                         ? i*CHUNK
                     : (ORDER == 1)
                         ? 0
                     : (ORDER == 2)
                         ? (BENCH_PRNG(&prng) % (
-                            (lfsr_file_size(&lfs, &file)+(CHUNK-1))/CHUNK))
+                            (lfs3_file_size(&lfs3, &file)+(CHUNK-1))/CHUNK))
                                 * CHUNK
                         : BENCH_PRNG(&prng) % (
-                            lfs_max(lfsr_file_size(&lfs, &file), CHUNK)
+                            lfs3_max(lfs3_file_size(&lfs3, &file), CHUNK)
                                 - (CHUNK-1));
             BENCH_START("write", i*CHUNK+CHUNK);
             // seek to where we want to write
-            lfsr_file_seek(&lfs, &file, i__, LFS_SEEK_SET) => i__;
+            lfs3_file_seek(&lfs3, &file, i__, LFS3_SEEK_SET) => i__;
 
             // actually write
             uint8_t wbuf[CHUNK];
-            for (lfs_size_t j = 0; j < CHUNK; j++) {
+            for (lfs3_size_t j = 0; j < CHUNK; j++) {
                 wbuf[j] = 'a' + (BENCH_PRNG(&prng) % 26);
             }
-            lfsr_file_write(&lfs, &file, wbuf, CHUNK) => CHUNK;
+            lfs3_file_write(&lfs3, &file, wbuf, CHUNK) => CHUNK;
 
             // sync?
             if (SYNC) {
-                lfsr_file_sync(&lfs, &file) => 0;
+                lfs3_file_sync(&lfs3, &file) => 0;
             }
             BENCH_STOP("write");
         }
 
         // measure a random chunk-sized read
-        lfs_off_t i__ = BENCH_PRNG(&prng) % (
-                lfs_max(lfsr_file_size(&lfs, &file), CHUNK) - (CHUNK-1));
+        lfs3_off_t i__ = BENCH_PRNG(&prng) % (
+                lfs3_max(lfs3_file_size(&lfs3, &file), CHUNK) - (CHUNK-1));
         BENCH_START("read", i*CHUNK+CHUNK);
-        lfsr_file_seek(&lfs, &file, i__, LFS_SEEK_SET) => i__;
+        lfs3_file_seek(&lfs3, &file, i__, LFS3_SEEK_SET) => i__;
 
         uint8_t rbuf[CHUNK];
-        lfsr_file_read(&lfs, &file, rbuf, CHUNK) => CHUNK;
+        lfs3_file_read(&lfs3, &file, rbuf, CHUNK) => CHUNK;
         BENCH_STOP("read");
 
         // measure disk usage
@@ -144,20 +144,20 @@ code = '''
         // littlefs can be a dag, so build a bitmap to find the exact
         // disk usage
         memset(usage_bmap, 0, (BLOCK_COUNT+8-1)/8);
-        lfsr_traversal_open(&lfs, &t, 0) => 0;
+        lfs3_traversal_open(&lfs3, &t, 0) => 0;
         while (true) {
-            struct lfs_tinfo tinfo;
-            int err = lfsr_traversal_read(&lfs, &t, &tinfo);
-            assert(!err || err == LFS_ERR_NOENT);
-            if (err == LFS_ERR_NOENT) {
+            struct lfs3_tinfo tinfo;
+            int err = lfs3_traversal_read(&lfs3, &t, &tinfo);
+            assert(!err || err == LFS3_ERR_NOENT);
+            if (err == LFS3_ERR_NOENT) {
                 break;
             }
 
             usage_bmap[tinfo.block/8] |= 1 << (tinfo.block % 8);
         }
-        lfsr_traversal_close(&lfs, &t) => 0;
-        lfs_size_t usage = 0;
-        for (lfs_size_t j = 0; j < BLOCK_COUNT; j++) {
+        lfs3_traversal_close(&lfs3, &t) => 0;
+        lfs3_size_t usage = 0;
+        for (lfs3_size_t j = 0; j < BLOCK_COUNT; j++) {
             if (usage_bmap[j / 8] & (1 << (j % 8))) {
                 usage += 1;
             }
@@ -166,9 +166,9 @@ code = '''
                 (uintmax_t)(usage - usage_baseline)
                     * (uintmax_t)CFG->block_size);
     }
-    lfsr_file_close(&lfs, &file) => 0;
+    lfs3_file_close(&lfs3, &file) => 0;
 
     free(usage_bmap);
-    lfsr_unmount(&lfs) => 0;
+    lfs3_unmount(&lfs3) => 0;
 '''
 

@@ -9,7 +9,7 @@
 #endif
 
 #include "runners/bench_runner.h"
-#include "bd/lfs_emubd.h"
+#include "bd/lfs3_emubd.h"
 
 #include <getopt.h>
 #include <sys/types.h>
@@ -439,9 +439,9 @@ FILE *bench_trace_file = NULL;
 uint32_t bench_trace_cycles = 0;
 uint64_t bench_trace_time = 0;
 uint64_t bench_trace_open_time = 0;
-lfs_emubd_sleep_t bench_read_sleep = 0.0;
-lfs_emubd_sleep_t bench_prog_sleep = 0.0;
-lfs_emubd_sleep_t bench_erase_sleep = 0.0;
+lfs3_emubd_sleep_t bench_read_sleep = 0.0;
+lfs3_emubd_sleep_t bench_prog_sleep = 0.0;
+lfs3_emubd_sleep_t bench_erase_sleep = 0.0;
 
 // this determines both the backtrace buffer and the trace printf buffer, if
 // trace ends up interleaved or truncated this may need to be increased
@@ -607,17 +607,17 @@ void bench_permutation(size_t i, uint32_t *buffer, size_t size) {
 typedef struct bench_record {
     const char *m;
     uintmax_t n;
-    lfs_emubd_io_t last_readed;
-    lfs_emubd_io_t last_proged;
-    lfs_emubd_io_t last_erased;
+    lfs3_emubd_io_t last_readed;
+    lfs3_emubd_io_t last_proged;
+    lfs3_emubd_io_t last_erased;
 } bench_record_t;
 
-static struct lfs_config *bench_cfg = NULL;
+static struct lfs3_config *bench_cfg = NULL;
 static bench_record_t *bench_records;
 size_t bench_record_count;
 size_t bench_record_capacity;
 
-void bench_reset(struct lfs_config *cfg) {
+void bench_reset(struct lfs3_config *cfg) {
     bench_cfg = cfg;
     bench_record_count = 0;
 }
@@ -625,11 +625,11 @@ void bench_reset(struct lfs_config *cfg) {
 void bench_start(const char *m, uintmax_t n) {
     // measure current read/prog/erase
     assert(bench_cfg);
-    lfs_emubd_sio_t readed = lfs_emubd_readed(bench_cfg);
+    lfs3_emubd_sio_t readed = lfs3_emubd_readed(bench_cfg);
     assert(readed >= 0);
-    lfs_emubd_sio_t proged = lfs_emubd_proged(bench_cfg);
+    lfs3_emubd_sio_t proged = lfs3_emubd_proged(bench_cfg);
     assert(proged >= 0);
-    lfs_emubd_sio_t erased = lfs_emubd_erased(bench_cfg);
+    lfs3_emubd_sio_t erased = lfs3_emubd_erased(bench_cfg);
     assert(erased >= 0);
 
     // allocate a new record
@@ -648,11 +648,11 @@ void bench_start(const char *m, uintmax_t n) {
 void bench_stop(const char *m) {
     // measure current read/prog/erase
     assert(bench_cfg);
-    lfs_emubd_sio_t readed = lfs_emubd_readed(bench_cfg);
+    lfs3_emubd_sio_t readed = lfs3_emubd_readed(bench_cfg);
     assert(readed >= 0);
-    lfs_emubd_sio_t proged = lfs_emubd_proged(bench_cfg);
+    lfs3_emubd_sio_t proged = lfs3_emubd_proged(bench_cfg);
     assert(proged >= 0);
-    lfs_emubd_sio_t erased = lfs_emubd_erased(bench_cfg);
+    lfs3_emubd_sio_t erased = lfs3_emubd_erased(bench_cfg);
     assert(erased >= 0);
 
     // find our record
@@ -1335,15 +1335,15 @@ void perm_run(
     }
 
     // create block device and configuration
-    lfs_emubd_t bd;
+    lfs3_emubd_t bd;
 
     #ifdef LFS3
-    struct lfs_config cfg = {
+    struct lfs3_config cfg = {
         .context            = &bd,
-        .read               = lfs_emubd_read,
-        .prog               = lfs_emubd_prog,
-        .erase              = lfs_emubd_erase,
-        .sync               = lfs_emubd_sync,
+        .read               = lfs3_emubd_read,
+        .prog               = lfs3_emubd_prog,
+        .erase              = lfs3_emubd_erase,
+        .sync               = lfs3_emubd_sync,
         BENCH_CFG
     };
     #else
@@ -1352,22 +1352,22 @@ void perm_run(
         .read               = (
             int (*)(const struct lfs2_config *c,
                 lfs2_block_t block, lfs2_off_t off,
-                void *buffer, lfs2_size_t size))lfs_emubd_read,
+                void *buffer, lfs2_size_t size))lfs3_emubd_read,
         .prog               = (
             int (*)(const struct lfs2_config *c,
                 lfs2_block_t block, lfs2_off_t off,
-                const void *buffer, lfs2_size_t))lfs_emubd_prog,
+                const void *buffer, lfs2_size_t))lfs3_emubd_prog,
         .erase              = (
             int (*)(const struct lfs2_config *c,
-                lfs2_block_t block))lfs_emubd_erase,
+                lfs2_block_t block))lfs3_emubd_erase,
         .sync               = (
             int (*)(const struct lfs2_config *c
-                ))lfs_emubd_sync,
+                ))lfs3_emubd_sync,
         BENCH_CFG
     };
     #endif
 
-    struct lfs_emubd_config bdcfg = {
+    struct lfs3_emubd_config bdcfg = {
         .disk_path          = bench_disk_path,
         .read_sleep         = bench_read_sleep,
         .prog_sleep         = bench_prog_sleep,
@@ -1375,7 +1375,7 @@ void perm_run(
         BENCH_BDCFG
     };
 
-    int err = lfs_emubd_createcfg((struct lfs_config*)&cfg,
+    int err = lfs3_emubd_createcfg((struct lfs3_config*)&cfg,
             bench_disk_path, &bdcfg);
     if (err) {
         fprintf(stderr, "error: could not create block device: %d\n", err);
@@ -1383,19 +1383,19 @@ void perm_run(
     }
 
     // run the bench
-    bench_reset((struct lfs_config*)&cfg);
+    bench_reset((struct lfs3_config*)&cfg);
     printf("running ");
     perm_printid(suite, case_);
     printf("\n");
 
-    case_->run((struct lfs_config*)&cfg);
+    case_->run((struct lfs3_config*)&cfg);
 
     printf("finished ");
     perm_printid(suite, case_);
     printf("\n");
 
     // cleanup
-    err = lfs_emubd_destroy((struct lfs_config*)&cfg);
+    err = lfs3_emubd_destroy((struct lfs3_config*)&cfg);
     if (err) {
         fprintf(stderr, "error: could not destroy block device: %d\n", err);
         exit(-1);
@@ -1942,7 +1942,7 @@ getopt_done: ;
 
                 if (d >= define_count) {
                     // align to power of two to avoid any superlinear growth
-                    size_t ncount = 1 << lfs_npw2(d+1);
+                    size_t ncount = 1 << lfs3_nlog2(d+1);
                     defines = realloc(defines,
                             ncount*sizeof(bench_define_t));
                     memset(defines+define_count, 0,
