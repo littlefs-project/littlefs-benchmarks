@@ -1,0 +1,241 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0,0,104,103" width="104" height="103" style="font: 10px sans-serif; background-color: #00000000; user-select: auto;"><g id="c-lfs3_mtree_traverse" class="tile code" transform="translate(1,1)" ><rect width="22" height="32" opacity="0"></rect><title>lfs3_mtree_traverse
+code 728
+stack 568
+ctx 366</title><rect id="c-tile-0" fill="#9c8cbf" width="21" height="31"></rect></g><g id="c-lfs3_mtree_namelookup" class="tile code" transform="translate(23,1)" ><rect width="13" height="32" opacity="0"></rect><title>lfs3_mtree_namelookup
+code 436
+stack 496
+ctx 259</title><rect id="c-tile-1" fill="#9c8cbf" width="12" height="31"></rect></g><g id="c-lfs3_mtree_pathlookup" class="tile code" transform="translate(36,1)" ><rect width="19" height="22" opacity="0"></rect><title>lfs3_mtree_pathlookup
+code 432
+stack 600
+ctx 247</title><rect id="c-tile-2" fill="#9c8cbf" width="18" height="21"></rect></g><g id="c-lfs3_mtree_lookup" class="tile code" transform="translate(36,23)" ><rect width="19" height="10" opacity="0"></rect><title>lfs3_mtree_lookup
+code 188
+stack 488
+ctx 228</title><rect id="c-tile-3" fill="#9c8cbf" width="18" height="9"></rect></g><g id="c-lfs3_file_opencfg" class="tile code" transform="translate(1,33)" ><rect width="27" height="20" opacity="0"></rect><title>lfs3_file_opencfg
+code 544
+stack 696
+ctx 385</title><rect id="c-tile-4" fill="#6aac79" width="26" height="19"></rect></g><g id="c-lfs3_file_read_" class="tile code" transform="translate(1,53)" ><rect width="27" height="11" opacity="0"></rect><title>lfs3_file_read_
+code 316
+stack 536
+ctx 349</title><rect id="c-tile-5" fill="#6aac79" width="26" height="10"></rect></g><g id="c-lfs3_file_traverse_" class="tile code" transform="translate(28,33)" ><rect width="15" height="19" opacity="0"></rect><title>lfs3_file_traverse_
+code 288
+stack 392
+ctx 346</title><rect id="c-tile-6" fill="#6aac79" width="14" height="18"></rect></g><g id="c-lfs3_file_read" class="tile code" transform="translate(43,33)" ><rect width="12" height="19" opacity="0"></rect><title>lfs3_file_read
+code 238
+stack 576
+ctx 344</title><rect id="c-tile-7" fill="#6aac79" width="11" height="18"></rect></g><g id="c-lfs3_file_ck" class="tile code" transform="translate(28,52)" ><rect width="7" height="12" opacity="0"></rect><title>lfs3_file_ck
+code 80
+stack 480
+ctx 340</title><rect id="c-tile-8" fill="#6aac79" width="6" height="11"></rect></g><g id="c-lfs3_file_seek" class="tile code" transform="translate(35,52)" ><rect width="7" height="6" opacity="0"></rect><title>lfs3_file_seek
+code 48
+stack 24
+ctx 341</title><rect id="c-tile-9" fill="#6aac79" width="6" height="5"></rect></g><g id="c-lfs3_file_close_" class="tile code" transform="translate(35,58)" ><rect width="7" height="6" opacity="0"></rect><title>lfs3_file_close_
+code 40
+stack 28
+ctx 336</title><rect id="c-tile-10" fill="#6aac79" width="6" height="5"></rect></g><g id="c-lfs3_file_size_" class="tile code" transform="translate(42,52)" ><rect width="4" height="7" opacity="0"></rect><title>lfs3_file_size_
+code 32
+stack 8
+ctx 144</title><rect id="c-tile-11" fill="#6aac79" width="3" height="6"></rect></g><g id="c-lfs3_file_close" class="tile code" transform="translate(46,52)" ><rect width="3" height="7" opacity="0"></rect><title>lfs3_file_close
+code 22
+stack 44
+ctx 336</title><rect id="c-tile-12" fill="#6aac79" width="2" height="6"></rect></g><g id="c-lfs3_file_sync" class="tile code" transform="translate(42,59)" ><rect width="4" height="5" opacity="0"></rect><title>lfs3_file_sync
+code 20
+stack 0
+ctx 336</title><rect id="c-tile-13" fill="#6aac79" width="3" height="4"></rect></g><g id="c-lfs3_file_defaults" class="tile code" transform="translate(46,59)" ><rect width="3" height="5" opacity="0"></rect><title>lfs3_file_defaults
+code 16
+stack 0
+ctx 0</title><rect id="c-tile-14" fill="#6aac79" width="2" height="4"></rect></g><g id="c-lfs3_file_open" class="tile code" transform="translate(49,52)" ><rect width="6" height="2" opacity="0"></rect><title>lfs3_file_open
+code 16
+stack 712
+ctx 345</title><rect id="c-tile-15" fill="#6aac79" width="5" height="1"></rect></g><g id="c-lfs3_file_resync" class="tile code" transform="translate(49,54)" ><rect width="4" height="5" opacity="0"></rect><title>lfs3_file_resync
+code 16
+stack 0
+ctx 336</title><rect id="c-tile-16" fill="#6aac79" width="3" height="4"></rect></g><g id="c-lfs3_file_size" class="tile code" transform="translate(53,54)" ><rect width="2" height="5" opacity="0"></rect><title>lfs3_file_size
+code 10
+stack 16
+ctx 336</title><rect id="c-tile-17" fill="#6aac79" width="1" height="4"></rect></g><g id="c-lfs3_file_ckdata" class="tile code" transform="translate(49,59)" ><rect width="3" height="2" opacity="0"></rect><title>lfs3_file_ckdata
+code 8
+stack 488
+ctx 336</title><rect id="c-tile-18" fill="#6aac79" width="2" height="1"></rect></g><g id="c-lfs3_file_ckmeta" class="tile code" transform="translate(49,61)" ><rect width="3" height="3" opacity="0"></rect><title>lfs3_file_ckmeta
+code 8
+stack 488
+ctx 336</title><rect id="c-tile-19" fill="#6aac79" width="2" height="2"></rect></g><g id="c-lfs3_file_rewind" class="tile code" transform="translate(52,59)" ><rect width="2" height="3" opacity="0"></rect><title>lfs3_file_rewind
+code 6
+stack 0
+ctx 336</title><rect id="c-tile-20" fill="#6aac79" width="1" height="2"></rect></g><g id="c-lfs3_file_flush" class="tile code" transform="translate(52,62)" ><rect width="2" height="2" opacity="0"></rect><title>lfs3_file_flush
+code 4
+stack 0
+ctx 336</title><rect id="c-tile-22" fill="#6aac79" width="1" height="1"></rect></g><g id="c-lfs3_mount" class="tile code" transform="translate(1,64)" ><rect width="28" height="39" opacity="0"></rect><title>lfs3_mount
+code 1124
+stack 808
+ctx 232</title><rect id="c-tile-24" fill="#8bb5b4" width="27" height="38"></rect></g><g id="c-lfs3_mdir_fetch" class="tile code" transform="translate(29,64)" ><rect width="26" height="26" opacity="0"></rect><title>lfs3_mdir_fetch
+code 680
+stack 288
+ctx 236</title><rect id="c-tile-25" fill="#bfbe7a" width="25" height="25"></rect></g><g id="c-lfs3_mdir_lookupnext" class="tile code" transform="translate(29,90)" ><rect width="12" height="13" opacity="0"></rect><title>lfs3_mdir_lookupnext
+code 148
+stack 312
+ctx 248</title><rect id="c-tile-26" fill="#bfbe7a" width="11" height="12"></rect></g><g id="c-lfs3_mdir_lookup" class="tile code" transform="translate(41,90)" ><rect width="8" height="13" opacity="0"></rect><title>lfs3_mdir_lookup
+code 104
+stack 344
+ctx 248</title><rect id="c-tile-27" fill="#bfbe7a" width="7" height="12"></rect></g><g id="c-lfs3_mdir_nametag" class="tile code" transform="translate(49,90)" ><rect width="6" height="13" opacity="0"></rect><title>lfs3_mdir_nametag
+code 78
+stack 20
+ctx 230</title><rect id="c-tile-28" fill="#bfbe7a" width="5" height="12"></rect></g><g id="c-lfs3_bd_read" class="tile code" transform="translate(55,1)" ><rect width="17" height="17" opacity="0"></rect><title>lfs3_bd_read
+code 304
+stack 64
+ctx 212</title><rect id="c-tile-29" fill="#9b9b9b" width="16" height="16"></rect></g><g id="c-lfs3_bd_readtag" class="tile code" transform="translate(72,1)" ><rect width="16" height="17" opacity="0"></rect><title>lfs3_bd_readtag
+code 278
+stack 152
+ctx 234</title><rect id="c-tile-30" fill="#9b9b9b" width="15" height="16"></rect></g><g id="c-lfs3_bd_readnext" class="tile code" transform="translate(88,1)" ><rect width="16" height="10" opacity="0"></rect><title>lfs3_bd_readnext
+code 162
+stack 64
+ctx 225</title><rect id="c-tile-31" fill="#9b9b9b" width="15" height="9"></rect></g><g id="c-lfs3_bd_cksum" class="tile code" transform="translate(88,11)" ><rect width="14" height="7" opacity="0"></rect><title>lfs3_bd_cksum
+code 112
+stack 136
+ctx 216</title><rect id="c-tile-32" fill="#9b9b9b" width="13" height="6"></rect></g><g id="c-lfs3_bd_read__" class="tile code" transform="translate(102,11)" ><rect width="2" height="7" opacity="0"></rect><title>lfs3_bd_read__
+code 12
+stack 16
+ctx 208</title><rect id="c-tile-33" fill="#9b9b9b" width="1" height="6"></rect></g><g id="c-lfs3_rbyd_lookupnext" class="tile code" transform="translate(55,18)" ><rect width="25" height="16" opacity="0"></rect><title>lfs3_rbyd_lookupnext
+code 396
+stack 248
+ctx 260</title><rect id="c-tile-34" fill="#bf7774" width="24" height="15"></rect></g><g id="c-lfs3_rbyd_namelookup" class="tile code" transform="translate(55,34)" ><rect width="18" height="18" opacity="0"></rect><title>lfs3_rbyd_namelookup
+code 332
+stack 376
+ctx 267</title><rect id="c-tile-35" fill="#bf7774" width="17" height="17"></rect></g><g id="c-lfs3_rbyd_lookup" class="tile code" transform="translate(73,34)" ><rect width="7" height="18" opacity="0"></rect><title>lfs3_rbyd_lookup
+code 126
+stack 304
+ctx 244</title><rect id="c-tile-36" fill="#bf7774" width="6" height="17"></rect></g><g id="c-lfs3_data_cmp" class="tile code" transform="translate(80,18)" ><rect width="11" height="17" opacity="0"></rect><title>lfs3_data_cmp
+code 178
+stack 152
+ctx 212</title><rect id="c-tile-37" fill="#6aac79" width="10" height="16"></rect></g><g id="c-lfs3_data_readleb128" class="tile code" transform="translate(91,18)" ><rect width="13" height="10" opacity="0"></rect><title>lfs3_data_readleb128
+code 128
+stack 136
+ctx 216</title><rect id="c-tile-38" fill="#6aac79" width="12" height="9"></rect></g><g id="c-lfs3_data_readbptr" class="tile code" transform="translate(91,28)" ><rect width="13" height="7" opacity="0"></rect><title>lfs3_data_readbptr
+code 90
+stack 160
+ctx 232</title><rect id="c-tile-39" fill="#6aac79" width="12" height="6"></rect></g><g id="c-lfs3_data_read" class="tile code" transform="translate(80,35)" ><rect width="13" height="7" opacity="0"></rect><title>lfs3_data_read
+code 88
+stack 88
+ctx 216</title><rect id="c-tile-40" fill="#6aac79" width="12" height="6"></rect></g><g id="c-lfs3_data_readle32" class="tile code" transform="translate(80,42)" ><rect width="7" height="10" opacity="0"></rect><title>lfs3_data_readle32
+code 68
+stack 104
+ctx 216</title><rect id="c-tile-41" fill="#6aac79" width="6" height="9"></rect></g><g id="c-lfs3_data_fetchbtree" class="tile code" transform="translate(87,42)" ><rect width="6" height="10" opacity="0"></rect><title>lfs3_data_fetchbtree
+code 64
+stack 184
+ctx 232</title><rect id="c-tile-42" fill="#6aac79" width="5" height="9"></rect></g><g id="c-lfs3_data_fetchmdir" class="tile code" transform="translate(93,35)" ><rect width="6" height="10" opacity="0"></rect><title>lfs3_data_fetchmdir
+code 54
+stack 320
+ctx 244</title><rect id="c-tile-43" fill="#6aac79" width="5" height="9"></rect></g><g id="c-lfs3_data_readbranch" class="tile code" transform="translate(99,35)" ><rect width="5" height="10" opacity="0"></rect><title>lfs3_data_readbranch
+code 50
+stack 160
+ctx 236</title><rect id="c-tile-44" fill="#6aac79" width="4" height="9"></rect></g><g id="c-lfs3_data_readshrub" class="tile code" transform="translate(93,45)" ><rect width="7" height="7" opacity="0"></rect><title>lfs3_data_readshrub
+code 48
+stack 160
+ctx 264</title><rect id="c-tile-45" fill="#6aac79" width="6" height="6"></rect></g><g id="c-lfs3_data_readlleb128" class="tile code" transform="translate(100,45)" ><rect width="4" height="7" opacity="0"></rect><title>lfs3_data_readlleb128
+code 26
+stack 144
+ctx 216</title><rect id="c-tile-46" fill="#6aac79" width="3" height="6"></rect></g><g id="c-lfs3_dir_read" class="tile code" transform="translate(55,52)" ><rect width="12" height="25" opacity="0"></rect><title>lfs3_dir_read
+code 298
+stack 560
+ctx 508</title><rect id="c-tile-47" fill="#bfbe7a" width="11" height="24"></rect></g><g id="c-lfs3_dir_open" class="tile code" transform="translate(67,52)" ><rect width="14" height="12" opacity="0"></rect><title>lfs3_dir_open
+code 172
+stack 680
+ctx 245</title><rect id="c-tile-48" fill="#bfbe7a" width="13" height="11"></rect></g><g id="c-lfs3_dir_seek" class="tile code" transform="translate(67,64)" ><rect width="10" height="13" opacity="0"></rect><title>lfs3_dir_seek
+code 132
+stack 552
+ctx 244</title><rect id="c-tile-49" fill="#bfbe7a" width="9" height="12"></rect></g><g id="c-lfs3_dir_rewind_" class="tile code" transform="translate(77,64)" ><rect width="4" height="9" opacity="0"></rect><title>lfs3_dir_rewind_
+code 44
+stack 512
+ctx 240</title><rect id="c-tile-50" fill="#bfbe7a" width="3" height="8"></rect></g><g id="c-lfs3_dir_close" class="tile code" transform="translate(77,73)" ><rect width="2" height="4" opacity="0"></rect><title>lfs3_dir_close
+code 10
+stack 8
+ctx 240</title><rect id="c-tile-51" fill="#bfbe7a" width="1" height="3"></rect></g><g id="c-lfs3_dir_rewind" class="tile code" transform="translate(79,73)" ><rect width="2" height="3" opacity="0"></rect><title>lfs3_dir_rewind
+code 8
+stack 520
+ctx 240</title><rect id="c-tile-52" fill="#bfbe7a" width="1" height="2"></rect></g><g id="c-lfs3_traversal_read" class="tile code" transform="translate(81,52)" ><rect width="13" height="14" opacity="0"></rect><title>lfs3_traversal_read
+code 174
+stack 632
+ctx 348</title><rect id="c-tile-54" fill="#bfbe7a" width="12" height="13"></rect></g><g id="c-lfs3_traversal_open" class="tile code" transform="translate(94,52)" ><rect width="10" height="5" opacity="0"></rect><title>lfs3_traversal_open
+code 50
+stack 16
+ctx 340</title><rect id="c-tile-55" fill="#bfbe7a" width="9" height="4"></rect></g><g id="c-lfs3_traversal_init" class="tile code" transform="translate(94,57)" ><rect width="5" height="9" opacity="0"></rect><title>lfs3_traversal_init
+code 46
+stack 0
+ctx 148</title><rect id="c-tile-56" fill="#bfbe7a" width="4" height="8"></rect></g><g id="c-lfs3_traversal_rewind" class="tile code" transform="translate(99,57)" ><rect width="5" height="7" opacity="0"></rect><title>lfs3_traversal_rewind
+code 32
+stack 8
+ctx 336</title><rect id="c-tile-57" fill="#bfbe7a" width="4" height="6"></rect></g><g id="c-lfs3_traversal_close" class="tile code" transform="translate(99,64)" ><rect width="5" height="2" opacity="0"></rect><title>lfs3_traversal_close
+code 10
+stack 8
+ctx 336</title><rect id="c-tile-58" fill="#bfbe7a" width="4" height="1"></rect></g><g id="c-lfs3_fs_usage" class="tile code" transform="translate(81,66)" ><rect width="9" height="11" opacity="0"></rect><title>lfs3_fs_usage
+code 100
+stack 720
+ctx 192</title><rect id="c-tile-59" fill="#a68c74" width="8" height="10"></rect></g><g id="c-lfs3_fs_ck" class="tile code" transform="translate(90,66)" ><rect width="6" height="11" opacity="0"></rect><title>lfs3_fs_ck
+code 68
+stack 704
+ctx 196</title><rect id="c-tile-60" fill="#a68c74" width="5" height="10"></rect></g><g id="c-lfs3_fs_stat" class="tile code" transform="translate(96,66)" ><rect width="8" height="5" opacity="0"></rect><title>lfs3_fs_stat
+code 36
+stack 0
+ctx 216</title><rect id="c-tile-61" fill="#a68c74" width="7" height="4"></rect></g><g id="c-lfs3_fs_ckdata" class="tile code" transform="translate(96,71)" ><rect width="5" height="3" opacity="0"></rect><title>lfs3_fs_ckdata
+code 16
+stack 712
+ctx 192</title><rect id="c-tile-62" fill="#a68c74" width="4" height="2"></rect></g><g id="c-lfs3_fs_ckmeta" class="tile code" transform="translate(96,74)" ><rect width="5" height="3" opacity="0"></rect><title>lfs3_fs_ckmeta
+code 16
+stack 712
+ctx 192</title><rect id="c-tile-63" fill="#a68c74" width="4" height="2"></rect></g><g id="c-lfs3_fs_unck" class="tile code" transform="translate(101,71)" ><rect width="3" height="4" opacity="0"></rect><title>lfs3_fs_unck
+code 10
+stack 0
+ctx 196</title><rect id="c-tile-64" fill="#a68c74" width="2" height="3"></rect></g><g id="c-lfs3_fs_cksum" class="tile code" transform="translate(101,75)" ><rect width="3" height="2" opacity="0"></rect><title>lfs3_fs_cksum
+code 8
+stack 0
+ctx 200</title><rect id="c-tile-65" fill="#a68c74" width="2" height="1"></rect></g><g id="c-lfs3_btree_lookupleaf" class="tile code" transform="translate(55,77)" ><rect width="24" height="11" opacity="0"></rect><title>lfs3_btree_lookupleaf
+code 240
+stack 408
+ctx 290</title><rect id="c-tile-66" fill="#7997b7" width="23" height="10"></rect></g><g id="c-lfs3_crc32c_mul" class="tile code" transform="translate(55,88)" ><rect width="14" height="6" opacity="0"></rect><title>lfs3_crc32c_mul
+code 84
+stack 20
+ctx 8</title><rect id="c-tile-67" fill="#bfbe7a" width="13" height="5"></rect></g><g id="c-lfs3_crc32c_table" class="tile code" transform="translate(55,94)" ><rect width="7" height="9" opacity="0"></rect><title>lfs3_crc32c_table
+code 64
+stack 0
+ctx 0</title><rect id="c-tile-68" fill="#bfbe7a" width="6" height="8"></rect></g><g id="c-lfs3_crc32c" class="tile code" transform="translate(62,94)" ><rect width="7" height="9" opacity="0"></rect><title>lfs3_crc32c
+code 56
+stack 16
+ctx 12</title><rect id="c-tile-69" fill="#bfbe7a" width="6" height="8"></rect></g><g id="c-lfs3_stat" class="tile code" transform="translate(69,88)" ><rect width="10" height="15" opacity="0"></rect><title>lfs3_stat
+code 152
+stack 696
+ctx 465</title><rect id="c-tile-70" fill="#a68c74" width="9" height="14"></rect></g><g id="c-lfs3_stat_" class="tile code" transform="translate(79,77)" ><rect width="10" height="14" opacity="0"></rect><title>lfs3_stat_
+code 140
+stack 400
+ctx 506</title><rect id="c-tile-71" fill="#bb84ab" width="9" height="13"></rect></g><g id="c-lfs3_lookupattr" class="tile code" transform="translate(89,77)" ><rect width="10" height="14" opacity="0"></rect><title>lfs3_lookupattr
+code 136
+stack 648
+ctx 246</title><rect id="c-tile-72" fill="#9b9b9b" width="9" height="13"></rect></g><g id="c-lfs3_getattr" class="tile code" transform="translate(99,77)" ><rect width="5" height="14" opacity="0"></rect><title>lfs3_getattr
+code 68
+stack 720
+ctx 206</title><rect id="c-tile-73" fill="#bb84ab" width="4" height="13"></rect></g><g id="c-lfs3_fromleb128" class="tile code" transform="translate(79,91)" ><rect width="11" height="6" opacity="0"></rect><title>lfs3_fromleb128
+code 64
+stack 32
+ctx 16</title><rect id="c-tile-74" fill="#9c8cbf" width="10" height="5"></rect></g><g id="c-lfs3_omdir_ismidopen" class="tile code" transform="translate(79,97)" ><rect width="6" height="6" opacity="0"></rect><title>lfs3_omdir_ismidopen
+code 36
+stack 12
+ctx 200</title><rect id="c-tile-75" fill="#6aac79" width="5" height="5"></rect></g><g id="c-lfs3_omdir_close" class="tile code" transform="translate(85,97)" ><rect width="5" height="6" opacity="0"></rect><title>lfs3_omdir_close
+code 26
+stack 0
+ctx 232</title><rect id="c-tile-76" fill="#6aac79" width="4" height="5"></rect></g><g id="c-lfs3_sizeattr" class="tile code" transform="translate(90,91)" ><rect width="8" height="7" opacity="0"></rect><title>lfs3_sizeattr
+code 60
+stack 712
+ctx 198</title><rect id="c-tile-77" fill="#9c8cbf" width="7" height="6"></rect></g><g id="c-lfs3_toleb128" class="tile code" transform="translate(90,98)" ><rect width="8" height="5" opacity="0"></rect><title>lfs3_toleb128
+code 36
+stack 16
+ctx 12</title><rect id="c-tile-78" fill="#9b9b9b" width="7" height="4"></rect></g><g id="c-lfs3_fromle32" class="tile code" transform="translate(98,91)" ><rect width="6" height="4" opacity="0"></rect><title>lfs3_fromle32
+code 22
+stack 0
+ctx 4</title><rect id="c-tile-79" fill="#bf7774" width="5" height="3"></rect></g><g id="c-lfs3_deinit" class="tile code" transform="translate(98,95)" ><rect width="6" height="3" opacity="0"></rect><title>lfs3_deinit
+code 20
+stack 8
+ctx 192</title><rect id="c-tile-80" fill="#7997b7" width="5" height="2"></rect></g><g id="c-lfs3_mrid" class="tile code" transform="translate(98,98)" ><rect width="4" height="5" opacity="0"></rect><title>lfs3_mrid
+code 16
+stack 0
+ctx 196</title><rect id="c-tile-81" fill="#7997b7" width="3" height="4"></rect></g><g id="c-lfs3_unmount" class="tile code" transform="translate(102,98)" ><rect width="2" height="5" opacity="0"></rect><title>lfs3_unmount
+code 8
+stack 16
+ctx 192</title><rect id="c-tile-82" fill="#8bb5b4" width="1" height="4"></rect></g></svg>
