@@ -314,7 +314,7 @@ $(BUILDDIR)/thumb/%.o $(BUILDDIR)/thumb/%.ci: $(BUILDDIR)/thumb/%.c
 	$(strip $(CODEMAP_CC) -c -MMD $(CFLAGS) $(CODEMAP_CFLAGS) $< \
 		-o $(BUILDDIR)/thumb/$*.o)
 
-# other interesting codemap builds
+# rdonly codemap builds
 $(BUILDDIR)/thumb/%.rdonly.o $(BUILDDIR)/thumb/%.rdonly.ci: \
 		%.c
 	$(strip $(CODEMAP_CC) -c -MMD $(CFLAGS) \
@@ -328,6 +328,87 @@ $(BUILDDIR)/thumb/%.rdonly.o $(BUILDDIR)/thumb/%.rdonly.ci: \
 		-DLFS3_RDONLY -DLFS2_READONLY \
 		$(CODEMAP_CFLAGS) $< \
 		-o $(BUILDDIR)/thumb/$*.rdonly.o)
+
+# other interesting codemap builds
+$(BUILDDIR)/thumb/%.kvonly.o $(BUILDDIR)/thumb/%.kvonly.ci: \
+		%.c
+	$(strip $(CODEMAP_CC) -c -MMD $(CFLAGS) \
+		-DLFS3_KVONLY \
+		$(CODEMAP_CFLAGS) $< \
+		-o $(BUILDDIR)/thumb/$*.kvonly.o)
+$(BUILDDIR)/thumb/%.kvonly.o $(BUILDDIR)/thumb/%.kvonly.ci: \
+		$(BUILDDIR)/thumb/%.c
+	$(strip $(CODEMAP_CC) -c -MMD $(CFLAGS) \
+		-DLFS3_KVONLY \
+		$(CODEMAP_CFLAGS) $< \
+		-o $(BUILDDIR)/thumb/$*.kvonly.o)
+
+$(BUILDDIR)/thumb/%.kvonly.rdonly.o $(BUILDDIR)/thumb/%.kvonly.rdonly.ci: \
+		%.c
+	$(strip $(CODEMAP_CC) -c -MMD $(CFLAGS) \
+		-DLFS3_KVONLY -DLFS3_RDONLY \
+		$(CODEMAP_CFLAGS) $< \
+		-o $(BUILDDIR)/thumb/$*.kvonly.rdonly.o)
+$(BUILDDIR)/thumb/%.kvonly.rdonly.o $(BUILDDIR)/thumb/%.kvonly.rdonly.ci: \
+		$(BUILDDIR)/thumb/%.c
+	$(strip $(CODEMAP_CC) -c -MMD $(CFLAGS) \
+		-DLFS3_KVONLY -DLFS3_RDONLY \
+		$(CODEMAP_CFLAGS) $< \
+		-o $(BUILDDIR)/thumb/$*.kvonly.rdonly.o)
+
+$(BUILDDIR)/thumb/%.2bonly.o $(BUILDDIR)/thumb/%.2bonly.ci: \
+		%.c
+	$(strip $(CODEMAP_CC) -c -MMD $(CFLAGS) \
+		-DLFS3_2BONLY \
+		$(CODEMAP_CFLAGS) $< \
+		-o $(BUILDDIR)/thumb/$*.2bonly.o)
+$(BUILDDIR)/thumb/%.2bonly.o $(BUILDDIR)/thumb/%.2bonly.ci: \
+		$(BUILDDIR)/thumb/%.c
+	$(strip $(CODEMAP_CC) -c -MMD $(CFLAGS) \
+		-DLFS3_2BONLY \
+		$(CODEMAP_CFLAGS) $< \
+		-o $(BUILDDIR)/thumb/$*.2bonly.o)
+
+$(BUILDDIR)/thumb/%.2bonly.rdonly.o $(BUILDDIR)/thumb/%.2bonly.rdonly.ci: \
+		%.c
+	$(strip $(CODEMAP_CC) -c -MMD $(CFLAGS) \
+		-DLFS3_2BONLY -DLFS3_RDONLY \
+		$(CODEMAP_CFLAGS) $< \
+		-o $(BUILDDIR)/thumb/$*.2bonly.rdonly.o)
+$(BUILDDIR)/thumb/%.2bonly.rdonly.o $(BUILDDIR)/thumb/%.2bonly.rdonly.ci: \
+		$(BUILDDIR)/thumb/%.c
+	$(strip $(CODEMAP_CC) -c -MMD $(CFLAGS) \
+		-DLFS3_2BONLY -DLFS3_RDONLY \
+		$(CODEMAP_CFLAGS) $< \
+		-o $(BUILDDIR)/thumb/$*.2bonly.rdonly.o)
+
+$(BUILDDIR)/thumb/%.2bonly.kvonly.o $(BUILDDIR)/thumb/%.2bonly.kvonly.ci: \
+		%.c
+	$(strip $(CODEMAP_CC) -c -MMD $(CFLAGS) \
+		-DLFS3_2BONLY -DLFS3_KVONLY \
+		$(CODEMAP_CFLAGS) $< \
+		-o $(BUILDDIR)/thumb/$*.2bonly.kvonly.o)
+$(BUILDDIR)/thumb/%.2bonly.kvonly.o $(BUILDDIR)/thumb/%.2bonly.kvonly.ci: \
+		$(BUILDDIR)/thumb/%.c
+	$(strip $(CODEMAP_CC) -c -MMD $(CFLAGS) \
+		-DLFS3_2BONLY -DLFS3_KVONLY \
+		$(CODEMAP_CFLAGS) $< \
+		-o $(BUILDDIR)/thumb/$*.2bonly.kvonly.o)
+
+$(BUILDDIR)/thumb/%.2bonly.kvonly.rdonly.o \
+			$(BUILDDIR)/thumb/%.2bonly.kvonly.rdonly.ci: \
+		%.c
+	$(strip $(CODEMAP_CC) -c -MMD $(CFLAGS) \
+		-DLFS3_2BONLY -DLFS3_KVONLY -DLFS3_RDONLY \
+		$(CODEMAP_CFLAGS) $< \
+		-o $(BUILDDIR)/thumb/$*.2bonly.kvonly.rdonly.o)
+$(BUILDDIR)/thumb/%.2bonly.kvonly.rdonly.o \
+			$(BUILDDIR)/thumb/%.2bonly.kvonly.rdonly.ci: \
+		$(BUILDDIR)/thumb/%.c
+	$(strip $(CODEMAP_CC) -c -MMD $(CFLAGS) \
+		-DLFS3_2BONLY -DLFS3_KVONLY -DLFS3_RDONLY \
+		$(CODEMAP_CFLAGS) $< \
+		-o $(BUILDDIR)/thumb/$*.2bonly.kvonly.rdonly.o)
 
 # .lfs3 files need -DLFS3=1
 $(BUILDDIR)/%.lfs3.b.a.o $(BUILDDIR)/%.lfs3.b.a.ci: %.lfs3.b.a.c
@@ -850,7 +931,8 @@ endif
 .PHONY: codemap
 codemap codemap-all: \
 		codemap-default \
-		codemap-rdonly
+		codemap-rdonly \
+		codemap-more
 
 ## Generate codemaps for the default build
 .PHONY: codemap-default
@@ -869,6 +951,26 @@ codemap-rdonly: \
 		$(CODEMAPSDIR)/codemap_lfs2_rdonly_tiny.svg \
 		$(CODEMAPSDIR)/codemap_lfs3_rdonly.svg \
 		$(CODEMAPSDIR)/codemap_lfs2_rdonly.svg
+
+## Generate more codemaps
+.PHONY: codemap-more
+codemap-more: \
+		$(CODEMAPSDIR)/codemap_lfs3_tiny.svg \
+		$(CODEMAPSDIR)/codemap_lfs3_rdonly_tiny.svg \
+		$(CODEMAPSDIR)/codemap_lfs3_kvonly_tiny.svg \
+		$(CODEMAPSDIR)/codemap_lfs3_kvonly_rdonly_tiny.svg \
+		$(CODEMAPSDIR)/codemap_lfs3_2bonly_tiny.svg \
+		$(CODEMAPSDIR)/codemap_lfs3_2bonly_rdonly_tiny.svg \
+		$(CODEMAPSDIR)/codemap_lfs3_2bonly_kvonly_tiny.svg \
+		$(CODEMAPSDIR)/codemap_lfs3_2bonly_kvonly_rdonly_tiny.svg \
+		$(CODEMAPSDIR)/codemap_lfs3.svg \
+		$(CODEMAPSDIR)/codemap_lfs3_rdonly.svg \
+		$(CODEMAPSDIR)/codemap_lfs3_kvonly.svg \
+		$(CODEMAPSDIR)/codemap_lfs3_kvonly_rdonly.svg \
+		$(CODEMAPSDIR)/codemap_lfs3_2bonly.svg \
+		$(CODEMAPSDIR)/codemap_lfs3_2bonly_rdonly.svg \
+		$(CODEMAPSDIR)/codemap_lfs3_2bonly_kvonly.svg \
+		$(CODEMAPSDIR)/codemap_lfs3_2bonly_kvonly_rdonly.svg
 
 
 # codemap rules!
@@ -904,7 +1006,7 @@ $(foreach V_, lfs3/LFS3 lfs2/LFS2 lfs1/LFS1, \
 		$$(CODEMAP_$(word 2,$(subst /, ,$(V_)))_CI), \
 	$(eval $(CODEMAP_RULES))))))
 
-# default codemaps
+# rdonly codemaps
 #
 # parameterize based on lfs3/lfs2/lfs1
 $(foreach V_, lfs3/LFS3 lfs2/LFS2 lfs1/LFS1, \
@@ -914,6 +1016,24 @@ $(foreach V_, lfs3/LFS3 lfs2/LFS2 lfs1/LFS1, \
 	$(foreach V_CI, \
 		$$(CODEMAP_$(word 2,$(subst /, ,$(V_)))_CI:.ci=.rdonly.ci), \
 	$(eval $(CODEMAP_RULES))))))
+
+# other codemaps
+$(foreach M_, \
+		kvonly \
+		kvonly-rdonly \
+		2bonly \
+		2bonly-rdonly \
+		2bonly-kvonly \
+		2bonly-kvonly-rdonly, \
+	$(foreach V_, lfs3/LFS3, \
+		$(foreach V, $(word 1,$(subst /, ,$(V_)))-$(M_), \
+		$(foreach V_OBJ, \
+			$$(CODEMAP_$(word 2,$(subst /, ,$(V_)))_OBJ:.o=.$(subst \
+				-,.,$(M_)).o), \
+		$(foreach V_CI, \
+			$$(CODEMAP_$(word 2,$(subst /, ,$(V_)))_CI:.ci=.$(subst \
+				-,.,$(M_)).ci), \
+		$(eval $(CODEMAP_RULES)))))))
 
 
 

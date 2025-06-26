@@ -201,11 +201,16 @@ size: $(OBJ)
 	$(SIZE) -t $^
 
 ## Generate a ctags file
+#
+# run twice to only include prototypes in header files
 .PHONY: tags ctags
 tags ctags:
 	$(strip $(CTAGS) \
 		--totals --fields=+n --c-types=+p \
-		$(shell find -H -name '*.h') $(SRC))
+		$(shell find -H -name '*.h'))
+	$(strip $(CTAGS) \
+		--totals --append --fields=+n \
+		$(SRC))
 
 ## Show this help text
 .PHONY: help
@@ -457,7 +462,7 @@ summary-diff sizes-diff: $(OBJ) $(CI)
 
 ## Generate a codemap svg
 .PHONY: codemap
-codemap: CODEMAPFLAGS+=-W1400 -H750 --dark
+codemap: CODEMAPFLAGS+=-W1125 -H525 --dark
 codemap: $(BUILDDIR)/lfs3.codemap.svg
 
 ## Generate a tiny codemap, where 1 pixel ~= 1 byte

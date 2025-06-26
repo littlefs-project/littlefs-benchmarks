@@ -139,6 +139,7 @@ enum lfs3_type {
 #define LFS3_O_CKDATA   0x00002000  // Check metadata + data checksums
 
 // internally used flags, don't use these
+#define LFS3_o_WRSET             3  // Open a file as an atomic write
 #define LFS3_o_TYPE     0xf0000000  // The file's type
 #define LFS3_o_ZOMBIE   0x08000000  // File has been removed
 #define LFS3_o_UNCREAT  0x02000000  // File does not exist yet
@@ -619,17 +620,21 @@ struct lfs3_file_config {
 
     // Size of the file cache in bytes. In addition to filesystem-wide
     // read/prog caches, each file gets its own cache to reduce disk
-    // accesses. Defaults to file_cache_size.
+    // accesses. Defaults to file_cache_size if cache_buffer is NULL.
     lfs3_size_t cache_size;
 
     // Optional list of custom attributes attached to the file. If readable,
     // these attributes will be kept up to date with the attributes on-disk.
     // If writeable, these attributes will be written to disk atomically on
     // every file sync or close.
+    #ifndef LFS3_KVONLY
     struct lfs3_attr *attrs;
+    #endif
 
     // Number of custom attributes in the list
+    #ifndef LFS3_KVONLY
     lfs3_size_t attr_count;
+    #endif
 };
 
 
@@ -667,7 +672,7 @@ typedef struct lfs3_bptr {
     // sign2(size)=0b10 => on-disk data
     // sign2(size)=0b11 => block pointer
     lfs3_data_t data;
-    #ifndef LFS3_CKDATACKSUMREADS
+    #if !defined(LFS3_2BONLY) && !defined(LFS3_CKDATACKSUMREADS)
     // sign(cksize)=0 => block not erased
     // sign(cksize)=1 => block erased
     lfs3_size_t cksize;
@@ -733,7 +738,9 @@ typedef struct lfs3_file {
     const struct lfs3_file_config *cfg;
 
     // current file position
+    #ifndef LFS3_KVONLY
     lfs3_off_t pos;
+    #endif
 
     // in-RAM cache
     //
@@ -741,15 +748,19 @@ typedef struct lfs3_file {
     struct {
         lfs3_off_t size;
         uint8_t *buffer;
+        #ifndef LFS3_KVONLY
         lfs3_off_t pos;
+        #endif
     } cache;
 
     // on-disk leaf bptr
+    #ifndef LFS3_KVONLY
     struct {
         lfs3_off_t pos;
         lfs3_off_t weight;
         lfs3_bptr_t bptr;
     } leaf;
+    #endif
 } lfs3_file_t;
 
 // littlefs directory type
@@ -823,7 +834,9 @@ typedef struct lfs3 {
     lfs3_omdir_t *omdirs;
 
     lfs3_mdir_t mroot;
+    #ifndef LFS3_2BONLY
     lfs3_btree_t mtree;
+    #endif
 
     struct lfs3_rcache {
         lfs3_block_t block;
@@ -849,7 +862,7 @@ typedef struct lfs3 {
     } ptail;
     #endif
 
-    #ifndef LFS3_RDONLY
+    #if !defined(LFS3_RDONLY) && !defined(LFS3_2BONLY)
     struct lfs3_lookahead {
         lfs3_block_t window;
         lfs3_block_t off;
@@ -916,6 +929,27 @@ int lfs3_unmount(lfs3_t *lfs3);
 
 /// General operations ///
 
+// Get the value of a file
+//
+// Returns the number of bytes read, or a negative error code on failure.
+// Note this may be less than the on-disk file size if the buffer is not
+// large enough.
+lfs3_ssize_t lfs3_get(lfs3_t *lfs3, const char *path,
+        void *buffer, lfs3_size_t size);
+
+// Get a file's size
+//
+// Returns the size of the file, or a negative error code on failure.
+lfs3_ssize_t lfs3_size(lfs3_t *lfs3, const char *path);
+
+// Set the value of a file
+//
+// Returns a negative error code on failure.
+#ifndef LFS3_RDONLY
+int lfs3_set(lfs3_t *lfs3, const char *path,
+        const void *buffer, lfs3_size_t size);
+#endif
+
 // Removes a file or directory
 //
 // If removing a directory, the directory must be empty.
@@ -977,7 +1011,7 @@ int lfs3_removeattr(lfs3_t *lfs3, const char *path, uint8_t type);
 // are values from the enum lfs3_open_flags that are bitwise-ored together.
 //
 // Returns a negative error code on failure.
-#ifndef LFS3_NO_MALLOC
+#if !defined(LFS3_KVONLY) && !defined(LFS3_NO_MALLOC)
 int lfs3_file_open(lfs3_t *lfs3, lfs3_file_t *file,
         const char *path, uint32_t flags);
 #endif
@@ -992,9 +1026,11 @@ int lfs3_file_open(lfs3_t *lfs3, lfs3_file_t *file,
 // the config struct must be zeroed for defaults and backwards compatibility.
 //
 // Returns a negative error code on failure.
+#ifndef LFS3_KVONLY
 int lfs3_file_opencfg(lfs3_t *lfs3, lfs3_file_t *file,
         const char *path, uint32_t flags,
         const struct lfs3_file_config *cfg);
+#endif
 
 // Close a file
 //
@@ -1007,7 +1043,9 @@ int lfs3_file_opencfg(lfs3_t *lfs3, lfs3_file_t *file,
 // return 0.
 //
 // Returns a negative error code on failure.
+#ifndef LFS3_KVONLY
 int lfs3_file_close(lfs3_t *lfs3, lfs3_file_t *file);
+#endif
 
 // Synchronize a file on storage
 //
@@ -1017,7 +1055,9 @@ int lfs3_file_close(lfs3_t *lfs3, lfs3_file_t *file);
 // now recieve file updates and syncs on close.
 //
 // Returns a negative error code on failure.
+#ifndef LFS3_KVONLY
 int lfs3_file_sync(lfs3_t *lfs3, lfs3_file_t *file);
+#endif
 
 // Flush any buffered data
 //
@@ -1026,7 +1066,9 @@ int lfs3_file_sync(lfs3_t *lfs3, lfs3_file_t *file);
 // read operations.
 //
 // Returns a negative error code on failure.
+#ifndef LFS3_KVONLY
 int lfs3_file_flush(lfs3_t *lfs3, lfs3_file_t *file);
+#endif
 
 // Mark a file as desynchronized
 //
@@ -1041,7 +1083,9 @@ int lfs3_file_flush(lfs3_t *lfs3, lfs3_file_t *file);
 // lfs3_file_resync reverses this, marking the file as synchronized again.
 //
 // Returns a negative error code on failure.
+#ifndef LFS3_KVONLY
 int lfs3_file_desync(lfs3_t *lfs3, lfs3_file_t *file);
+#endif
 
 // Discard unsynchronized changes and mark a file as synchronized
 //
@@ -1049,14 +1093,18 @@ int lfs3_file_desync(lfs3_t *lfs3, lfs3_file_t *file);
 // may read from disk to figure out file state.
 //
 // Returns a negative error code on failure.
+#ifndef LFS3_KVONLY
 int lfs3_file_resync(lfs3_t *lfs3, lfs3_file_t *file);
+#endif
 
 // Read data from file
 //
 // Takes a buffer and size indicating where to store the read data.
 // Returns the number of bytes read, or a negative error code on failure.
+#ifndef LFS3_KVONLY
 lfs3_ssize_t lfs3_file_read(lfs3_t *lfs3, lfs3_file_t *file,
         void *buffer, lfs3_size_t size);
+#endif
 
 // Write data to file
 //
@@ -1064,7 +1112,7 @@ lfs3_ssize_t lfs3_file_read(lfs3_t *lfs3, lfs3_file_t *file,
 // actually be updated on the storage until either sync or close is called.
 //
 // Returns the number of bytes written, or a negative error code on failure.
-#ifndef LFS3_RDONLY
+#if !defined(LFS3_RDONLY) && !defined(LFS3_KVONLY)
 lfs3_ssize_t lfs3_file_write(lfs3_t *lfs3, lfs3_file_t *file,
         const void *buffer, lfs3_size_t size);
 #endif
@@ -1073,8 +1121,10 @@ lfs3_ssize_t lfs3_file_write(lfs3_t *lfs3, lfs3_file_t *file,
 //
 // The change in position is determined by the offset and whence flag.
 // Returns the new position of the file, or a negative error code on failure.
+#ifndef LFS3_KVONLY
 lfs3_soff_t lfs3_file_seek(lfs3_t *lfs3, lfs3_file_t *file,
         lfs3_soff_t off, uint8_t whence);
+#endif
 
 // Truncate/grow the size of the file to the specified size
 //
@@ -1082,7 +1132,7 @@ lfs3_soff_t lfs3_file_seek(lfs3_t *lfs3, lfs3_file_t *file,
 // as if the file was filled with zeros.
 //
 // Returns a negative error code on failure.
-#ifndef LFS3_RDONLY
+#if !defined(LFS3_RDONLY) && !defined(LFS3_KVONLY)
 int lfs3_file_truncate(lfs3_t *lfs3, lfs3_file_t *file, lfs3_off_t size);
 #endif
 
@@ -1092,7 +1142,7 @@ int lfs3_file_truncate(lfs3_t *lfs3, lfs3_file_t *file, lfs3_off_t size);
 // as if the file was filled with zeros.
 //
 // Returns a negative error code on failure.
-#ifndef LFS3_RDONLY
+#if !defined(LFS3_RDONLY) && !defined(LFS3_KVONLY)
 int lfs3_file_fruncate(lfs3_t *lfs3, lfs3_file_t *file, lfs3_off_t size);
 #endif
 
@@ -1100,31 +1150,41 @@ int lfs3_file_fruncate(lfs3_t *lfs3, lfs3_file_t *file, lfs3_off_t size);
 //
 // Equivalent to lfs3_file_seek(lfs3, file, 0, LFS3_SEEK_CUR)
 // Returns the position of the file, or a negative error code on failure.
+#ifndef LFS3_KVONLY
 lfs3_soff_t lfs3_file_tell(lfs3_t *lfs3, lfs3_file_t *file);
+#endif
 
 // Change the position of the file to the beginning of the file
 //
 // Equivalent to lfs3_file_seek(lfs3, file, 0, LFS3_SEEK_SET)
 // Returns a negative error code on failure.
+#ifndef LFS3_KVONLY
 int lfs3_file_rewind(lfs3_t *lfs3, lfs3_file_t *file);
+#endif
 
 // Return the size of the file
 //
 // Similar to lfs3_file_seek(lfs3, file, 0, LFS3_SEEK_END)
 // Returns the size of the file, or a negative error code on failure.
+#ifndef LFS3_KVONLY
 lfs3_soff_t lfs3_file_size(lfs3_t *lfs3, lfs3_file_t *file);
+#endif
 
 // Check a file for metadata errors
 //
 // Returns LFS3_ERR_CORRUPT if a checksum mismatch is found, or a negative
 // error code on failure.
+#ifndef LFS3_KVONLY
 int lfs3_file_ckmeta(lfs3_t *lfs3, lfs3_file_t *file);
+#endif
 
 // Check a file for metadata + data errors
 //
 // Returns LFS3_ERR_CORRUPT if a checksum mismatch is found, or a negative
 // error code on failure.
+#ifndef LFS3_KVONLY
 int lfs3_file_ckdata(lfs3_t *lfs3, lfs3_file_t *file);
+#endif
 
 
 /// Directory operations ///
@@ -1296,7 +1356,7 @@ int lfs3_fs_unck(lfs3_t *lfs3, uint32_t flags);
 // Note: This is irreversible.
 //
 // Returns a negative error code on failure.
-#ifndef LFS3_RDONLY
+#if !defined(LFS3_RDONLY) && !defined(LFS3_2BONLY)
 int lfs3_fs_grow(lfs3_t *lfs3, lfs3_size_t block_count);
 #endif
 
