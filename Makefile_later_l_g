@@ -31,7 +31,6 @@ else
 SIM_TIME ?= 60000000000 # 1 minute
 endif
 
-# include all filesystems and some variants
 # focus littlefs3/2, but explore some different configurations
 BENCH_FSS ?= lfs3 lfs3nb lfs3f lfs3nf lfs2
 # use our fancy bus+buffer sim
@@ -51,7 +50,7 @@ C_lfs3f = \#c44e52bf # red
 else
 C_lfs3f = \#c44e52bf # red
 endif
-F_lfs3f = H # hexagon
+F_lfs3f = h # hexagon
 BENCH_LFS3F_RUNNER ?= $(BENCH_LFS3_RUNNER)
 BENCH_LFS3F_FILTER ?= $(BENCH_LFS3_FILTER)
 

@@ -1,9 +1,9 @@
 # overrideable results dir
-RESULTSDIR ?= results_later_n
+RESULTSDIR ?= results_later_l_n
 # overrideable plots dir
-PLOTSDIR ?= plots_later_n
+PLOTSDIR ?= plots_later_l_n
 # overrideable tikz dir
-TIKZDIR ?= tikz_later_n
+TIKZDIR ?= tikz_later_l_n
 
 
 # give us more space for activities
@@ -28,8 +28,8 @@ else
 SIM_TIME ?= 60000000000 # 1 minute
 endif
 
-# include all filesystems and some variants
-BENCH_FSS ?= lfs3 lfs2 spiffs yaffs2
+# focus littlefs3/2, but explore some different configurations
+BENCH_FSS ?= lfs3 lfs3nb lfs3f lfs3nf lfs2
 # use our fancy bus+buffer sim
 BENCH_SIMS ?= nor nand
 #BENCH_SIMPLE ?= 1
@@ -38,26 +38,52 @@ BENCH_SIMS ?= nor nand
 #DEBUG ?= 1
 
 
+# extra configuration
+U_lfs3f = LFS3F
+N_lfs3f = 31
+I_lfs3f = 6
+ifdef LIGHT
+C_lfs3f = \#c44e52bf # red
+else
+C_lfs3f = \#c44e52bf # red
+endif
+F_lfs3f = h # hexagon
+BENCH_LFS3F_RUNNER ?= $(BENCH_LFS3_RUNNER)
+BENCH_LFS3F_FILTER ?= $(BENCH_LFS3_FILTER)
+
+U_lfs3nf = LFS3F
+N_lfs3nf = 32
+I_lfs3nf = 7
+ifdef LIGHT
+C_lfs3nf = \#937860bf # brown
+else
+C_lfs3nf = \#debb9bbf # brown
+endif
+F_lfs3nf = p # pentagon
+BENCH_LFS3NF_RUNNER ?= $(BENCH_LFS3_RUNNER)
+BENCH_LFS3NF_FILTER ?= $(BENCH_LFS3_FILTER)
+
+
 # use our bench rules
 BENCH_RULES ?= \
-	bench-p26-later-n-wt
+	bench-p26-later-l-n-wt
 # use our plot rules
 PLOT_RULES ?= \
-	plot-p26-later-n-wt
+	plot-p26-later-l-n-wt
 # use our tikz rules
 TIKZ_RULES ?= \
-	tikz-p26-later-n-wt
+	tikz-p26-later-l-n-wt
 
 # default Makefile does most of the work
 include Makefile
 
 
 ## Run target size wt benchmarks
-.PHONY: bench-p26-later-n-wt
-bench-p26-later-n-wt: \
+.PHONY: bench-p26-later-l-n-wt
+bench-p26-later-l-n-wt: \
 		$(foreach fs, $(BENCH_FSS), \
 			$(foreach sim, $(BENCH_SIMS), \
-				$(RESULTSDIR)/bench_p26_later_n_wt.$(fs).$(sim).csv))
+				$(RESULTSDIR)/bench_p26_later_l_n_wt.$(fs).$(sim).csv))
 
 # $1 - target
 # $2 - fs type/version
@@ -68,6 +94,8 @@ $1: $(BENCH_$(U_$2)_RUNNER)
 	$$(strip ./scripts/bench.py -R$$< -B bench_p26_wt \
 		$(BENCHFLAGS) \
 		-DFS=$(N_$2) \
+		$(if $(filter lfs3f,$2),-DCRYSTAL_THRESH=-1) \
+		$(if $(filter lfs3nf,$2),-DNO_FRUNCATE=1) \
 		-DDISK_SIZE=$(DISK_SIZE) \
 		-DDISK_GEOMETRY=$(N_$3) \
 		$(if $(BENCH_SIMPLE),-DDISK_SIM=1) \
@@ -81,19 +109,19 @@ endef
 $(foreach fs,$(BENCH_FSS),$\
 	$(foreach sim,$(BENCH_SIMS),$\
 		$(eval $(call BENCH_P26_LATER_BS_WT_RULE,$\
-			$(RESULTSDIR)/bench_p26_later_n_wt.$(fs).$(sim).csv,$\
+			$(RESULTSDIR)/bench_p26_later_l_n_wt.$(fs).$(sim).csv,$\
 			$(fs),$\
 			$(sim)))))
 
 
 ## Plot target size wt benchmarks
-.PHONY: plot-p26-later-n-wt
-plot-p26-later-n-wt: \
+.PHONY: plot-p26-later-l-n-wt
+plot-p26-later-l-n-wt: \
 		$(foreach sim, $(BENCH_SIMS), \
-			$(PLOTSDIR)/bench_p26_later_n_wt.$(sim).svg)
+			$(PLOTSDIR)/bench_p26_later_l_n_wt.$(sim).svg)
 
-$(PLOTSDIR)/bench_p26_later_n_wt.%.csv: \
-		$(RESULTSDIR)/bench_p26_later_n_wt.%.csv
+$(PLOTSDIR)/bench_p26_later_l_n_wt.%.csv: \
+		$(RESULTSDIR)/bench_p26_later_l_n_wt.%.csv
 	$(strip ./scripts/csv.py \
 		<(./scripts/csv.py $^ \
 			-Dprobe=write \
@@ -109,9 +137,9 @@ $(PLOTSDIR)/bench_p26_later_n_wt.%.csv: \
 		-bFS -bDISK_GEOMETRY -bcase -bSIZE \
 		-o$@)
 
-$(PLOTSDIR)/bench_p26_later_n_wt.%.svg: \
+$(PLOTSDIR)/bench_p26_later_l_n_wt.%.svg: \
 		$(foreach fs, $(BENCH_FSS), \
-			$(PLOTSDIR)/bench_p26_later_n_wt.$(fs).%.csv)
+			$(PLOTSDIR)/bench_p26_later_l_n_wt.$(fs).%.csv)
 	$(strip ./scripts/plotmpl.py $^ \
 		-W1150 -H350 $(filter,-W1500 -H350) \
 		--wpad=2 --hpad=0.5 \
@@ -127,35 +155,17 @@ $(PLOTSDIR)/bench_p26_later_n_wt.%.svg: \
 					-Dcase=bench_p26_wt_linear \
 					-ybench_ram \
 					--y2 --yunits=B \
-					-H0.3333333\" \
-				--subplot-below=\" \
-					-Dcase=bench_p26_wt_linear \
-					-UFS=5 \
-					-ybench_ram \
-					--y2 --yunits=B \
-					-H0.25\"" \
+					-H0.5\"" \
 		--subplot-right=" \
 					-Dcase=bench_p26_wt_random \
 					-ybench_throughput \
 					--y2 --yunits=B/s \
 					--title=random \
-				--subplot-below=\" \
-					-Dcase=bench_p26_wt_random \
-					-UFS=5 \
-					-ybench_throughput \
-					--y2 --yunits=B/s \
-					-H0.5\" \
 			--subplot-below=\" \
 					-Dcase=bench_p26_wt_random \
 					-ybench_ram \
 					--y2 --yunits=B \
-					-H0.3333333\" \
-				--subplot-below=\" \
-					-Dcase=bench_p26_wt_random \
-					-UFS=5 \
-					-ybench_ram \
-					--y2 --yunits=B \
-					-H0.25\"" \
+					-H0.5\"" \
 		--subplot-right=" \
 					-Dcase=bench_p26_wt_logging \
 					-ybench_throughput \
@@ -165,36 +175,17 @@ $(PLOTSDIR)/bench_p26_later_n_wt.%.svg: \
 					-Dcase=bench_p26_wt_logging \
 					-ybench_ram \
 					--y2 --yunits=B \
-					-H0.3333333\" \
-				--subplot-below=\" \
-					-Dcase=bench_p26_wt_logging \
-					-UFS=5 \
-					-ybench_ram \
-					--y2 --yunits=B \
-					-H0.25\"" \
+					-H0.5\"" \
 		--subplot-right=" \
 					-Dcase=bench_p26_wt_many \
 					-ybench_throughput \
 					--y2 --yunits=B/s \
 					--title=many \
-				$(if $(filter nand,$*), \
-					--subplot-below=\" \
-						-Dcase=bench_p26_wt_many \
-						-UFS=5 \
-						-ybench_throughput \
-						--y2 --yunits=B/s \
-						-H0.5\") \
 			--subplot-below=\" \
 					-Dcase=bench_p26_wt_many \
 					-ybench_ram \
 					--y2 --yunits=B \
-					-H0.3333333\" \
-				--subplot-below=\" \
-					-Dcase=bench_p26_wt_many \
-					-UFS=5 \
-					-ybench_ram \
-					--y2 --yunits=B \
-					-H0.25\"" \
+					-H0.5\"" \
 		--legend \
 		$(foreach fs, $(BENCH_FSS),$\
     		-L'$(N_$(fs)),bench_throughput=$(fs)' \
