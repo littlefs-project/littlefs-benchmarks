@@ -1,9 +1,9 @@
 # overrideable results dir
-RESULTSDIR ?= results_later_g
+RESULTSDIR ?= results_later_l_g
 # overrideable plots dir
-PLOTSDIR ?= plots_later_g
+PLOTSDIR ?= plots_later_l_g
 # overrideable tikz dir
-TIKZDIR ?= tikz_later_g
+TIKZDIR ?= tikz_later_l_g
 
 
 # give us more space for activities
@@ -70,25 +70,25 @@ BENCH_LFS3NF_FILTER ?= $(BENCH_LFS3_FILTER)
 
 # use our bench rules
 BENCH_RULES ?= \
-	bench-p26-later-g-wt
+	bench-p26-later-l-g-wt
 # use our plot rules
 PLOT_RULES ?= \
-	plot-p26-later-g-wt
+	plot-p26-later-l-g-wt
 # use our tikz rules
 TIKZ_RULES ?= \
-	tikz-p26-later-g-wt
+	tikz-p26-later-l-g-wt
 
 # default Makefile does most of the work
 include Makefile
 
 
 ## Run geometry wt benchmarks
-.PHONY: bench-p26-later-g-wt
-bench-p26-later-g-wt: \
+.PHONY: bench-p26-later-l-g-wt
+bench-p26-later-l-g-wt: \
 		$(foreach fs, $(BENCH_FSS), \
 			$(foreach sim, $(BENCH_SIMS), \
 				$(foreach g, rs ps bs, \
-					$(RESULTSDIR)/bench_p26_later_g_wt.$(fs).$(sim).$(g).csv)))
+					$(RESULTSDIR)/bench_p26_later_l_g_wt.$(fs).$(sim).$(g).csv)))
 
 # $1 - target
 # $2 - fs type/version
@@ -115,7 +115,7 @@ endef
 $(foreach fs,$(BENCH_FSS),$\
 	$(foreach sim,$(BENCH_SIMS),$\
 		$(eval $(call BENCH_P26_LATER_G_WT_RULE,$\
-			$(RESULTSDIR)/bench_p26_later_g_wt.$(fs).$(sim).rs.csv,$\
+			$(RESULTSDIR)/bench_p26_later_l_g_wt.$(fs).$(sim).rs.csv,$\
 			$(fs),$\
 			$(sim),$\
 			-DREAD_SIZE=$(BENCH_READ_SIZES)))))
@@ -123,7 +123,7 @@ $(foreach fs,$(BENCH_FSS),$\
 $(foreach fs,$(BENCH_FSS),$\
 	$(foreach sim,$(BENCH_SIMS),$\
 		$(eval $(call BENCH_P26_LATER_G_WT_RULE,$\
-			$(RESULTSDIR)/bench_p26_later_g_wt.$(fs).$(sim).ps.csv,$\
+			$(RESULTSDIR)/bench_p26_later_l_g_wt.$(fs).$(sim).ps.csv,$\
 			$(fs),$\
 			$(sim),$\
 			-DPROG_SIZE=$(BENCH_PROG_SIZES)))))
@@ -131,24 +131,25 @@ $(foreach fs,$(BENCH_FSS),$\
 $(foreach fs,$(BENCH_FSS),$\
 	$(foreach sim,$(BENCH_SIMS),$\
 		$(eval $(call BENCH_P26_LATER_G_WT_RULE,$\
-			$(RESULTSDIR)/bench_p26_later_g_wt.$(fs).$(sim).bs.csv,$\
+			$(RESULTSDIR)/bench_p26_later_l_g_wt.$(fs).$(sim).bs.csv,$\
 			$(fs),$\
 			$(sim),$\
 			-DBLOCK_SIZE=$(BENCH_BLOCK_SIZES)))))
 
 
 ## Plot geometry wt benchmarks
-.PHONY: plot-p26-later-g-wt
-plot-p26-later-g-wt: \
+.PHONY: plot-p26-later-l-g-wt
+plot-p26-later-l-g-wt: \
 		$(foreach sim, $(BENCH_SIMS), \
-			$(PLOTSDIR)/bench_p26_later_g_wt.$(sim).svg)
+			$(PLOTSDIR)/bench_p26_later_l_g_wt.$(sim).svg)
 
-$(PLOTSDIR)/bench_p26_later_g_wt.%.csv: \
+$(PLOTSDIR)/bench_p26_later_l_g_wt.%.csv: \
 		$(foreach g, rs ps bs, \
-			$(RESULTSDIR)/bench_p26_later_g_wt.%.$(g).csv)
+			$(RESULTSDIR)/bench_p26_later_l_g_wt.%.$(g).csv)
 	$(strip ./scripts/csv.py \
 		$(foreach g, rs ps bs, \
-			<(./scripts/csv.py $(RESULTSDIR)/bench_p26_later_g_wt.$*.$(g).csv \
+			<(./scripts/csv.py \
+				$(RESULTSDIR)/bench_p26_later_l_g_wt.$*.$(g).csv \
 				-Dprobe=write \
 				-bFS -bDISK_GEOMETRY -bcase -bg=$(g) \
 				-bREAD_SIZE -bPROG_SIZE -bBLOCK_SIZE \
@@ -159,9 +160,9 @@ $(PLOTSDIR)/bench_p26_later_g_wt.%.csv: \
 		-bREAD_SIZE -bPROG_SIZE -bBLOCK_SIZE \
 		-o$@)
 
-$(PLOTSDIR)/bench_p26_later_g_wt.%.svg: \
+$(PLOTSDIR)/bench_p26_later_l_g_wt.%.svg: \
 		$(foreach fs, $(BENCH_FSS), \
-			$(PLOTSDIR)/bench_p26_later_g_wt.$(fs).%.csv)
+			$(PLOTSDIR)/bench_p26_later_l_g_wt.$(fs).%.csv)
 	$(strip ./scripts/plotmpl.py $^ \
 		-W1150 -H475 $(filter, -W1150 -H350 $(filter,-W1500 -H350)) \
 		--wpad=2 --hpad=2 \

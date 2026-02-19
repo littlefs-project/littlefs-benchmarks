@@ -1,0 +1,206 @@
+# overrideable results dir
+RESULTSDIR ?= results_later_n
+# overrideable plots dir
+PLOTSDIR ?= plots_later_n
+# overrideable tikz dir
+TIKZDIR ?= tikz_later_n
+
+
+# give us more space for activities
+DISK_SIZE ?= 134217728 # 128 MiB
+
+# how big a chunk to write?
+BENCH_CHUNK ?= 64
+
+# target sizes to benchmark
+#
+# be careful with n<=~512, if n fits in a cache, the bench may never
+# terminate!
+BENCH_SIZES ?= $\
+	1024,2048,4096,8192,16384,32768,65536,131072,262144,524288,$\
+	1048576,2097152,4194304,8388608,16777216,33554432
+
+# how long to simulate
+ifdef PRECISE
+SIM_TIME ?= 3600000000000 # 1 hour
+else
+#SIM_TIME ?= 600000000000 # 10 minutes
+SIM_TIME ?= 60000000000 # 1 minute
+endif
+
+# include all filesystems and some variants
+BENCH_FSS ?= lfs3 lfs2 spiffs yaffs2
+# use our fancy bus+buffer sim
+BENCH_SIMS ?= nor nand
+#BENCH_SIMPLE ?= 1
+
+# enable debug to make sure benches work, otherwise asserts are disabled
+#DEBUG ?= 1
+
+
+# use our bench rules
+BENCH_RULES ?= \
+	bench-p26-later-n-wt
+# use our plot rules
+PLOT_RULES ?= \
+	plot-p26-later-n-wt
+# use our tikz rules
+TIKZ_RULES ?= \
+	tikz-p26-later-n-wt
+
+# default Makefile does most of the work
+include Makefile
+
+
+## Run target size wt benchmarks
+.PHONY: bench-p26-later-n-wt
+bench-p26-later-n-wt: \
+		$(foreach fs, $(BENCH_FSS), \
+			$(foreach sim, $(BENCH_SIMS), \
+				$(RESULTSDIR)/bench_p26_later_n_wt.$(fs).$(sim).csv))
+
+# $1 - target
+# $2 - fs type/version
+# $3 - sim type
+# $4 - target sizes
+define BENCH_P26_LATER_BS_WT_RULE
+$1: $(BENCH_$(U_$2)_RUNNER)
+	$$(strip ./scripts/bench.py -R$$< -B bench_p26_wt \
+		$(BENCHFLAGS) \
+		-DFS=$(N_$2) \
+		-DDISK_SIZE=$(DISK_SIZE) \
+		-DDISK_GEOMETRY=$(N_$3) \
+		$(if $(BENCH_SIMPLE),-DDISK_SIM=1) \
+		$(if $(SKIP_WARMUP),-DSKIP_WARMUP=$(SKIP_WARMUP)) \
+		-DSIZE="$(or $4,$(BENCH_SIZES))" \
+		-DCHUNK=$(BENCH_CHUNK) \
+		-DSIM_TIME=$(SIM_TIME) \
+		-o$$@)
+endef
+
+$(foreach fs,$(BENCH_FSS),$\
+	$(foreach sim,$(BENCH_SIMS),$\
+		$(eval $(call BENCH_P26_LATER_BS_WT_RULE,$\
+			$(RESULTSDIR)/bench_p26_later_n_wt.$(fs).$(sim).csv,$\
+			$(fs),$\
+			$(sim)))))
+
+
+## Plot target size wt benchmarks
+.PHONY: plot-p26-later-n-wt
+plot-p26-later-n-wt: \
+		$(foreach sim, $(BENCH_SIMS), \
+			$(PLOTSDIR)/bench_p26_later_n_wt.$(sim).svg)
+
+$(PLOTSDIR)/bench_p26_later_n_wt.%.csv: \
+		$(RESULTSDIR)/bench_p26_later_n_wt.%.csv
+	$(strip ./scripts/csv.py \
+		<(./scripts/csv.py $^ \
+			-Dprobe=write \
+			-bFS -bDISK_GEOMETRY -bcase -bSIZE \
+			-fbench_throughput=' \
+				float(n) / max(float(bench_simtime)/1.0e9, 1.0e-9)' \
+			-o-) \
+		<(./scripts/csv.py $^ \
+			-Dprobe=stack,heap \
+			-bFS -bDISK_GEOMETRY -bcase -bSIZE \
+			-fbench_ram='sum(bench_simtime)' \
+			-o-) \
+		-bFS -bDISK_GEOMETRY -bcase -bSIZE \
+		-o$@)
+
+$(PLOTSDIR)/bench_p26_later_n_wt.%.svg: \
+		$(foreach fs, $(BENCH_FSS), \
+			$(PLOTSDIR)/bench_p26_later_n_wt.$(fs).%.csv)
+	$(strip ./scripts/plotmpl.py $^ \
+		-W1150 -H350 $(filter,-W1500 -H350) \
+		--wpad=2 --hpad=0.5 \
+		--title='simulated write throughput - $* - target size' \
+		-bFS \
+		-xSIZE \
+		--subplot=" \
+			-Dcase=bench_p26_wt_linear \
+			-ybench_throughput \
+			--y2 --yunits=B/s \
+			--title=sequential \
+			--ylabel=throughput \
+			--subplot-below=\" \
+				-Dcase=bench_p26_wt_linear \
+				-ybench_ram \
+				--y2 --yunits=B \
+				--ylabel='ram%x20' \
+				-H0.5\"" \
+		--subplot-right=" \
+			-Dcase=bench_p26_wt_random \
+			-ybench_throughput \
+			--y2 --yunits=B/s \
+			--title=random \
+			$(if $(filter nor nand,$*), \
+				--subplot-below=\" \
+					-Dcase=bench_p26_wt_random \
+					-UFS=5 \
+					-ybench_throughput \
+					--y2 --yunits=B/s \
+					-H0.5\") \
+			--subplot-below=\" \
+				-Dcase=bench_p26_wt_random \
+				-ybench_ram \
+				--y2 --yunits=B \
+				-H0.3333333\" \
+			$(if $(filter nor nand,$*), \
+				--subplot-below=\" \
+					-Dcase=bench_p26_wt_random \
+					-UFS=5 \
+					-ybench_ram \
+					--y2 --yunits=B \
+					-H0.25\")" \
+		--subplot-right=" \
+			-Dcase=bench_p26_wt_logging \
+			-ybench_throughput \
+			--y2 --yunits=B/s \
+			--title=logging \
+			--subplot-below=\" \
+				-Dcase=bench_p26_wt_logging \
+				-ybench_ram \
+				--y2 --yunits=B \
+				-H0.5\"" \
+		--subplot-right=" \
+			-Dcase=bench_p26_wt_many \
+			-ybench_throughput \
+			--y2 --yunits=B/s \
+			--title=many \
+			$(if $(filter nand,$*), \
+				--subplot-below=\" \
+					-Dcase=bench_p26_wt_many \
+					-UFS=5 \
+					-ybench_throughput \
+					--y2 --yunits=B/s \
+					-H0.5\") \
+			--subplot-below=\" \
+				-Dcase=bench_p26_wt_many \
+				-ybench_ram \
+				--y2 --yunits=B \
+				-H0.5\"" \
+		--legend \
+		$(foreach fs, $(BENCH_FSS),$\
+    		-L'$(N_$(fs)),bench_throughput=$(fs)' \
+    		-L'$(N_$(fs)),bench_ram=') \
+		$(foreach fs, $(BENCH_FSS),$\
+		    -C'$(N_$(fs))=$(C_$(fs))') \
+		$(foreach fs, $(BENCH_FSS),$\
+		    -F'$(N_$(fs))=$(addsuffix -,$(F_$(fs)))') \
+		--xlog \
+		-X"$(shell python -c $\
+				'a=min([$(BENCH_SIZES)]); print(a-a/4)'),$\
+		    $(shell python -c $\
+				'b=max([$(BENCH_SIZES)]); print(b+b/4)')" \
+		--x2 --xunits=B \
+		--xticks=0 \
+		$(shell python -c '$\
+			for n in [$(BENCH_SIZES)][::4]: $\
+				print("--add-xticklabel=%d=\"%%(x)IB\"" % n)') \
+		--xlabel='target size' \
+		$(PLOTFLAGS) \
+		-o$@)
+
+
