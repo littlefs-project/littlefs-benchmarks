@@ -441,8 +441,8 @@ code = '''
         // many files, just log this error and mark the test as bad for now
         assert(!err || err == LFS2_ERR_NOENT);
         if (err) {
-            LFS3_ERROR("lfs2 close failure? %d", err);
-            return;
+            LFS3_ERROR("lfs2 open failure? %d", err);
+            continue;
         }
         #elif defined(SPIFFS)
         spiffs_file fd = SPIFFS_open(&spiffs, name,
@@ -480,7 +480,7 @@ code = '''
         assert(!err || err == LFS2_ERR_NOENT);
         if (err) {
             LFS3_ERROR("lfs2 close failure? %d", err);
-            return;
+            continue;
         }
         #elif defined(SPIFFS)
         SPIFFS_close(&spiffs, fd) => 0;
