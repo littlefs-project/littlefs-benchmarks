@@ -119,68 +119,82 @@ $(PLOTSDIR)/bench_p26_later_n_wt.%.svg: \
 		-bFS \
 		-xSIZE \
 		--subplot=" \
-			-Dcase=bench_p26_wt_linear \
-			-ybench_throughput \
-			--y2 --yunits=B/s \
-			--title=sequential \
-			--ylabel=throughput \
+					-Dcase=bench_p26_wt_linear \
+					-ybench_throughput \
+					--y2 --yunits=B/s \
+					--title=sequential \
 			--subplot-below=\" \
-				-Dcase=bench_p26_wt_linear \
-				-ybench_ram \
-				--y2 --yunits=B \
-				--ylabel='ram%x20' \
-				-H0.5\"" \
+					-Dcase=bench_p26_wt_linear \
+					-ybench_ram \
+					--y2 --yunits=B \
+					-H0.3333333\" \
+				--subplot-below=\" \
+					-Dcase=bench_p26_wt_linear \
+					-UFS=5 \
+					-ybench_ram \
+					--y2 --yunits=B \
+					-H0.25\"" \
 		--subplot-right=" \
-			-Dcase=bench_p26_wt_random \
-			-ybench_throughput \
-			--y2 --yunits=B/s \
-			--title=random \
-			$(if $(filter nor nand,$*), \
+					-Dcase=bench_p26_wt_random \
+					-ybench_throughput \
+					--y2 --yunits=B/s \
+					--title=random \
 				--subplot-below=\" \
 					-Dcase=bench_p26_wt_random \
 					-UFS=5 \
 					-ybench_throughput \
 					--y2 --yunits=B/s \
-					-H0.5\") \
+					-H0.5\" \
 			--subplot-below=\" \
-				-Dcase=bench_p26_wt_random \
-				-ybench_ram \
-				--y2 --yunits=B \
-				-H0.3333333\" \
-			$(if $(filter nor nand,$*), \
+					-Dcase=bench_p26_wt_random \
+					-ybench_ram \
+					--y2 --yunits=B \
+					-H0.3333333\" \
 				--subplot-below=\" \
 					-Dcase=bench_p26_wt_random \
 					-UFS=5 \
 					-ybench_ram \
 					--y2 --yunits=B \
-					-H0.25\")" \
+					-H0.25\"" \
 		--subplot-right=" \
-			-Dcase=bench_p26_wt_logging \
-			-ybench_throughput \
-			--y2 --yunits=B/s \
-			--title=logging \
+					-Dcase=bench_p26_wt_logging \
+					-ybench_throughput \
+					--y2 --yunits=B/s \
+					--title=logging \
 			--subplot-below=\" \
-				-Dcase=bench_p26_wt_logging \
-				-ybench_ram \
-				--y2 --yunits=B \
-				-H0.5\"" \
+					-Dcase=bench_p26_wt_logging \
+					-ybench_ram \
+					--y2 --yunits=B \
+					-H0.3333333\" \
+				--subplot-below=\" \
+					-Dcase=bench_p26_wt_logging \
+					-UFS=5 \
+					-ybench_ram \
+					--y2 --yunits=B \
+					-H0.25\"" \
 		--subplot-right=" \
-			-Dcase=bench_p26_wt_many \
-			-ybench_throughput \
-			--y2 --yunits=B/s \
-			--title=many \
-			$(if $(filter nand,$*), \
+					-Dcase=bench_p26_wt_many \
+					-ybench_throughput \
+					--y2 --yunits=B/s \
+					--title=many \
+				$(if $(filter nand,$*), \
+					--subplot-below=\" \
+						-Dcase=bench_p26_wt_many \
+						-UFS=5 \
+						-ybench_throughput \
+						--y2 --yunits=B/s \
+						-H0.5\") \
+			--subplot-below=\" \
+					-Dcase=bench_p26_wt_many \
+					-ybench_ram \
+					--y2 --yunits=B \
+					-H0.3333333\" \
 				--subplot-below=\" \
 					-Dcase=bench_p26_wt_many \
 					-UFS=5 \
-					-ybench_throughput \
-					--y2 --yunits=B/s \
-					-H0.5\") \
-			--subplot-below=\" \
-				-Dcase=bench_p26_wt_many \
-				-ybench_ram \
-				--y2 --yunits=B \
-				-H0.5\"" \
+					-ybench_ram \
+					--y2 --yunits=B \
+					-H0.25\"" \
 		--legend \
 		$(foreach fs, $(BENCH_FSS),$\
     		-L'$(N_$(fs)),bench_throughput=$(fs)' \
@@ -199,6 +213,7 @@ $(PLOTSDIR)/bench_p26_later_n_wt.%.svg: \
 		$(shell python -c '$\
 			for n in [$(BENCH_SIZES)][::4]: $\
 				print("--add-xticklabel=%d=\"%%(x)IB\"" % n)') \
+		--ylabel='%{ram%}^12s%21s%{throughput%}^12s' \
 		--xlabel='target size' \
 		$(PLOTFLAGS) \
 		-o$@)
