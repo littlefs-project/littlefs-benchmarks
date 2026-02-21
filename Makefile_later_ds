@@ -13,8 +13,8 @@ BENCH_SIZE ?= 2097152 # 2 MiB
 BENCH_CHUNK ?= 64
 
 # disk sizes to benchmark
-BENCH_DISK_SIZES ?= 8388608,16777216,33554432,67108864,134217728,$\
-	268435456,536870912,1073741824,2147483648
+BENCH_DISK_SIZES ?= 16777216,33554432,67108864,$\
+	134217728,268435456,536870912,1073741824,2147483648,4294967296
 # you can go bigger, but you will need this to prevent parallel benching
 #DISK_BIG = 1
 
@@ -66,7 +66,17 @@ $1: $(BENCH_$(U_$2)_RUNNER)
 	$$(strip ./scripts/bench.py -R$$< -B bench_p26_wt \
 		$(BENCHFLAGS) \
 		-DFS=$(N_$2) \
-		-DDISK_SIZE="$(or $4,$(BENCH_DISK_SIZES))" \
+		-DDISK_SIZE="$(if $(and $(filter yaffs2,$2), $(filter nor,$3)), \
+				$(subst $(space),$(comma),$(strip \
+					$(filter-out 16777216 33554432, \
+						$(subst $(comma),$(space), \
+							$(or $4,$(BENCH_DISK_SIZES)))))), \
+			$(if $(filter spiffs,$2), \
+				$(subst $(space),$(comma),$(strip \
+					$(filter-out 4294967296, \
+						$(subst $(comma),$(space), \
+							$(or $4,$(BENCH_DISK_SIZES)))))), \
+				$(or $4,$(BENCH_DISK_SIZES))))" \
 		-DDISK_GEOMETRY=$(N_$3) \
 		$(if $(BENCH_SIMPLE),-DDISK_SIM=1) \
 		$(if $(SKIP_WARMUP),-DSKIP_WARMUP=$(SKIP_WARMUP)) \

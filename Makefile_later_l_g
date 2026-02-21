@@ -133,7 +133,14 @@ $(foreach fs,$(BENCH_FSS),$\
 			$(RESULTSDIR)/bench_p26_later_l_g_wt.$(fs).$(sim).bs.csv,$\
 			$(fs),$\
 			$(sim),$\
-			-DBLOCK_SIZE=$(BENCH_BLOCK_SIZES)))))
+			-DBLOCK_SIZE="$(if $(and \
+					$(filter lfs2,$(fs)), \
+					$(filter nor,$(sim))), \
+				$(subst $(space),$(comma),$(strip \
+					$(filter-out 131072 262144 524288 1048576, \
+						$(subst $(comma),$(space), \
+							$(BENCH_BLOCK_SIZES))))), \
+				$(BENCH_BLOCK_SIZES))"))))
 
 
 ## Plot geometry wt benchmarks

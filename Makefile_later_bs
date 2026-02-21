@@ -16,8 +16,8 @@ BENCH_SIZE ?= 2097152 # 2 MiB
 BENCH_CHUNK ?= 64
 
 # block sizes to benchmark
-BENCH_BLOCK_SIZES ?= 4096,8192,16384,32768,65536,131072,$\
-		262144,524288,1048576
+BENCH_BLOCK_SIZES ?= 4096,8192,16384,32768,65536,$\
+		131072,262144,524288,1048576
 
 # how long to simulate
 ifdef PRECISE
@@ -74,7 +74,12 @@ $1: $(BENCH_$(U_$2)_RUNNER)
 		-DSIZE=$(BENCH_SIZE) \
 		-DCHUNK=$(BENCH_CHUNK) \
 		-DSIM_TIME=$(SIM_TIME) \
-		-DBLOCK_SIZE="$(or $4,$(BENCH_BLOCK_SIZES))" \
+		-DBLOCK_SIZE="$(if $(and $(filter lfs2,$2), $(filter nor,$3)), \
+			$(subst $(space),$(comma),$(strip \
+				$(filter-out 131072 262144 524288 1048576, \
+					$(subst $(comma),$(space), \
+						$(or $4,$(BENCH_BLOCK_SIZES)))))), \
+			$(or $4,$(BENCH_BLOCK_SIZES)))" \
 		-o$$@)
 endef
 

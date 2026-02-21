@@ -72,7 +72,12 @@ $1: $(BENCH_$(U_$2)_RUNNER)
 		-DDISK_GEOMETRY=$(N_$3) \
 		$(if $(BENCH_SIMPLE),-DDISK_SIM=1) \
 		$(if $(SKIP_WARMUP),-DSKIP_WARMUP=$(SKIP_WARMUP)) \
-		-DSIZE="$(or $4,$(BENCH_SIZES))" \
+		-DSIZE="$(if $(and $(filter yaffs2,$2), $(filter nor,$3)), \
+			$(subst $(space),$(comma),$(strip \
+				$(filter-out 8388608 16777216 33554432, \
+					$(subst $(comma),$(space), \
+						$(or $4,$(BENCH_SIZES)))))), \
+			$(or $4,$(BENCH_SIZES)))" \
 		-DCHUNK=$(BENCH_CHUNK) \
 		-DSIM_TIME=$(SIM_TIME) \
 		-o$$@)

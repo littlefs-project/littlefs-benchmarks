@@ -687,6 +687,9 @@ $(foreach fs, $(BENCH_RUNNER_FSS), \
 .PHONY: PHONY
 PHONY: ;
 , := ,
+comma := ,
+nil :=
+space := $(nil) $(nil)
 
 
 # bench runner rule
