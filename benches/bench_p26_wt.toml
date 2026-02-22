@@ -24,9 +24,6 @@ defines.SKIP_WARMUP = false
 # don't fruncate, this is logging specific
 defines.NO_FRUNCATE = 0
 
-# spiffs is limited to 32-bit disks
-if = 'BENCH_IFDEF_SPIFFS(DISK_SIZE < 0x100000000ULL, true)'
-
 
 # include common bench helpers
 code = '''
@@ -442,7 +439,8 @@ code = '''
         assert(!err || err == LFS2_ERR_NOENT);
         if (err) {
             LFS3_ERROR("lfs2 open failure? %d", err);
-            continue;
+            __builtin_trap();
+            return;
         }
         #elif defined(SPIFFS)
         spiffs_file fd = SPIFFS_open(&spiffs, name,
@@ -480,7 +478,8 @@ code = '''
         assert(!err || err == LFS2_ERR_NOENT);
         if (err) {
             LFS3_ERROR("lfs2 close failure? %d", err);
-            continue;
+            __builtin_trap();
+            return;
         }
         #elif defined(SPIFFS)
         SPIFFS_close(&spiffs, fd) => 0;

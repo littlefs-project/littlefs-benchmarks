@@ -37,6 +37,9 @@ BENCH_SIMS ?= nor nand
 # enable debug to make sure benches work, otherwise asserts are disabled
 #DEBUG ?= 1
 
+# keep going with errors
+KEEPGOING ?= 1
+
 
 # extra configuration
 U_lfs3f = LFS3F
@@ -91,7 +94,9 @@ bench-p26-later-l-n-wt: \
 # $4 - target sizes
 define BENCH_P26_LATER_BS_WT_RULE
 $1: $(BENCH_$(U_$2)_RUNNER)
+	$(if $(KEEPGOING),-,) \
 	$$(strip ./scripts/bench.py -R$$< -B bench_p26_wt \
+		$(if $(KEEPGOING),-k,) \
 		$(BENCHFLAGS) \
 		-DFS=$(N_$2) \
 		$(if $(filter lfs3f,$2),-DCRYSTAL_THRESH=-1) \

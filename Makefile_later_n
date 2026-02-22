@@ -37,6 +37,9 @@ BENCH_SIMS ?= nor nand
 # enable debug to make sure benches work, otherwise asserts are disabled
 #DEBUG ?= 1
 
+# keep going with errors
+KEEPGOING ?= 1
+
 
 # use our bench rules
 BENCH_RULES ?= \
@@ -65,19 +68,16 @@ bench-p26-later-n-wt: \
 # $4 - target sizes
 define BENCH_P26_LATER_BS_WT_RULE
 $1: $(BENCH_$(U_$2)_RUNNER)
+	$(if $(KEEPGOING),-,) \
 	$$(strip ./scripts/bench.py -R$$< -B bench_p26_wt \
+		$(if $(KEEPGOING),-k,) \
 		$(BENCHFLAGS) \
 		-DFS=$(N_$2) \
 		-DDISK_SIZE=$(DISK_SIZE) \
 		-DDISK_GEOMETRY=$(N_$3) \
 		$(if $(BENCH_SIMPLE),-DDISK_SIM=1) \
 		$(if $(SKIP_WARMUP),-DSKIP_WARMUP=$(SKIP_WARMUP)) \
-		-DSIZE="$(if $(and $(filter yaffs2,$2), $(filter nor,$3)), \
-			$(subst $(space),$(comma),$(strip \
-				$(filter-out 8388608 16777216 33554432, \
-					$(subst $(comma),$(space), \
-						$(or $4,$(BENCH_SIZES)))))), \
-			$(or $4,$(BENCH_SIZES)))" \
+		-DSIZE="$(or $4,$(BENCH_SIZES))" \
 		-DCHUNK=$(BENCH_CHUNK) \
 		-DSIM_TIME=$(SIM_TIME) \
 		-o$$@)
