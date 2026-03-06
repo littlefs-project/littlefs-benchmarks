@@ -117,66 +117,88 @@ $(PLOTSDIR)/bench_p26_later_ds_wt.%.svg: \
 			$(PLOTSDIR)/bench_p26_later_ds_wt.$(fs).%.csv)
 	$(strip ./scripts/plotmpl.py $^ \
 		-W1150 -H350 $(filter,-W1500 -H350) \
-		--wpad=3 --hpad=2 \
+		--wpad=2 --hpad=0.5 \
 		--title='simulated write throughput - $* - disk size' \
 		-bFS \
 		-xDISK_SIZE \
 		--subplot=" \
-			-Dcase=bench_p26_wt_linear \
-			-ybench_throughput \
-			--y2 --yunits=B/s \
-			--title=sequential \
-			--ylabel=throughput \
+					-Dcase=bench_p26_wt_linear \
+					-ybench_throughput \
+					--y2 --yunits=B/s \
+					--title=sequential \
 			--subplot-below=\" \
-				-Dcase=bench_p26_wt_linear \
-				-ybench_ram \
-				--y2 --yunits=B \
-				--ylabel=ram \
-				-H0.5\"" \
+					-Dcase=bench_p26_wt_linear \
+					-ybench_ram \
+					--y2 --yunits=B \
+					-H0.3333333\" \
+				--subplot-below=\" \
+					-Dcase=bench_p26_wt_linear \
+					-I$(N_yaffs2) \
+					-ybench_ram \
+					--y2 --yunits=B \
+					-H0.25\"" \
 		--subplot-right=" \
-			-Dcase=bench_p26_wt_random \
-			-ybench_throughput \
-			--y2 --yunits=B/s \
-			--title=random \
-			$(if $(filter nand,$*), \
+					-Dcase=bench_p26_wt_random \
+					-ybench_throughput \
+					--y2 --yunits=B/s \
+					--title=random \
+				$(if $(filter nand,$*), \
+					--subplot-below=\" \
+						-Dcase=bench_p26_wt_random \
+						-I$(N_yaffs2) \
+						-ybench_throughput \
+						--y2 --yunits=B/s \
+						-H0.5\") \
+			--subplot-below=\" \
+					-Dcase=bench_p26_wt_random \
+					-ybench_ram \
+					--y2 --yunits=B \
+					-H0.3333333\" \
 				--subplot-below=\" \
 					-Dcase=bench_p26_wt_random \
-					-UFS=5 \
+					-I$(N_yaffs2) \
+					-ybench_ram \
+					--y2 --yunits=B \
+					-H0.25\"" \
+		--subplot-right=" \
+					-Dcase=bench_p26_wt_logging \
 					-ybench_throughput \
 					--y2 --yunits=B/s \
-					-H0.5\") \
+					--title=logging \
 			--subplot-below=\" \
-				-Dcase=bench_p26_wt_random \
-				-ybench_ram \
-				--y2 --yunits=B \
-				-H0.5\"" \
+					-Dcase=bench_p26_wt_logging \
+					-ybench_ram \
+					--y2 --yunits=B \
+					-H0.3333333\" \
+				--subplot-below=\" \
+					-Dcase=bench_p26_wt_logging \
+					-I$(N_yaffs2) \
+					-ybench_ram \
+					--y2 --yunits=B \
+					-H0.25\"" \
 		--subplot-right=" \
-			-Dcase=bench_p26_wt_logging \
-			-ybench_throughput \
-			--y2 --yunits=B/s \
-			--title=logging \
+					-Dcase=bench_p26_wt_many \
+					-ybench_throughput \
+					--y2 --yunits=B/s \
+					--title=many \
+				$(if $(filter nand,$*), \
+					--subplot-below=\" \
+						-Dcase=bench_p26_wt_many \
+						-I$(N_yaffs2) \
+						-ybench_throughput \
+						--y2 --yunits=B/s \
+						-H0.5\") \
 			--subplot-below=\" \
-				-Dcase=bench_p26_wt_logging \
-				-ybench_ram \
-				--y2 --yunits=B \
-				-H0.5\"" \
-		--subplot-right=" \
-			-Dcase=bench_p26_wt_many \
-			-ybench_throughput \
-			--y2 --yunits=B/s \
-			--title=many \
-			$(if $(filter nand,$*), \
+					-Dcase=bench_p26_wt_many \
+					-ybench_ram \
+					--y2 --yunits=B \
+					-H0.3333333\" \
 				--subplot-below=\" \
 					-Dcase=bench_p26_wt_many \
-					-UFS=5 \
-					-ybench_throughput \
-					--y2 --yunits=B/s \
-					-H0.5\") \
-			--subplot-below=\" \
-				-Dcase=bench_p26_wt_many \
-				-ybench_ram \
-				--y2 --yunits=B \
-				-H0.5\"" \
+					-I$(N_yaffs2) \
+					-ybench_ram \
+					--y2 --yunits=B \
+					-H0.25\"" \
 		--legend \
 		$(foreach fs, $(BENCH_FSS),$\
     		-L'$(N_$(fs)),bench_throughput=$(fs)' \
@@ -195,6 +217,7 @@ $(PLOTSDIR)/bench_p26_later_ds_wt.%.svg: \
 		$(shell python -c '$\
 			for n in [$(BENCH_DISK_SIZES)][::2]: $\
 				print("--add-xticklabel=%d=\"%%(x)IB\"" % n)') \
+		--ylabel='%{ram%}^12s%19s%{throughput%}^12s' \
 		--xlabel='disk size' \
 		$(PLOTFLAGS) \
 		-o$@)

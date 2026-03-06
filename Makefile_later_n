@@ -135,7 +135,7 @@ $(PLOTSDIR)/bench_p26_later_n_wt.%.svg: \
 					-H0.3333333\" \
 				--subplot-below=\" \
 					-Dcase=bench_p26_wt_linear \
-					-UFS=5 \
+					-I$(N_yaffs2) \
 					-ybench_ram \
 					--y2 --yunits=B \
 					-H0.25\"" \
@@ -146,7 +146,7 @@ $(PLOTSDIR)/bench_p26_later_n_wt.%.svg: \
 					--title=random \
 				--subplot-below=\" \
 					-Dcase=bench_p26_wt_random \
-					-UFS=5 \
+					-I$(N_yaffs2) \
 					-ybench_throughput \
 					--y2 --yunits=B/s \
 					-H0.5\" \
@@ -157,7 +157,7 @@ $(PLOTSDIR)/bench_p26_later_n_wt.%.svg: \
 					-H0.3333333\" \
 				--subplot-below=\" \
 					-Dcase=bench_p26_wt_random \
-					-UFS=5 \
+					-I$(N_yaffs2) \
 					-ybench_ram \
 					--y2 --yunits=B \
 					-H0.25\"" \
@@ -173,7 +173,7 @@ $(PLOTSDIR)/bench_p26_later_n_wt.%.svg: \
 					-H0.3333333\" \
 				--subplot-below=\" \
 					-Dcase=bench_p26_wt_logging \
-					-UFS=5 \
+					-I$(N_yaffs2) \
 					-ybench_ram \
 					--y2 --yunits=B \
 					-H0.25\"" \
@@ -185,9 +185,9 @@ $(PLOTSDIR)/bench_p26_later_n_wt.%.svg: \
 				$(if $(filter nand,$*), \
 					--subplot-below=\" \
 						-Dcase=bench_p26_wt_many \
-						-UFS=5 \
 						-ybench_throughput \
 						--y2 --yunits=B/s \
+						-I$(N_yaffs2) -I$(N_lfs3) \
 						-H0.5\") \
 			--subplot-below=\" \
 					-Dcase=bench_p26_wt_many \
@@ -196,7 +196,7 @@ $(PLOTSDIR)/bench_p26_later_n_wt.%.svg: \
 					-H0.3333333\" \
 				--subplot-below=\" \
 					-Dcase=bench_p26_wt_many \
-					-UFS=5 \
+					-I$(N_yaffs2) \
 					-ybench_ram \
 					--y2 --yunits=B \
 					-H0.25\"" \
