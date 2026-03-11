@@ -1,0 +1,36 @@
+# Compilation output
+*.o
+*.d
+*.a
+*.ci
+*.csv
+*.t.*
+*.b.*
+*.gcno
+*.gcda
+*.perf
+lfs3
+liblfs3.a
+
+# Testing things
+runners/test_runner
+runners/bench_runner
+lfs3.code.csv
+lfs3.data.csv
+lfs3.stack.csv
+lfs3.structs.csv
+lfs3.cov.csv
+lfs3.perf.csv
+lfs3.perfbd.csv
+lfs3.test.csv
+lfs3.bench.csv
+
+# Misc
+tags
+clip
+disk
+.gdb_history
+scripts/__pycache__
+
+# Historical, probably should remove at some point
+tests/*.toml.*

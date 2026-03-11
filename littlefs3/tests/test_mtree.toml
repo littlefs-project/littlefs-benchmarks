@@ -1,0 +1,5409 @@
+# Test the high-level metadata tree in the core of littlefs
+after = ['test_rbyd', 'test_btree']
+
+# maximize lookahead buffer, we don't actually gc so we only get one pass
+# of the disk for these tests
+defines.LOOKAHEAD_SIZE = '(BLOCK_COUNT+8-1) / 8'
+
+# test with normal revision counts, debug revision counts, and noisy
+# revision counts
+defines.REVPERTURB = [false, true]
+defines.REVNOISE = [false, true]
+defines.F_FLAGS = '''
+    ((REVPERTURB) ? LFS3_IFDEF_REVPERTURB(LFS3_F_REVPERTURB, -1) : 0)
+        | ((REVNOISE) ? LFS3_IFDEF_REVNOISE(LFS3_F_REVNOISE, -1) : 0)
+'''
+defines.M_FLAGS = '''
+    ((REVPERTURB) ? LFS3_IFDEF_REVPERTURB(LFS3_M_REVPERTURB, -1) : 0)
+        | ((REVNOISE) ? LFS3_IFDEF_REVNOISE(LFS3_M_REVNOISE, -1) : 0)
+'''
+if = [
+    'LFS3_IFDEF_REVPERTURB(true, !REVPERTURB)',
+    'LFS3_IFDEF_REVNOISE(true, !REVNOISE)',
+    '!REVPERTURB || !REVNOISE',
+]
+
+
+
+# test a single mroot
+[cases.test_mtree_mroot]
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+# test a single mroot with attributes
+[cases.test_mtree_mroot_rattrs]
+defines.N = [1, 3]
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    for (lfs3_size_t i = 0; i < N; i++) {
+        lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+                LFS3_RATTR(2, LFS3_TAG_ATTR(i), 0, LFS3_FROM_BUF, 1),
+                LFS3_RATTR_ARG(&(uint8_t){'a'+(i % 26)}),
+                LFS3_RATTR_NULL)) => 0;
+    }
+
+    for (lfs3_size_t i = 0; i < N; i++) {
+        lfs3_data_t data;
+        uint8_t buffer[1];
+        lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(i),
+                &data) => LFS3_TAG_ATTR(i);
+        lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+        assert(memcmp(buffer, &(uint8_t){'a'+(i % 26)}, 1) == 0);
+    }
+
+    lfs3_unmount(&lfs3) => 0;
+
+
+    // check things stay sane after remount
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    for (lfs3_size_t i = 0; i < N; i++) {
+        lfs3_data_t data;
+        uint8_t buffer[1];
+        lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(i),
+                &data) => LFS3_TAG_ATTR(i);
+        lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+        assert(memcmp(buffer, &(uint8_t){'a'+(i % 26)}, 1) == 0);
+    }
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+# test a single mroot with forced compaction
+[cases.test_mtree_mroot_compact]
+defines.N = [1, 3]
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    for (lfs3_size_t i = 0; i < N; i++) {
+        // force mroot to compact
+        lfs3.mroot.r.eoff = -1;
+
+        lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+                LFS3_RATTR(2, LFS3_TAG_ATTR(i), 0, LFS3_FROM_BUF, 1),
+                LFS3_RATTR_ARG(&(uint8_t){'a'+(i % 26)}),
+                LFS3_RATTR_NULL)) => 0;
+    }
+
+    for (lfs3_size_t i = 0; i < N; i++) {
+        lfs3_data_t data;
+        uint8_t buffer[1];
+        lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(i),
+                &data) => LFS3_TAG_ATTR(i);
+        lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+        assert(memcmp(buffer, &(uint8_t){'a'+(i % 26)}, 1) == 0);
+    }
+
+    lfs3_unmount(&lfs3) => 0;
+
+
+    // check things stay sane after remount
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    for (lfs3_size_t i = 0; i < N; i++) {
+        lfs3_data_t data;
+        uint8_t buffer[1];
+        lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(i),
+                &data) => LFS3_TAG_ATTR(i);
+        lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+        assert(memcmp(buffer, &(uint8_t){'a'+(i % 26)}, 1) == 0);
+    }
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+# test a single mroot with many commits
+[cases.test_mtree_mroot_many_commits]
+defines.N = [5, 5000]
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    for (lfs3_size_t i = 0; i < N; i++) {
+        lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+                LFS3_RATTR(2, LFS3_TAG_ATTR(1), 0, LFS3_FROM_BUF, 1),
+                LFS3_RATTR_ARG(&(uint8_t){'a'+(i % 26)}),
+                LFS3_RATTR_NULL)) => 0;
+        lfs3_data_t data;
+
+        uint8_t buffer[4];
+        lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+                &data) => LFS3_TAG_ATTR(1);
+        lfs3_data_read(&lfs3, &data, buffer, 4) => 1;
+        assert(memcmp(buffer, &(uint8_t){'a'+(i % 26)}, 1) == 0);
+    }
+    lfs3_data_t data;
+
+    uint8_t buffer[4];
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 4) => 1;
+    assert(memcmp(buffer, &(uint8_t){'a'+((N-1) % 26)}, 1) == 0);
+
+    lfs3_unmount(&lfs3) => 0;
+
+
+    // check things stay sane after remount
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 4) => 1;
+    assert(memcmp(buffer, &(uint8_t){'a'+((N-1) % 26)}, 1) == 0);
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+
+## Splitting operations ##
+
+# specific split corner cases
+[cases.test_mtree_uninline]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // create a 2 large rattrs that needs to be uninlined
+    uint8_t buffer[SIZE];
+    memset(buffer, 'a', SIZE);
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_ATTR(1), 0, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+
+    memset(buffer, 'b', SIZE);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_ATTR(2), 0, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(3), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("c"),
+            LFS3_RATTR_NULL)) => 0;
+
+    // assert mdirs were unininlined
+    assert(lfs3.mtree.r.weight == (1 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our rattrs are still in the mroot/mtree
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[0] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[0] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(3),
+            &data) => LFS3_TAG_ATTR(3);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert mdirs were unininlined
+    assert(lfs3.mtree.r.weight == (1 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our rattrs are still in the mroot/mtree
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[0] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[0] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(3),
+            &data) => LFS3_TAG_ATTR(3);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_uninline_split]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // create 2 large entries that needs to be uninlined and split
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'a', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 3);
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(1), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("c"),
+            LFS3_RATTR_NULL)) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_split]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // create 2 large entries that needs to be uninlined and split
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'a', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 3);
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(1), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("c"),
+            LFS3_RATTR_NULL)) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // now add another large entry to an mdir, forcing a split
+    memset(buffer+1, 'd', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    // force mdir to compact
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(2), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("e"),
+            LFS3_RATTR_NULL)) => 0;
+
+    // assert mdir was split correctly
+    assert(lfs3.mtree.r.weight == (3 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_mtree_lookup(&lfs3, (2 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'd');
+
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'e');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert mdir was split correctly
+    assert(lfs3.mtree.r.weight == (3 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_mtree_lookup(&lfs3, (2 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'd');
+
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'e');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+
+# try creating a range of entries that may or may not split our mtree
+[cases.test_mtree_split_many]
+defines.N = [5, 10, 20, 40, 80, 160, 320]
+defines.FORCE_COMPACTION = [false, true]
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    // create entries
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        name[0] = '\0';
+        sprintf(name+1, "%03x", i);
+        lfs3_mdir_t mdir;
+        lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                &mdir, NULL) => LFS3_ERR_NOENT;
+        // force a compaction?
+        if (FORCE_COMPACTION) {
+            lfs3.mroot.r.eoff = -1;
+            mdir.r.eoff = -1;
+        }
+        lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+                LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+                LFS3_RATTR_ARG(0),
+                LFS3_RATTR_ARG(name+1),
+                LFS3_RATTR_ARG(3),
+                LFS3_RATTR_NULL)) => 0;
+        lfs3_data_t data;
+
+        uint8_t buffer[256];
+        lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+                &data) => LFS3_TAG_REG;
+        lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 4;
+        assert(memcmp(buffer, name, 4) == 0);
+    }
+
+    // try looking up each entry
+    lfs3_mdir_t mdir;
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    lfs3_data_t data;
+    uint8_t buffer[256];
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_BOOKMARK,
+            &data) => LFS3_TAG_BOOKMARK;
+    lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 1;
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        name[0] = '\0';
+        sprintf(name+1, "%03x", i);
+        mdir.mid += 1;
+        if (lfs3_mrid(&lfs3, mdir.mid) >= (lfs3_srid_t)mdir.r.weight) {
+            lfs3_mtree_lookup(&lfs3, lfs3_mbid(&lfs3, mdir.mid) + 1,
+                    &mdir) => 0;
+        }
+        lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+                &data) => LFS3_TAG_REG;
+        lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 4;
+        assert(memcmp(buffer, name, 4) == 0);
+    }
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // try looking up each entry
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_BOOKMARK,
+            &data) => LFS3_TAG_BOOKMARK;
+    lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 1;
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        name[0] = '\0';
+        sprintf(name+1, "%03x", i);
+        mdir.mid += 1;
+        if (lfs3_mrid(&lfs3, mdir.mid) >= (lfs3_srid_t)mdir.r.weight) {
+            lfs3_mtree_lookup(&lfs3, lfs3_mbid(&lfs3, mdir.mid) + 1,
+                    &mdir) => 0;
+        }
+        lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+                &data) => LFS3_TAG_REG;
+        lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 4;
+        assert(memcmp(buffer, name, 4) == 0);
+    }
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+# create random entries
+[cases.test_mtree_split_fuzz]
+defines.N = [5, 10, 20, 40, 80, 160]
+defines.FORCE_COMPACTION = [false, true]
+defines.SEED = 'range(100)'
+fuzz = 'SEED'
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    bool sim[N];
+    for (lfs3_size_t i = 0; i < N; i++) {
+        sim[i] = false;
+    }
+
+    uint32_t prng = SEED;
+    for (lfs3_size_t i = 0; i < N; i++) {
+        // choose a pseudo-random name
+        lfs3_size_t x = TEST_PRNG(&prng) % N;
+
+        // update sim
+        sim[x] = true;
+
+        // update mtree
+        char name[256];
+        name[0] = '\0';
+        sprintf(name+1, "%03x", x);
+        lfs3_mdir_t mdir;
+        lfs3_stag_t tag = lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                &mdir, NULL);
+        assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+        if (tag != LFS3_ERR_NOENT) {
+            continue;
+        }
+        // force a compaction?
+        if (FORCE_COMPACTION) {
+            lfs3.mroot.r.eoff = -1;
+            mdir.r.eoff = -1;
+        }
+        lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+                LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+                LFS3_RATTR_ARG(0),
+                LFS3_RATTR_ARG(name+1),
+                LFS3_RATTR_ARG(3),
+                LFS3_RATTR_NULL)) => 0;
+        lfs3_data_t data;
+
+        // double check
+        uint8_t buffer[256];
+        lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+                &data) => LFS3_TAG_REG;
+        lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 4;
+        assert(memcmp(buffer, name, 4) == 0);
+    }
+
+    // try looking up each entry
+    lfs3_mdir_t mdir;
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    lfs3_data_t data;
+    uint8_t buffer[256];
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_BOOKMARK,
+            &data) => LFS3_TAG_BOOKMARK;
+    lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 1;
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        name[0] = '\0';
+        sprintf(name+1, "%03x", i);
+        if (sim[i]) {
+            lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                    &mdir, NULL) => LFS3_TAG_REG;
+            lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+                    &data) => LFS3_TAG_REG;
+            lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 4;
+            assert(memcmp(buffer, name, 4) == 0);
+        } else {
+            lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                    &mdir, NULL) => LFS3_ERR_NOENT;
+        }
+    }
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // try looking up each entry
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_BOOKMARK,
+            &data) => LFS3_TAG_BOOKMARK;
+    lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 1;
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        name[0] = '\0';
+        sprintf(name+1, "%03x", i);
+        if (sim[i]) {
+            lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                    &mdir, NULL) => LFS3_TAG_REG;
+            lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+                    &data) => LFS3_TAG_REG;
+            lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 4;
+            assert(memcmp(buffer, name, 4) == 0);
+        } else {
+            lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                    &mdir, NULL) => LFS3_ERR_NOENT;
+        }
+    }
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+
+## Dropping operations ##
+
+# specific drop corner cases
+[cases.test_mtree_drop]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // create 2 large entries that needs to be uninlined and split
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'a', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 3);
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(1), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("c"),
+            LFS3_RATTR_NULL)) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // remove an entry, forcing the mdir to be dropped
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(1, LFS3_tag_RM, -1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 0);
+
+    // assert mdir was dropped
+    assert(lfs3.mtree.r.weight == (1 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert mdir was dropped
+    assert(lfs3.mtree.r.weight == (1 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_drop_compact]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // create 2 large entries that needs to be uninlined and split
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'a', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 3);
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(1), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("c"),
+            LFS3_RATTR_NULL)) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // remove an entry, forcing the mdir to be dropped
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    // force mdir to compact while we're removing
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(1, LFS3_tag_RM, -1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 0);
+
+    // assert mdir was dropped
+    assert(lfs3.mtree.r.weight == (1 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert mdir was dropped
+    assert(lfs3.mtree.r.weight == (1 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_drop_uninline_split]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // create 2 large entries that needs to be uninlined and split
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'a', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 3);
+
+    // remove an entry, forcing the mdir to be dropped
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    // force mdir to compact while we're removing
+    lfs3.mroot.r.eoff = -1;
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(1, LFS3_tag_RM, -1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    // assert split/drop worked out
+    assert(lfs3.mtree.r.weight == (1 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert mdir was dropped
+    assert(lfs3.mtree.r.weight == (1 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_drop_split_l]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // create 2 large entries that needs to be uninlined and split
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'a', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 3);
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(1), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("c"),
+            LFS3_RATTR_NULL)) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // now add another large entry to an mdir, forcing a split
+    memset(buffer+1, 'd', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    // remove an entry, forcing the mdir to be dropped
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    // force mdir to compact while we're removing
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(1, LFS3_tag_RM, -1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 1);
+
+    // assert split/drop worked out
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'd');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert split/drop worked out
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'd');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_drop_split_r]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // create 2 large entries that needs to be uninlined and split
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'a', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 3);
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(1), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("c"),
+            LFS3_RATTR_NULL)) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // now add another large entry to an mdir, forcing a split
+    memset(buffer+1, 'd', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    // remove an entry, forcing the mdir to be dropped
+    memset(buffer+1, 'd', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    // force mdir to compact while we're removing
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(1, LFS3_tag_RM, -1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 1);
+
+    // assert split/drop worked out
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert split/drop worked out
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_drop_fuzz]
+defines.N = [5, 10, 20, 40, 80, 160]
+defines.FORCE_COMPACTION = [false, true]
+defines.SEED = 'range(100)'
+fuzz = 'SEED'
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    bool sim[N];
+    for (lfs3_size_t i = 0; i < N; i++) {
+        sim[i] = false;
+    }
+
+    uint32_t prng = SEED;
+    for (lfs3_size_t i = 0; i < N; i++) {
+        // choose a pseudo-random name
+        lfs3_size_t x = TEST_PRNG(&prng) % N;
+        char name[256];
+        name[0] = '\0';
+        sprintf(name+1, "%03x", x);
+        // choose to create or delete
+        uint8_t op = TEST_PRNG(&prng) % 2;
+
+        // create
+        if (op == 0) {
+            // update sim
+            sim[x] = true;
+
+            // update mtree
+            lfs3_mdir_t mdir;
+            lfs3_stag_t tag = lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                    &mdir, NULL);
+            assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+            if (tag != LFS3_ERR_NOENT) {
+                continue;
+            }
+            // force a compaction?
+            if (FORCE_COMPACTION) {
+                lfs3.mroot.r.eoff = -1;
+                mdir.r.eoff = -1;
+            }
+            lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+                    LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+                    LFS3_RATTR_ARG(0),
+                    LFS3_RATTR_ARG(name+1),
+                    LFS3_RATTR_ARG(3),
+                    LFS3_RATTR_NULL)) => 0;
+            lfs3_data_t data;
+
+            // double check
+            uint8_t buffer[256];
+            lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+                    &data) => LFS3_TAG_REG;
+            lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 4;
+            assert(memcmp(buffer, name, 4) == 0);
+
+        // delete
+        } else {
+            // update sim
+            sim[x] = false;
+
+            // update mtree
+            lfs3_mdir_t mdir;
+            lfs3_stag_t tag = lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                    &mdir, NULL);
+            assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+            if (tag == LFS3_ERR_NOENT) {
+                continue;
+            }
+            // force a compaction?
+            if (FORCE_COMPACTION) {
+                lfs3.mroot.r.eoff = -1;
+                mdir.r.eoff = -1;
+            }
+            lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+                    LFS3_RATTR(1, LFS3_tag_RM, -1),
+                    LFS3_RATTR_NULL)) => 0;
+        }
+    }
+
+    // try looking up each entry
+    lfs3_mdir_t mdir;
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    lfs3_data_t data;
+    uint8_t buffer[256];
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_BOOKMARK,
+            &data) => LFS3_TAG_BOOKMARK;
+    lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 1;
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        name[0] = '\0';
+        sprintf(name+1, "%03x", i);
+        if (sim[i]) {
+            lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                    &mdir, NULL) => LFS3_TAG_REG;
+            lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+                    &data) => LFS3_TAG_REG;
+            lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 4;
+            assert(memcmp(buffer, name, 4) == 0);
+        } else {
+            lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                    &mdir, NULL) => LFS3_ERR_NOENT;
+        }
+    }
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // try looking up each entry
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_BOOKMARK,
+            &data) => LFS3_TAG_BOOKMARK;
+    lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 1;
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        name[0] = '\0';
+        sprintf(name+1, "%03x", i);
+        if (sim[i]) {
+            lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                    &mdir, NULL) => LFS3_TAG_REG;
+            lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+                    &data) => LFS3_TAG_REG;
+            lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 4;
+            assert(memcmp(buffer, name, 4) == 0);
+        } else {
+            lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                    &mdir, NULL) => LFS3_ERR_NOENT;
+        }
+    }
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+
+## Relocation operations ##
+
+# specific relocation corner cases
+[cases.test_mtree_relocate]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+# make it so blocks relocate every two compacts
+defines.BLOCK_RECYCLES = 0
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // create a 2 large rattrs that needs to be uninlined
+    uint8_t buffer[SIZE];
+    memset(buffer, 'a', SIZE);
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_ATTR(1), 0, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+
+    memset(buffer, 'b', SIZE);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_ATTR(2), 0, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(3), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("c"),
+            LFS3_RATTR_NULL)) => 0;
+
+    // assert mdirs were unininlined
+    assert(lfs3.mtree.r.weight == (1 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // force mdir to compact twice, this should relocate
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    lfs3_mdir_t old_mdir = mdir;
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(4), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("d"),
+            LFS3_RATTR_NULL)) => 0;
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(5), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("e"),
+            LFS3_RATTR_NULL)) => 0;
+    // assert we relocated
+    assert(lfs3_mdir_cmp(&old_mdir, &mdir) != 0);
+
+    // assert mdirs were unininlined
+    assert(lfs3.mtree.r.weight == (1 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our rattrs are still in the mroot/mtree
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[0] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[0] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(3),
+            &data) => LFS3_TAG_ATTR(3);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(4),
+            &data) => LFS3_TAG_ATTR(4);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'd');
+
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(5),
+            &data) => LFS3_TAG_ATTR(5);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'e');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert mdirs were unininlined
+    assert(lfs3.mtree.r.weight == (1 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our rattrs are still in the mroot/mtree
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[0] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[0] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(3),
+            &data) => LFS3_TAG_ATTR(3);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(4),
+            &data) => LFS3_TAG_ATTR(4);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'd');
+
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(5),
+            &data) => LFS3_TAG_ATTR(5);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'e');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_relocate_l]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+# make it so blocks relocate every two compacts
+defines.BLOCK_RECYCLES = 0
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // create 2 large entries that needs to be uninlined and split
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'a', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 3);
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(1), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("c"),
+            LFS3_RATTR_NULL)) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // force mdir to compact twice, this should relocate
+    memset(buffer+1, 'a', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    lfs3_mdir_t old_mdir = mdir;
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(2), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("d"),
+            LFS3_RATTR_NULL)) => 0;
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(3), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("e"),
+            LFS3_RATTR_NULL)) => 0;
+    // assert we relocated
+    assert(lfs3_mdir_cmp(&old_mdir, &mdir) != 0);
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'd');
+
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(3),
+            &data) => LFS3_TAG_ATTR(3);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'e');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'd');
+
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(3),
+            &data) => LFS3_TAG_ATTR(3);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'e');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_relocate_r]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+# make it so blocks relocate every two compacts
+defines.BLOCK_RECYCLES = 0
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // create 2 large entries that needs to be uninlined and split
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'a', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 3);
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(1), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("c"),
+            LFS3_RATTR_NULL)) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // force mdir to compact twice, this should relocate
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    lfs3_mdir_t old_mdir = mdir;
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(2), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("d"),
+            LFS3_RATTR_NULL)) => 0;
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(3), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("e"),
+            LFS3_RATTR_NULL)) => 0;
+    // assert we relocated
+    assert(lfs3_mdir_cmp(&old_mdir, &mdir) != 0);
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'd');
+
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(3),
+            &data) => LFS3_TAG_ATTR(3);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'e');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'd');
+
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(3),
+            &data) => LFS3_TAG_ATTR(3);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'e');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_extend]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+# make it so blocks relocate every two compacts
+defines.BLOCK_RECYCLES = 0
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // prepare mroot with an entry
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'a', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    // force mroot to compact twice, this should extend the mroot
+    lfs3_mdir_t old_mroot = lfs3.mroot;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(1), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("b"),
+            LFS3_RATTR_NULL)) => 0;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(2), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("c"),
+            LFS3_RATTR_NULL)) => 0;
+    // assert we relocated
+    assert(lfs3_mdir_cmp(&old_mroot, &lfs3.mroot) != 0);
+
+    // assert that our entry is still in the mroot
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert that our rattr is still in the mroot
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_extend_twice]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+# make it so blocks relocate every two compacts
+defines.BLOCK_RECYCLES = 0
+# force our block to compact by setting prog_size=block_size, we don't have
+# an easy way to force the intermediary mroots to compact otherwise
+defines.PROG_SIZE = 'BLOCK_SIZE'
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // prepare mroot with an entry
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'a', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    // force mroot to compact twice, this should extend the mroot
+    lfs3_mdir_t old_mroot = lfs3.mroot;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(1), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("b"),
+            LFS3_RATTR_NULL)) => 0;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(2), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("c"),
+            LFS3_RATTR_NULL)) => 0;
+    // assert we relocated
+    assert(lfs3_mdir_cmp(&old_mroot, &lfs3.mroot) != 0);
+
+    // force mroot to compact four times, this should relocate the mroot
+    // twice, forcing a second mroot extension
+    old_mroot = lfs3.mroot;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(3), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("d"),
+            LFS3_RATTR_NULL)) => 0;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(4), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("e"),
+            LFS3_RATTR_NULL)) => 0;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(5), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("f"),
+            LFS3_RATTR_NULL)) => 0;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(6), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("g"),
+            LFS3_RATTR_NULL)) => 0;
+    // assert we relocated
+    assert(lfs3_mdir_cmp(&old_mroot, &lfs3.mroot) != 0);
+
+    // assert that our rattr is still in the mroot
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(3),
+            &data) => LFS3_TAG_ATTR(3);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'd');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(4),
+            &data) => LFS3_TAG_ATTR(4);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'e');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(5),
+            &data) => LFS3_TAG_ATTR(5);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'f');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(6),
+            &data) => LFS3_TAG_ATTR(6);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'g');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert that our rattr is still in the mroot
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(3),
+            &data) => LFS3_TAG_ATTR(3);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'd');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(4),
+            &data) => LFS3_TAG_ATTR(4);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'e');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(5),
+            &data) => LFS3_TAG_ATTR(5);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'f');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(6),
+            &data) => LFS3_TAG_ATTR(6);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'g');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_relocate_mroot]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+# make it so blocks relocate every two compacts
+defines.BLOCK_RECYCLES = 0
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // prepare mroot with an entry
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'a', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    // force mroot to compact twice, this should extend the mroot
+    lfs3_mdir_t old_mroot = lfs3.mroot;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(1), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("b"),
+            LFS3_RATTR_NULL)) => 0;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(2), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("c"),
+            LFS3_RATTR_NULL)) => 0;
+    // assert we relocated
+    assert(lfs3_mdir_cmp(&old_mroot, &lfs3.mroot) != 0);
+
+    // force mroot to compact twice again, this should relocate the mroot
+    old_mroot = lfs3.mroot;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(3), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("d"),
+            LFS3_RATTR_NULL)) => 0;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(4), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("e"),
+            LFS3_RATTR_NULL)) => 0;
+    // assert we relocated
+    assert(lfs3_mdir_cmp(&old_mroot, &lfs3.mroot) != 0);
+
+    // assert that our entry is still in the mroot
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(3),
+            &data) => LFS3_TAG_ATTR(3);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'd');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(4),
+            &data) => LFS3_TAG_ATTR(4);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'e');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert that our rattr is still in the mroot
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(3),
+            &data) => LFS3_TAG_ATTR(3);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'd');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(4),
+            &data) => LFS3_TAG_ATTR(4);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'e');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_relocate_extend]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+# make it so blocks relocate every two compacts
+defines.BLOCK_RECYCLES = 0
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // create 2 large entries that needs to be uninlined and split
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'a', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 3);
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(1), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("c"),
+            LFS3_RATTR_NULL)) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // setup mroot to compact and relocate on next commit
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_t old_mroot = lfs3.mroot;
+    // force mdir to compact twice, this should relocate
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    lfs3_mdir_t old_mdir = mdir;
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(2), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("d"),
+            LFS3_RATTR_NULL)) => 0;
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(3), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("e"),
+            LFS3_RATTR_NULL)) => 0;
+    // assert we relocated
+    assert(lfs3_mdir_cmp(&old_mdir, &mdir) != 0);
+    // assert mroot relocated
+    assert(lfs3_mdir_cmp(&old_mroot, &lfs3.mroot) != 0);
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'd');
+
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(3),
+            &data) => LFS3_TAG_ATTR(3);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'e');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'd');
+
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(3),
+            &data) => LFS3_TAG_ATTR(3);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'e');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_split_extend]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+# make it so blocks relocate every two compacts
+defines.BLOCK_RECYCLES = 0
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // create 2 large entries that needs to be uninlined and split
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'a', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 3);
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(1), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("c"),
+            LFS3_RATTR_NULL)) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // now add another large entry to an mdir, forcing a split
+    memset(buffer+1, 'd', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    // setup mroot to compact and relocate on next commit
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_t old_mroot = lfs3.mroot;
+    // force mdir to compact twice, this should relocate
+    lfs3_mdir_t old_mdir = mdir;
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(2), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("e"),
+            LFS3_RATTR_NULL)) => 0;
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(3), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("f"),
+            LFS3_RATTR_NULL)) => 0;
+    // assert we relocated
+    assert(lfs3_mdir_cmp(&old_mdir, &mdir) != 0);
+    // assert mroot relocated
+    assert(lfs3_mdir_cmp(&old_mroot, &lfs3.mroot) != 0);
+
+    // assert mdir was split correctly
+    assert(lfs3.mtree.r.weight == (3 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_mtree_lookup(&lfs3, (2 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'd');
+
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'e');
+
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(3),
+            &data) => LFS3_TAG_ATTR(3);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'f');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert mdir was split correctly
+    assert(lfs3.mtree.r.weight == (3 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_mtree_lookup(&lfs3, (2 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'd');
+
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'e');
+
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(3),
+            &data) => LFS3_TAG_ATTR(3);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'f');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_drop_extend]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+# make it so blocks relocate every two compacts
+defines.BLOCK_RECYCLES = 0
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // create 2 large entries that needs to be uninlined and split
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'a', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 3);
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(1), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("c"),
+            LFS3_RATTR_NULL)) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // setup mroot to compact and relocate on next commit
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_t old_mroot = lfs3.mroot;
+    // remove an entry, forcing the mdir to be dropped
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    // force mdir to compact twice, this should relocate
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(2), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("d"),
+            LFS3_RATTR_NULL)) => 0;
+    // force mdir to compact while we're removing
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(1, LFS3_tag_RM, -1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 0);
+    // assert mroot relocated
+    assert(lfs3_mdir_cmp(&old_mroot, &lfs3.mroot) != 0);
+
+    // assert mdir was dropped
+    assert(lfs3.mtree.r.weight == (1 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert mdir was dropped
+    assert(lfs3.mtree.r.weight == (1 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_uninline_extend]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+# make it so blocks relocate every two compacts
+defines.BLOCK_RECYCLES = 0
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    // force mroot to compact once, so the second compact below will
+    // trigger a relocation
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+    lfs3_data_t data;
+
+    // create a 2 large rattrs that needs to be uninlined
+    uint8_t buffer[SIZE];
+    memset(buffer, 'a', SIZE);
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_ATTR(1), 0, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+
+    memset(buffer, 'b', SIZE);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_ATTR(2), 0, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+
+    // force mroot to compact, this should both uninline and relocate
+    lfs3_mdir_t old_mroot = lfs3.mroot;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(3), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("c"),
+            LFS3_RATTR_NULL)) => 0;
+    // assert mroot relocated
+    assert(lfs3_mdir_cmp(&old_mroot, &lfs3.mroot) != 0);
+
+    // assert mdirs were unininlined
+    assert(lfs3.mtree.r.weight == (1 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our rattrs are still in the mroot/mtree
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[0] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[0] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(3),
+            &data) => LFS3_TAG_ATTR(3);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert mdirs were unininlined
+    assert(lfs3.mtree.r.weight == (1 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our rattrs are still in the mroot/mtree
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[0] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(2),
+            &data) => LFS3_TAG_ATTR(2);
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[0] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(3),
+            &data) => LFS3_TAG_ATTR(3);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_uninline_split_extend]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+# make it so blocks relocate every two compacts
+defines.BLOCK_RECYCLES = 0
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    // force mroot to compact once, so the second compact below will
+    // trigger a relocation
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+    lfs3_data_t data;
+
+    // create 2 large entries that needs to be uninlined and split
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'a', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 3);
+
+    // force mroot to compact, this should both split and relocate
+    lfs3_mdir_t old_mroot = lfs3.mroot;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_ATTR(1), 0, LFS3_FROM_BUF, 1),
+            LFS3_RATTR_ARG("c"),
+            LFS3_RATTR_NULL)) => 0;
+    // assert mroot relocated
+    assert(lfs3_mdir_cmp(&old_mroot, &lfs3.mroot) != 0);
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'b');
+
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, 1) => 1;
+    assert(buffer[0] == 'c');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+# this fuzz covers a lot of configurations
+[cases.test_mtree_relocate_fuzz]
+defines.N = [5, 10, 20, 40]
+defines.FORCE_COMPACTION = [false, true]
+defines.BLOCK_RECYCLES = [4, 1, 0]
+defines.SEED = 'range(500)'
+fuzz = 'SEED'
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    bool sim[N];
+    for (lfs3_size_t i = 0; i < N; i++) {
+        sim[i] = false;
+    }
+
+    uint32_t prng = SEED;
+    for (lfs3_size_t i = 0; i < N; i++) {
+        // choose a pseudo-random name
+        lfs3_size_t x = TEST_PRNG(&prng) % N;
+        char name[256];
+        name[0] = '\0';
+        sprintf(name+1, "%03x", x);
+        // choose to create or delete
+        uint8_t op = TEST_PRNG(&prng) % 2;
+
+        // create
+        if (op == 0) {
+            // update sim
+            sim[x] = true;
+
+            // update mtree
+            lfs3_mdir_t mdir;
+            lfs3_stag_t tag = lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                    &mdir, NULL);
+            assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+            if (tag != LFS3_ERR_NOENT) {
+                continue;
+            }
+            // force a compaction?
+            if (FORCE_COMPACTION) {
+                lfs3.mroot.r.eoff = -1;
+                mdir.r.eoff = -1;
+            }
+            lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+                    LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+                    LFS3_RATTR_ARG(0),
+                    LFS3_RATTR_ARG(name+1),
+                    LFS3_RATTR_ARG(3),
+                    LFS3_RATTR_NULL)) => 0;
+            lfs3_data_t data;
+
+            // double check
+            uint8_t buffer[256];
+            lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+                    &data) => LFS3_TAG_REG;
+            lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 4;
+            assert(memcmp(buffer, name, 4) == 0);
+
+        // update
+        } else if (op == 1) {
+            // sim update is a noop
+
+            // update mtree
+            lfs3_mdir_t mdir;
+            lfs3_stag_t tag = lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                    &mdir, NULL);
+            assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+            if (tag == LFS3_ERR_NOENT) {
+                continue;
+            }
+            // force a compaction?
+            if (FORCE_COMPACTION) {
+                lfs3.mroot.r.eoff = -1;
+                mdir.r.eoff = -1;
+            }
+            // we can't really change metadata names, but commits still
+            // trigger writes to the mdir
+            lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+                    LFS3_RATTR(4, LFS3_TAG_REG, 0, LFS3_FROM_NAME),
+                    LFS3_RATTR_ARG(0),
+                    LFS3_RATTR_ARG(name+1),
+                    LFS3_RATTR_ARG(3),
+                    LFS3_RATTR_NULL)) => 0;
+            lfs3_data_t data;
+
+            // double check
+            uint8_t buffer[256];
+            lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+                    &data) => LFS3_TAG_REG;
+            lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 4;
+            assert(memcmp(buffer, name, 4) == 0);
+
+        // delete
+        } else {
+            // update sim
+            sim[x] = false;
+
+            // update mtree
+            lfs3_mdir_t mdir;
+            lfs3_stag_t tag = lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                    &mdir, NULL);
+            assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+            if (tag == LFS3_ERR_NOENT) {
+                continue;
+            }
+            // force a compaction?
+            if (FORCE_COMPACTION) {
+                lfs3.mroot.r.eoff = -1;
+                mdir.r.eoff = -1;
+            }
+            lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+                    LFS3_RATTR(1, LFS3_tag_RM, -1),
+                    LFS3_RATTR_NULL)) => 0;
+        }
+    }
+
+    // try looking up each entry
+    lfs3_mdir_t mdir;
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    lfs3_data_t data;
+    uint8_t buffer[256];
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_BOOKMARK,
+            &data) => LFS3_TAG_BOOKMARK;
+    lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 1;
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        name[0] = '\0';
+        sprintf(name+1, "%03x", i);
+        if (sim[i]) {
+            lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                    &mdir, NULL) => LFS3_TAG_REG;
+            lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+                    &data) => LFS3_TAG_REG;
+            lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 4;
+            assert(memcmp(buffer, name, 4) == 0);
+        } else {
+            lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                    &mdir, NULL) => LFS3_ERR_NOENT;
+        }
+    }
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // try looking up each entry
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_BOOKMARK,
+            &data) => LFS3_TAG_BOOKMARK;
+    lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 1;
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        name[0] = '\0';
+        sprintf(name+1, "%03x", i);
+        if (sim[i]) {
+            lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                    &mdir, NULL) => LFS3_TAG_REG;
+            lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+                    &data) => LFS3_TAG_REG;
+            lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 4;
+            assert(memcmp(buffer, name, 4) == 0);
+        } else {
+            lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                    &mdir, NULL) => LFS3_ERR_NOENT;
+        }
+    }
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+
+## Opened mdir tracking ##
+
+[cases.test_mtree_opened]
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    // setup our neighbors
+    lfs3_handle_t left = {.flags=0};
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &left.mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &left.mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("a"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(left.mdir.r.weight == 2);
+    lfs3_handle_open(&lfs3, &left);
+
+    lfs3_handle_t right = {.flags=0};
+    lfs3_mtree_namelookup(&lfs3, 0, "c", 1,
+            &right.mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &right.mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("c"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(right.mdir.r.weight == 3);
+    lfs3_handle_open(&lfs3, &right);
+
+    // insert a new entry, this should update our neighbors
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, "b", 1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("b"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 4);
+    lfs3_data_t data;
+
+    // assert our entry was created
+    uint8_t buffer[2];
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, 2) => 2;
+    assert(buffer[1] == 'b');
+
+    // assert that our neighbors were updated correctly
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    assert(left.mdir.mid == mdir.mid);
+    assert(lfs3_mdir_cmp(&left.mdir, &mdir) == 0);
+    assert(left.mdir.r.trunk == mdir.r.trunk);
+    assert(left.mdir.r.cksum == mdir.r.cksum);
+    lfs3_mtree_namelookup(&lfs3, 0, "c", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    assert(right.mdir.mid == mdir.mid);
+    assert(lfs3_mdir_cmp(&right.mdir, &mdir) == 0);
+    assert(right.mdir.r.trunk == mdir.r.trunk);
+    assert(right.mdir.r.cksum == mdir.r.cksum);
+
+    lfs3_handle_close(&lfs3, &left);
+    lfs3_handle_close(&lfs3, &right);
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_opened_remove_l]
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    // setup our neighbors
+    lfs3_handle_t left = {.flags=0};
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &left.mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &left.mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("a"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(left.mdir.r.weight == 2);
+    lfs3_handle_open(&lfs3, &left);
+
+    lfs3_handle_t right = {.flags=0};
+    lfs3_mtree_namelookup(&lfs3, 0, "b", 1,
+            &right.mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &right.mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("b"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(right.mdir.r.weight == 3);
+    lfs3_handle_open(&lfs3, &right);
+
+    // try removing left neighbor
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(1, LFS3_tag_RM, -1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    // assert neighbor was removed
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+
+    // assert that our neighbors were updated correctly
+    lfs3_mtree_namelookup(&lfs3, 0, "b", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    assert(right.mdir.mid == mdir.mid);
+    assert(lfs3_mdir_cmp(&right.mdir, &mdir) == 0);
+    assert(right.mdir.r.trunk == mdir.r.trunk);
+    assert(right.mdir.r.cksum == mdir.r.cksum);
+
+    lfs3_handle_close(&lfs3, &left);
+    lfs3_handle_close(&lfs3, &right);
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_opened_remove_r]
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    // setup our neighbors
+    lfs3_handle_t left = {.flags=0};
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &left.mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &left.mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("a"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(left.mdir.r.weight == 2);
+    lfs3_handle_open(&lfs3, &left);
+
+    lfs3_handle_t right = {.flags=0};
+    lfs3_mtree_namelookup(&lfs3, 0, "b", 1,
+            &right.mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &right.mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("b"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(right.mdir.r.weight == 3);
+    lfs3_handle_open(&lfs3, &right);
+
+    // try removing right neighbor
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, "b", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(1, LFS3_tag_RM, -1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    // assert neighbor was removed
+    lfs3_mtree_namelookup(&lfs3, 0, "b", 1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+
+    // assert that our neighbors were updated correctly
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    assert(left.mdir.mid == mdir.mid);
+    assert(lfs3_mdir_cmp(&left.mdir, &mdir) == 0);
+    assert(left.mdir.r.trunk == mdir.r.trunk);
+    assert(left.mdir.r.cksum == mdir.r.cksum);
+
+    lfs3_handle_close(&lfs3, &left);
+    lfs3_handle_close(&lfs3, &right);
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_opened_uninline_split]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    // setup our neighbors
+    lfs3_handle_t left = {.flags=0};
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &left.mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &left.mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("a"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(left.mdir.r.weight == 2);
+    lfs3_handle_open(&lfs3, &left);
+
+    lfs3_handle_t right = {.flags=0};
+    lfs3_mtree_namelookup(&lfs3, 0, "d", 1,
+            &right.mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &right.mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("d"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(right.mdir.r.weight == 3);
+    lfs3_handle_open(&lfs3, &right);
+
+    // create 2 large entries that needs to be uninlined and split
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 4);
+
+    memset(buffer+1, 'c', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 5);
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our neighbors were updated correctly
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    assert(left.mdir.mid == mdir.mid);
+    assert(lfs3_mdir_cmp(&left.mdir, &mdir) == 0);
+    assert(left.mdir.r.trunk == mdir.r.trunk);
+    assert(left.mdir.r.cksum == mdir.r.cksum);
+    lfs3_mtree_namelookup(&lfs3, 0, "d", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    assert(right.mdir.mid == mdir.mid);
+    assert(lfs3_mdir_cmp(&right.mdir, &mdir) == 0);
+    assert(right.mdir.r.trunk == mdir.r.trunk);
+    assert(right.mdir.r.cksum == mdir.r.cksum);
+
+    lfs3_handle_close(&lfs3, &left);
+    lfs3_handle_close(&lfs3, &right);
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_opened_split]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    // setup our neighbors
+    lfs3_handle_t left = {.flags=0};
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &left.mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &left.mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("a"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(left.mdir.r.weight == 2);
+    lfs3_handle_open(&lfs3, &left);
+
+    lfs3_handle_t right = {.flags=0};
+    lfs3_mtree_namelookup(&lfs3, 0, "e", 1,
+            &right.mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &right.mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("e"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(right.mdir.r.weight == 3);
+    lfs3_handle_open(&lfs3, &right);
+
+    // create 2 large entries that needs to be uninlined and split
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 4);
+
+    memset(buffer+1, 'd', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 5);
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+
+    // now add another large entry to an mdir, forcing a split
+    memset(buffer+1, 'c', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 4);
+
+    // force mdir to compact
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+
+    // assert mdir was split correctly
+    assert(lfs3.mtree.r.weight == (3 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our neighbors were updated correctly
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    assert(left.mdir.mid == mdir.mid);
+    assert(lfs3_mdir_cmp(&left.mdir, &mdir) == 0);
+    assert(left.mdir.r.trunk == mdir.r.trunk);
+    assert(left.mdir.r.cksum == mdir.r.cksum);
+    lfs3_mtree_namelookup(&lfs3, 0, "e", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    assert(right.mdir.mid == mdir.mid);
+    assert(lfs3_mdir_cmp(&right.mdir, &mdir) == 0);
+    assert(right.mdir.r.trunk == mdir.r.trunk);
+    assert(right.mdir.r.cksum == mdir.r.cksum);
+
+    lfs3_handle_close(&lfs3, &left);
+    lfs3_handle_close(&lfs3, &right);
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_opened_extend]
+# make it so blocks relocate every two compacts
+defines.BLOCK_RECYCLES = 0
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    // setup our neighbors
+    lfs3_handle_t left = {.flags=0};
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &left.mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &left.mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("a"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(left.mdir.r.weight == 2);
+    lfs3_handle_open(&lfs3, &left);
+
+    lfs3_handle_t right = {.flags=0};
+    lfs3_mtree_namelookup(&lfs3, 0, "b", 1,
+            &right.mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &right.mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("b"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(right.mdir.r.weight == 3);
+    lfs3_handle_open(&lfs3, &right);
+
+    // force mroot to compact twice, this should extend the mroot
+    lfs3_mdir_t old_mroot = lfs3.mroot;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+    // assert we relocated
+    assert(lfs3_mdir_cmp(&old_mroot, &lfs3.mroot) != 0);
+
+    // assert that our neighbors were updated correctly
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    assert(left.mdir.mid == mdir.mid);
+    assert(lfs3_mdir_cmp(&left.mdir, &mdir) == 0);
+    assert(left.mdir.r.trunk == mdir.r.trunk);
+    assert(left.mdir.r.cksum == mdir.r.cksum);
+    lfs3_mtree_namelookup(&lfs3, 0, "b", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    assert(right.mdir.mid == mdir.mid);
+    assert(lfs3_mdir_cmp(&right.mdir, &mdir) == 0);
+    assert(right.mdir.r.trunk == mdir.r.trunk);
+    assert(right.mdir.r.cksum == mdir.r.cksum);
+
+    lfs3_handle_close(&lfs3, &left);
+    lfs3_handle_close(&lfs3, &right);
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_opened_relocate_l]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+# make it so blocks relocate every two compacts
+defines.BLOCK_RECYCLES = 0
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    // setup our neighbors
+    lfs3_handle_t left = {.flags=0};
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &left.mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &left.mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("a"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(left.mdir.r.weight == 2);
+    lfs3_handle_open(&lfs3, &left);
+
+    lfs3_handle_t right = {.flags=0};
+    lfs3_mtree_namelookup(&lfs3, 0, "d", 1,
+            &right.mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &right.mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("d"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(right.mdir.r.weight == 3);
+    lfs3_handle_open(&lfs3, &right);
+
+    // create 2 large entries that needs to be uninlined and split
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 4);
+
+    memset(buffer+1, 'c', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 5);
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // force mdir to compact twice, this should relocate
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    lfs3_mdir_t old_mdir = mdir;
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, 0, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG((const char*)buffer+1),
+            LFS3_RATTR_ARG(SIZE-1),
+            LFS3_RATTR_NULL)) => 0;
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, 0, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG((const char*)buffer+1),
+            LFS3_RATTR_ARG(SIZE-1),
+            LFS3_RATTR_NULL)) => 0;
+    // assert we relocated
+    assert(lfs3_mdir_cmp(&old_mdir, &mdir) != 0);
+
+    // assert that our neighbors were updated correctly
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    assert(left.mdir.mid == mdir.mid);
+    assert(lfs3_mdir_cmp(&left.mdir, &mdir) == 0);
+    assert(left.mdir.r.trunk == mdir.r.trunk);
+    assert(left.mdir.r.cksum == mdir.r.cksum);
+    lfs3_mtree_namelookup(&lfs3, 0, "d", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    assert(right.mdir.mid == mdir.mid);
+    assert(lfs3_mdir_cmp(&right.mdir, &mdir) == 0);
+    assert(right.mdir.r.trunk == mdir.r.trunk);
+    assert(right.mdir.r.cksum == mdir.r.cksum);
+
+    lfs3_handle_close(&lfs3, &left);
+    lfs3_handle_close(&lfs3, &right);
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_opened_relocate_r]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+# make it so blocks relocate every two compacts
+defines.BLOCK_RECYCLES = 0
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    // setup our neighbors
+    lfs3_handle_t left = {.flags=0};
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &left.mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &left.mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("a"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(left.mdir.r.weight == 2);
+    lfs3_handle_open(&lfs3, &left);
+
+    lfs3_handle_t right = {.flags=0};
+    lfs3_mtree_namelookup(&lfs3, 0, "d", 1,
+            &right.mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &right.mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("d"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(right.mdir.r.weight == 3);
+    lfs3_handle_open(&lfs3, &right);
+
+    // create 2 large entries that needs to be uninlined and split
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 4);
+
+    memset(buffer+1, 'c', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 5);
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // force mdir to compact twice, this should relocate
+    memset(buffer+1, 'c', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    lfs3_mdir_t old_mdir = mdir;
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, 0, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG((const char*)buffer+1),
+            LFS3_RATTR_ARG(SIZE-1),
+            LFS3_RATTR_NULL)) => 0;
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, 0, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG((const char*)buffer+1),
+            LFS3_RATTR_ARG(SIZE-1),
+            LFS3_RATTR_NULL)) => 0;
+    // assert we relocated
+    assert(lfs3_mdir_cmp(&old_mdir, &mdir) != 0);
+
+    // assert that our neighbors were updated correctly
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    assert(left.mdir.mid == mdir.mid);
+    assert(lfs3_mdir_cmp(&left.mdir, &mdir) == 0);
+    assert(left.mdir.r.trunk == mdir.r.trunk);
+    assert(left.mdir.r.cksum == mdir.r.cksum);
+    lfs3_mtree_namelookup(&lfs3, 0, "d", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    assert(right.mdir.mid == mdir.mid);
+    assert(lfs3_mdir_cmp(&right.mdir, &mdir) == 0);
+    assert(right.mdir.r.trunk == mdir.r.trunk);
+    assert(right.mdir.r.cksum == mdir.r.cksum);
+
+    lfs3_handle_close(&lfs3, &left);
+    lfs3_handle_close(&lfs3, &right);
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_opened_middle_split]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    // setup our neighbors
+    lfs3_handle_t left = {.flags=0};
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &left.mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &left.mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("a"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(left.mdir.r.weight == 2);
+    lfs3_handle_open(&lfs3, &left);
+
+    lfs3_handle_t right = {.flags=0};
+    lfs3_mtree_namelookup(&lfs3, 0, "f", 1,
+            &right.mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &right.mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("f"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(right.mdir.r.weight == 3);
+    lfs3_handle_open(&lfs3, &right);
+
+    // create 2 large entries that needs to be uninlined and split
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 4);
+
+    memset(buffer+1, 'e', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 5);
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+
+    // now add another large entry to an mdir, forcing a split
+    memset(buffer+1, 'c', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 4);
+
+    // force mdir to compact
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+
+    // assert mdir was split correctly
+    assert(lfs3.mtree.r.weight == (3 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // now add _another_ large entry to the middle mdir, forcing another split
+    memset(buffer+1, 'd', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    // force mdir to compact
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+
+    // assert mdir was split correctly
+    assert(lfs3.mtree.r.weight == (4 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our neighbors were updated correctly
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    assert(left.mdir.mid == mdir.mid);
+    assert(lfs3_mdir_cmp(&left.mdir, &mdir) == 0);
+    assert(left.mdir.r.trunk == mdir.r.trunk);
+    assert(left.mdir.r.cksum == mdir.r.cksum);
+    lfs3_mtree_namelookup(&lfs3, 0, "f", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    assert(right.mdir.mid == mdir.mid);
+    assert(lfs3_mdir_cmp(&right.mdir, &mdir) == 0);
+    assert(right.mdir.r.trunk == mdir.r.trunk);
+    assert(right.mdir.r.cksum == mdir.r.cksum);
+
+    lfs3_handle_close(&lfs3, &left);
+    lfs3_handle_close(&lfs3, &right);
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_opened_middle_drop]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    // setup our neighbors
+    lfs3_handle_t left = {.flags=0};
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &left.mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &left.mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("a"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(left.mdir.r.weight == 2);
+    lfs3_handle_open(&lfs3, &left);
+
+    lfs3_handle_t right = {.flags=0};
+    lfs3_mtree_namelookup(&lfs3, 0, "e", 1,
+            &right.mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &right.mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("e"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(right.mdir.r.weight == 3);
+    lfs3_handle_open(&lfs3, &right);
+
+    // create 2 large entries that needs to be uninlined and split
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 4);
+
+    memset(buffer+1, 'd', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 5);
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+
+    // now add another large entry to an mdir, forcing a split
+    memset(buffer+1, 'c', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 4);
+
+    // force mdir to compact
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+
+    // assert mdir was split correctly
+    assert(lfs3.mtree.r.weight == (3 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // now remove the middle entry, forcing a drop
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(1, LFS3_tag_RM, -1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 0);
+
+    // assert mdir was dropped correctly
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our neighbors were updated correctly
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    assert(left.mdir.mid == mdir.mid);
+    assert(lfs3_mdir_cmp(&left.mdir, &mdir) == 0);
+    assert(left.mdir.r.trunk == mdir.r.trunk);
+    assert(left.mdir.r.cksum == mdir.r.cksum);
+    lfs3_mtree_namelookup(&lfs3, 0, "e", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    assert(right.mdir.mid == mdir.mid);
+    assert(lfs3_mdir_cmp(&right.mdir, &mdir) == 0);
+    assert(right.mdir.r.trunk == mdir.r.trunk);
+    assert(right.mdir.r.cksum == mdir.r.cksum);
+
+    lfs3_handle_close(&lfs3, &left);
+    lfs3_handle_close(&lfs3, &right);
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+
+## mtree traversal ##
+
+# test specific corner cases
+[cases.test_mtree_traversal]
+defines.CKMETA = [false, true]
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    // insert at least one entry
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("a"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    // test that we can traverse the tree, keeping track of all blocks we see
+    uint8_t *seen = malloc((BLOCK_COUNT+7)/8);
+    memset(seen, 0, (BLOCK_COUNT+7)/8);
+
+    lfs3_mtrv_t mtrv;
+    lfs3_mtrv_init(&mtrv,
+            LFS3_T_RDONLY
+                | LFS3_T_MTREEONLY
+                | ((CKMETA) ? LFS3_T_CKMETA : 0));
+    for (lfs3_block_t i = 0;; i++) {
+        // a bit hacky, but this catches infinite loops
+        assert(i < 2*BLOCK_COUNT);
+
+        lfs3_stag_t tag;
+        lfs3_bptr_t bptr;
+        tag = lfs3_mtree_traverse(&lfs3, &mtrv,
+                &bptr);
+        assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+        if (tag == LFS3_ERR_NOENT) {
+            break;
+        }
+
+        if (tag == LFS3_TAG_MDIR) {
+            lfs3_mdir_t *mdir = (lfs3_mdir_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x mdir 0x{%x,%x}\n",
+                    tag,
+                    mdir->r.blocks[0],
+                    mdir->r.blocks[1]);
+
+            // keep track of seen blocks
+            seen[mdir->r.blocks[1] / 8] |= 1 << (mdir->r.blocks[1] % 8);
+            seen[mdir->r.blocks[0] / 8] |= 1 << (mdir->r.blocks[0] % 8);
+
+        } else if (tag == LFS3_TAG_BRANCH) {
+            lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x btree 0x%x.%x\n",
+                    tag,
+                    rbyd->blocks[0], rbyd->trunk);
+
+            // keep track of seen blocks
+            seen[rbyd->blocks[0] / 8] |= 1 << (rbyd->blocks[0] % 8);
+
+        } else {
+            // this shouldn't happen
+            printf("traversal: 0x%x\n", tag);
+            assert(false);
+        }
+    }
+
+    // if traversal worked, we should be able to clobber all other blocks
+    uint8_t clobber_buf[BLOCK_SIZE];
+    memset(clobber_buf, 0xcc, BLOCK_SIZE);
+    for (lfs3_block_t block = 0; block < BLOCK_COUNT; block++) {
+        if (!(seen[block / 8] & (1 << (block % 8)))) {
+            CFG->erase(CFG, block) => 0;
+            CFG->prog(CFG, block, 0, clobber_buf, BLOCK_SIZE) => 0;
+        }
+    }
+    free(seen);
+    lfs3_data_t data;
+
+    // and the tree should still work
+
+    // assert that our entry is still in the mtree
+    uint8_t buffer[256];
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 2;
+    assert(memcmp(buffer, "\0a", 2) == 0);
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert that our entry is still in the mtree
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 2;
+    assert(memcmp(buffer, "\0a", 2) == 0);
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_traversal_uninline]
+defines.CKMETA = [false, true]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // create a 2 large rattrs that needs to be uninlined
+    uint8_t buffer[SIZE];
+    memset(buffer, 'a', SIZE);
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_ATTR(1), 0, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+
+    memset(buffer, 'b', SIZE);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_ATTR(1), 0, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+
+    // assert mdirs were unininlined
+    assert(lfs3.mtree.r.weight == (1 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // test that we can traverse the tree, keeping track of all blocks we see
+    uint8_t *seen = malloc((BLOCK_COUNT+7)/8);
+    memset(seen, 0, (BLOCK_COUNT+7)/8);
+
+    lfs3_mtrv_t mtrv;
+    lfs3_mtrv_init(&mtrv,
+            LFS3_T_RDONLY
+                | LFS3_T_MTREEONLY
+                | ((CKMETA) ? LFS3_T_CKMETA : 0));
+    for (lfs3_block_t i = 0;; i++) {
+        // a bit hacky, but this catches infinite loops
+        assert(i < 2*BLOCK_COUNT);
+
+        lfs3_stag_t tag;
+        lfs3_bptr_t bptr;
+        tag = lfs3_mtree_traverse(&lfs3, &mtrv,
+                &bptr);
+        assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+        if (tag == LFS3_ERR_NOENT) {
+            break;
+        }
+
+        if (tag == LFS3_TAG_MDIR) {
+            lfs3_mdir_t *mdir = (lfs3_mdir_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x mdir 0x{%x,%x}\n",
+                    tag,
+                    mdir->r.blocks[0],
+                    mdir->r.blocks[1]);
+
+            // keep track of seen blocks
+            seen[mdir->r.blocks[1] / 8] |= 1 << (mdir->r.blocks[1] % 8);
+            seen[mdir->r.blocks[0] / 8] |= 1 << (mdir->r.blocks[0] % 8);
+
+        } else if (tag == LFS3_TAG_BRANCH) {
+            lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x btree 0x%x.%x\n",
+                    tag,
+                    rbyd->blocks[0], rbyd->trunk);
+
+            // keep track of seen blocks
+            seen[rbyd->blocks[0] / 8] |= 1 << (rbyd->blocks[0] % 8);
+
+        } else {
+            // this shouldn't happen
+            printf("traversal: 0x%x\n", tag);
+            assert(false);
+        }
+    }
+
+    // if traversal worked, we should be able to clobber all other blocks
+    uint8_t clobber_buf[BLOCK_SIZE];
+    memset(clobber_buf, 0xcc, BLOCK_SIZE);
+    for (lfs3_block_t block = 0; block < BLOCK_COUNT; block++) {
+        if (!(seen[block / 8] & (1 << (block % 8)))) {
+            CFG->erase(CFG, block) => 0;
+            CFG->prog(CFG, block, 0, clobber_buf, BLOCK_SIZE) => 0;
+        }
+    }
+    free(seen);
+
+    // and the tree should still work
+
+    // assert mdirs were unininlined
+    assert(lfs3.mtree.r.weight == (1 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our rattrs are still in the mroot/mtree
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[0] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[0] == 'b');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert mdirs were unininlined
+    assert(lfs3.mtree.r.weight == (1 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our rattrs are still in the mroot/mtree
+    lfs3_mdir_lookup(&lfs3, &lfs3.mroot, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[0] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_ATTR(1),
+            &data) => LFS3_TAG_ATTR(1);
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[0] == 'b');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_traversal_uninline_split]
+defines.CKMETA = [false, true]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // create 2 large entries that needs to be uninlined and split
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'a', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 3);
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // test that we can traverse the tree, keeping track of all blocks we see
+    uint8_t *seen = malloc((BLOCK_COUNT+7)/8);
+    memset(seen, 0, (BLOCK_COUNT+7)/8);
+
+    lfs3_mtrv_t mtrv;
+    lfs3_mtrv_init(&mtrv,
+            LFS3_T_RDONLY
+                | LFS3_T_MTREEONLY
+                | ((CKMETA) ? LFS3_T_CKMETA : 0));
+    for (lfs3_block_t i = 0;; i++) {
+        // a bit hacky, but this catches infinite loops
+        assert(i < 2*BLOCK_COUNT);
+
+        lfs3_stag_t tag;
+        lfs3_bptr_t bptr;
+        tag = lfs3_mtree_traverse(&lfs3, &mtrv,
+                &bptr);
+        assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+        if (tag == LFS3_ERR_NOENT) {
+            break;
+        }
+
+        if (tag == LFS3_TAG_MDIR) {
+            lfs3_mdir_t *mdir = (lfs3_mdir_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x mdir 0x{%x,%x}\n",
+                    tag,
+                    mdir->r.blocks[0],
+                    mdir->r.blocks[1]);
+
+            // keep track of seen blocks
+            seen[mdir->r.blocks[1] / 8] |= 1 << (mdir->r.blocks[1] % 8);
+            seen[mdir->r.blocks[0] / 8] |= 1 << (mdir->r.blocks[0] % 8);
+
+        } else if (tag == LFS3_TAG_BRANCH) {
+            lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x btree 0x%x.%x\n",
+                    tag,
+                    rbyd->blocks[0], rbyd->trunk);
+
+            // keep track of seen blocks
+            seen[rbyd->blocks[0] / 8] |= 1 << (rbyd->blocks[0] % 8);
+
+        } else {
+            // this shouldn't happen
+            printf("traversal: 0x%x\n", tag);
+            assert(false);
+        }
+    }
+
+    // if traversal worked, we should be able to clobber all other blocks
+    uint8_t clobber_buf[BLOCK_SIZE];
+    memset(clobber_buf, 0xcc, BLOCK_SIZE);
+    for (lfs3_block_t block = 0; block < BLOCK_COUNT; block++) {
+        if (!(seen[block / 8] & (1 << (block % 8)))) {
+            CFG->erase(CFG, block) => 0;
+            CFG->prog(CFG, block, 0, clobber_buf, BLOCK_SIZE) => 0;
+        }
+    }
+    free(seen);
+
+    // and the tree should still work
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'b');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'b');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_traversal_split]
+defines.CKMETA = [false, true]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // create 2 large entries that needs to be uninlined and split
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'a', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    memset(buffer+1, 'b', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 3);
+
+    // force mroot to compact
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+
+    // assert mdirs were unininlined and split
+    assert(lfs3.mtree.r.weight == (2 << lfs3.mbits));
+    // assert mroot now has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // now add another large entry to an mdir, forcing a split
+    memset(buffer+1, 'c', SIZE-1);
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    // force mdir to compact
+    mdir.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+
+    // assert mdir was split correctly
+    assert(lfs3.mtree.r.weight == (3 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // test that we can traverse the tree, keeping track of all blocks we see
+    uint8_t *seen = malloc((BLOCK_COUNT+7)/8);
+    memset(seen, 0, (BLOCK_COUNT+7)/8);
+
+    lfs3_mtrv_t mtrv;
+    lfs3_mtrv_init(&mtrv,
+            LFS3_T_RDONLY
+                | LFS3_T_MTREEONLY
+                | ((CKMETA) ? LFS3_T_CKMETA : 0));
+    for (lfs3_block_t i = 0;; i++) {
+        // a bit hacky, but this catches infinite loops
+        assert(i < 2*BLOCK_COUNT);
+
+        lfs3_stag_t tag;
+        lfs3_bptr_t bptr;
+        tag = lfs3_mtree_traverse(&lfs3, &mtrv,
+                &bptr);
+        assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+        if (tag == LFS3_ERR_NOENT) {
+            break;
+        }
+
+        if (tag == LFS3_TAG_MDIR) {
+            lfs3_mdir_t *mdir = (lfs3_mdir_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x mdir 0x{%x,%x}\n",
+                    tag,
+                    mdir->r.blocks[0],
+                    mdir->r.blocks[1]);
+
+            // keep track of seen blocks
+            seen[mdir->r.blocks[1] / 8] |= 1 << (mdir->r.blocks[1] % 8);
+            seen[mdir->r.blocks[0] / 8] |= 1 << (mdir->r.blocks[0] % 8);
+
+        } else if (tag == LFS3_TAG_BRANCH) {
+            lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x btree 0x%x.%x\n",
+                    tag,
+                    rbyd->blocks[0], rbyd->trunk);
+
+            // keep track of seen blocks
+            seen[rbyd->blocks[0] / 8] |= 1 << (rbyd->blocks[0] % 8);
+
+        } else {
+            // this shouldn't happen
+            printf("traversal: 0x%x\n", tag);
+            assert(false);
+        }
+    }
+
+    // if traversal worked, we should be able to clobber all other blocks
+    uint8_t clobber_buf[BLOCK_SIZE];
+    memset(clobber_buf, 0xcc, BLOCK_SIZE);
+    for (lfs3_block_t block = 0; block < BLOCK_COUNT; block++) {
+        if (!(seen[block / 8] & (1 << (block % 8)))) {
+            CFG->erase(CFG, block) => 0;
+            CFG->prog(CFG, block, 0, clobber_buf, BLOCK_SIZE) => 0;
+        }
+    }
+    free(seen);
+
+    // and the tree should still work
+
+    // assert mdir was split correctly
+    assert(lfs3.mtree.r.weight == (3 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'b');
+
+    lfs3_mtree_lookup(&lfs3, (2 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'c');
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert mdir was split correctly
+    assert(lfs3.mtree.r.weight == (3 << lfs3.mbits));
+    // assert mroot still has no entries
+    assert(lfs3.mroot.r.weight == 0);
+
+    // assert that our entries are still in the mtree
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_mtree_lookup(&lfs3, (1 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'b');
+
+    lfs3_mtree_lookup(&lfs3, (2 << lfs3.mbits)+0, &mdir) => 0;
+    assert(mdir.r.weight == 1);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'c');
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_traversal_extend]
+defines.CKMETA = [false, true]
+# make it so blocks relocate every two compacts
+defines.BLOCK_RECYCLES = 0
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    // insert at least one entry
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+            LFS3_RATTR_ARG(0),
+            LFS3_RATTR_ARG("a"),
+            LFS3_RATTR_ARG(1),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    // force mroot to compact twice, this should extend the mroot
+    lfs3_mdir_t old_mroot = lfs3.mroot;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+    // assert we relocated
+    assert(lfs3_mdir_cmp(&old_mroot, &lfs3.mroot) != 0);
+
+    // test that we can traverse the tree, keeping track of all blocks we see
+    uint8_t *seen = malloc((BLOCK_COUNT+7)/8);
+    memset(seen, 0, (BLOCK_COUNT+7)/8);
+
+    lfs3_mtrv_t mtrv;
+    lfs3_mtrv_init(&mtrv,
+            LFS3_T_RDONLY
+                | LFS3_T_MTREEONLY
+                | ((CKMETA) ? LFS3_T_CKMETA : 0));
+    for (lfs3_block_t i = 0;; i++) {
+        // a bit hacky, but this catches infinite loops
+        assert(i < 2*BLOCK_COUNT);
+
+        lfs3_stag_t tag;
+        lfs3_bptr_t bptr;
+        tag = lfs3_mtree_traverse(&lfs3, &mtrv,
+                &bptr);
+        assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+        if (tag == LFS3_ERR_NOENT) {
+            break;
+        }
+
+        if (tag == LFS3_TAG_MDIR) {
+            lfs3_mdir_t *mdir = (lfs3_mdir_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x mdir 0x{%x,%x}\n",
+                    tag,
+                    mdir->r.blocks[0],
+                    mdir->r.blocks[1]);
+
+            // keep track of seen blocks
+            seen[mdir->r.blocks[1] / 8]
+                    |= 1 << (mdir->r.blocks[1] % 8);
+            seen[mdir->r.blocks[0] / 8]
+                    |= 1 << (mdir->r.blocks[0] % 8);
+
+        } else if (tag == LFS3_TAG_BRANCH) {
+            lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x btree 0x%x.%x\n",
+                    tag,
+                    rbyd->blocks[0], rbyd->trunk);
+
+            // keep track of seen blocks
+            seen[rbyd->blocks[0] / 8]
+                    |= 1 << (rbyd->blocks[0] % 8);
+
+        } else {
+            // this shouldn't happen
+            printf("traversal: 0x%x\n", tag);
+            assert(false);
+        }
+    }
+
+    // if traversal worked, we should be able to clobber all other blocks
+    uint8_t clobber_buf[BLOCK_SIZE];
+    memset(clobber_buf, 0xcc, BLOCK_SIZE);
+    for (lfs3_block_t block = 0; block < BLOCK_COUNT; block++) {
+        if (!(seen[block / 8] & (1 << (block % 8)))) {
+            CFG->erase(CFG, block) => 0;
+            CFG->prog(CFG, block, 0, clobber_buf, BLOCK_SIZE) => 0;
+        }
+    }
+    free(seen);
+    lfs3_data_t data;
+
+    // and the tree should still work
+
+    // assert that our entry is still in the mtree
+    uint8_t buffer[256];
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 2;
+    assert(memcmp(buffer, "\0a", 2) == 0);
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // assert that our entry is still in the mtree
+    lfs3_mtree_namelookup(&lfs3, 0, "a", 1,
+            &mdir, NULL) => LFS3_TAG_REG;
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 2;
+    assert(memcmp(buffer, "\0a", 2) == 0);
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+# larger traversal tests
+[cases.test_mtree_traversal_many]
+defines.N = [5, 10, 20, 40, 80, 160, 320]
+defines.CKMETA = [false, true]
+defines.FORCE_COMPACTION = [false, true]
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    // create entries
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        name[0] = '\0';
+        sprintf(name+1, "%03x", i);
+        lfs3_mdir_t mdir;
+        lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                &mdir, NULL) => LFS3_ERR_NOENT;
+        // force a compaction?
+        if (FORCE_COMPACTION) {
+            lfs3.mroot.r.eoff = -1;
+            mdir.r.eoff = -1;
+        }
+        lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+                LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+                LFS3_RATTR_ARG(0),
+                LFS3_RATTR_ARG(name+1),
+                LFS3_RATTR_ARG(3),
+                LFS3_RATTR_NULL)) => 0;
+        lfs3_data_t data;
+
+        uint8_t buffer[256];
+        lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+                &data) => LFS3_TAG_REG;
+        lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 4;
+        assert(memcmp(buffer, name, 4) == 0);
+    }
+
+    // test that we can traverse the tree, keeping track of all blocks we see
+    uint8_t *seen = malloc((BLOCK_COUNT+7)/8);
+    memset(seen, 0, (BLOCK_COUNT+7)/8);
+
+    lfs3_mtrv_t mtrv;
+    lfs3_mtrv_init(&mtrv,
+            LFS3_T_RDONLY
+                | LFS3_T_MTREEONLY
+                | ((CKMETA) ? LFS3_T_CKMETA : 0));
+    for (lfs3_block_t i = 0;; i++) {
+        // a bit hacky, but this catches infinite loops
+        assert(i < 2*BLOCK_COUNT);
+
+        lfs3_stag_t tag;
+        lfs3_bptr_t bptr;
+        tag = lfs3_mtree_traverse(&lfs3, &mtrv,
+                &bptr);
+        assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+        if (tag == LFS3_ERR_NOENT) {
+            break;
+        }
+
+        if (tag == LFS3_TAG_MDIR) {
+            lfs3_mdir_t *mdir = (lfs3_mdir_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x mdir 0x{%x,%x}\n",
+                    tag,
+                    mdir->r.blocks[0],
+                    mdir->r.blocks[1]);
+
+            // keep track of seen blocks
+            seen[mdir->r.blocks[1] / 8]
+                    |= 1 << (mdir->r.blocks[1] % 8);
+            seen[mdir->r.blocks[0] / 8]
+                    |= 1 << (mdir->r.blocks[0] % 8);
+
+        } else if (tag == LFS3_TAG_BRANCH) {
+            lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x btree 0x%x.%x\n",
+                    tag,
+                    rbyd->blocks[0], rbyd->trunk);
+
+            // keep track of seen blocks
+            seen[rbyd->blocks[0] / 8]
+                    |= 1 << (rbyd->blocks[0] % 8);
+
+        } else {
+            // this shouldn't happen
+            printf("traversal: 0x%x\n", tag);
+            assert(false);
+        }
+    }
+
+    // if traversal worked, we should be able to clobber all other blocks
+    uint8_t clobber_buf[BLOCK_SIZE];
+    memset(clobber_buf, 0xcc, BLOCK_SIZE);
+    for (lfs3_block_t block = 0; block < BLOCK_COUNT; block++) {
+        if (!(seen[block / 8] & (1 << (block % 8)))) {
+            CFG->erase(CFG, block) => 0;
+            CFG->prog(CFG, block, 0, clobber_buf, BLOCK_SIZE) => 0;
+        }
+    }
+    free(seen);
+
+    // and the tree should still work
+
+    // try looking up each entry
+    lfs3_mdir_t mdir;
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    lfs3_data_t data;
+    uint8_t buffer[256];
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_BOOKMARK,
+            &data) => LFS3_TAG_BOOKMARK;
+    lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 1;
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        name[0] = '\0';
+        sprintf(name+1, "%03x", i);
+        mdir.mid += 1;
+        if (lfs3_mrid(&lfs3, mdir.mid) >= (lfs3_srid_t)mdir.r.weight) {
+            lfs3_mtree_lookup(&lfs3, lfs3_mbid(&lfs3, mdir.mid) + 1,
+                    &mdir) => 0;
+        }
+        lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+                &data) => LFS3_TAG_REG;
+        lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 4;
+        assert(memcmp(buffer, name, 4) == 0);
+    }
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // try looking up each entry
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_BOOKMARK,
+            &data) => LFS3_TAG_BOOKMARK;
+    lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 1;
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        name[0] = '\0';
+        sprintf(name+1, "%03x", i);
+        mdir.mid += 1;
+        if (lfs3_mrid(&lfs3, mdir.mid) >= (lfs3_srid_t)mdir.r.weight) {
+            lfs3_mtree_lookup(&lfs3, lfs3_mbid(&lfs3, mdir.mid) + 1,
+                    &mdir) => 0;
+        }
+        lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+                &data) => LFS3_TAG_REG;
+        lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 4;
+        assert(memcmp(buffer, name, 4) == 0);
+    }
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_mtree_traversal_fuzz]
+defines.N = [5, 10, 20, 40, 80, 160]
+defines.CKMETA = [false, true]
+defines.FORCE_COMPACTION = [false, true]
+defines.SEED = 'range(100)'
+fuzz = 'SEED'
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    bool sim[N];
+    for (lfs3_size_t i = 0; i < N; i++) {
+        sim[i] = false;
+    }
+
+    uint32_t prng = SEED;
+    for (lfs3_size_t i = 0; i < N; i++) {
+        // choose a pseudo-random name
+        lfs3_size_t x = TEST_PRNG(&prng) % N;
+
+        // update sim
+        sim[x] = true;
+
+        // update mtree
+        char name[256];
+        name[0] = '\0';
+        sprintf(name+1, "%03x", x);
+        lfs3_mdir_t mdir;
+        lfs3_stag_t tag = lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                &mdir, NULL);
+        assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+        if (tag != LFS3_ERR_NOENT) {
+            continue;
+        }
+        // force a compaction?
+        if (FORCE_COMPACTION) {
+            lfs3.mroot.r.eoff = -1;
+            mdir.r.eoff = -1;
+        }
+        lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+                LFS3_RATTR(4, LFS3_TAG_REG, +1, LFS3_FROM_NAME),
+                LFS3_RATTR_ARG(0),
+                LFS3_RATTR_ARG(name+1),
+                LFS3_RATTR_ARG(3),
+                LFS3_RATTR_NULL)) => 0;
+        lfs3_data_t data;
+
+        // double check
+        uint8_t buffer[256];
+        lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+                &data) => LFS3_TAG_REG;
+        lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 4;
+        assert(memcmp(buffer, name, 4) == 0);
+    }
+
+    // test that we can traverse the tree, keeping track of all blocks
+    // we see
+    uint8_t *seen = malloc((BLOCK_COUNT+7)/8);
+    memset(seen, 0, (BLOCK_COUNT+7)/8);
+
+    lfs3_mtrv_t mtrv;
+    lfs3_mtrv_init(&mtrv,
+            LFS3_T_RDONLY
+                | LFS3_T_MTREEONLY
+                | ((CKMETA) ? LFS3_T_CKMETA : 0));
+    for (lfs3_block_t i = 0;; i++) {
+        // a bit hacky, but this catches infinite loops
+        assert(i < 2*BLOCK_COUNT);
+
+        lfs3_stag_t tag;
+        lfs3_bptr_t bptr;
+        tag = lfs3_mtree_traverse(&lfs3, &mtrv,
+                &bptr);
+        assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+        if (tag == LFS3_ERR_NOENT) {
+            break;
+        }
+
+        if (tag == LFS3_TAG_MDIR) {
+            lfs3_mdir_t *mdir = (lfs3_mdir_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x mdir 0x{%x,%x}\n",
+                    tag,
+                    mdir->r.blocks[0],
+                    mdir->r.blocks[1]);
+
+            // keep track of seen blocks
+            seen[mdir->r.blocks[1] / 8]
+                    |= 1 << (mdir->r.blocks[1] % 8);
+            seen[mdir->r.blocks[0] / 8]
+                    |= 1 << (mdir->r.blocks[0] % 8);
+
+        } else if (tag == LFS3_TAG_BRANCH) {
+            lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x btree 0x%x.%x\n",
+                    tag,
+                    rbyd->blocks[0], rbyd->trunk);
+
+            // keep track of seen blocks
+            seen[rbyd->blocks[0] / 8]
+                    |= 1 << (rbyd->blocks[0] % 8);
+
+        } else {
+            // this shouldn't happen
+            printf("traversal: 0x%x\n", tag);
+            assert(false);
+        }
+    }
+
+    // if traversal worked, we should be able to clobber all other blocks
+    uint8_t clobber_buf[BLOCK_SIZE];
+    memset(clobber_buf, 0xcc, BLOCK_SIZE);
+    for (lfs3_block_t block = 0; block < BLOCK_COUNT; block++) {
+        if (!(seen[block / 8] & (1 << (block % 8)))) {
+            CFG->erase(CFG, block) => 0;
+            CFG->prog(CFG, block, 0, clobber_buf, BLOCK_SIZE) => 0;
+        }
+    }
+    free(seen);
+
+    // and the tree should still work
+
+    // try looking up each entry
+    lfs3_mdir_t mdir;
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    lfs3_data_t data;
+    uint8_t buffer[256];
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_BOOKMARK,
+            &data) => LFS3_TAG_BOOKMARK;
+    lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 1;
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        name[0] = '\0';
+        sprintf(name+1, "%03x", i);
+        if (sim[i]) {
+            lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                    &mdir, NULL) => LFS3_TAG_REG;
+            lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+                    &data) => LFS3_TAG_REG;
+            lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 4;
+            assert(memcmp(buffer, name, 4) == 0);
+        } else {
+            lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                    &mdir, NULL) => LFS3_ERR_NOENT;
+        }
+    }
+
+    // check things stay sane after remount
+    lfs3_unmount(&lfs3) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+
+    // try looking up each entry
+    lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_BOOKMARK,
+            &data) => LFS3_TAG_BOOKMARK;
+    lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 1;
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        name[0] = '\0';
+        sprintf(name+1, "%03x", i);
+        if (sim[i]) {
+            lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                    &mdir, NULL) => LFS3_TAG_REG;
+            lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+                    &data) => LFS3_TAG_REG;
+            lfs3_data_read(&lfs3, &data, buffer, sizeof(buffer)) => 4;
+            assert(memcmp(buffer, name, 4) == 0);
+        } else {
+            lfs3_mtree_namelookup(&lfs3, 0, name+1, 3,
+                    &mdir, NULL) => LFS3_ERR_NOENT;
+        }
+    }
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+
+## Cycle detection? ##
+
+# test that our cycle detector at least works in common cases
+[cases.test_mtree_traversal_mroot_cycle]
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(
+            LFS3_RATTR(2, LFS3_TAG_MROOT, 0, LFS3_FROM_MPTR),
+            LFS3_RATTR_ARG(LFS3_MPTR_MROOTANCHOR()),
+            LFS3_RATTR_NULL)) => 0;
+
+    // technically, cycle detection only needs to work when we're validating
+    lfs3_mtrv_t mtrv;
+    lfs3_mtrv_init(&mtrv,
+            LFS3_T_RDONLY | LFS3_T_MTREEONLY | LFS3_T_CKMETA);
+    for (lfs3_block_t i = 0;; i++) {
+        // assert that we detect the cycle in a reasonable number of iterations
+        assert(i < 2*BLOCK_COUNT);
+
+        lfs3_stag_t tag;
+        lfs3_bptr_t bptr;
+        tag = lfs3_mtree_traverse(&lfs3, &mtrv,
+                &bptr);
+        assert(tag >= 0 || tag == LFS3_ERR_CORRUPT);
+        if (tag == LFS3_ERR_CORRUPT) {
+            break;
+        }
+
+        if (tag == LFS3_TAG_MDIR) {
+            lfs3_mdir_t *mdir = (lfs3_mdir_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x mdir 0x{%x,%x}\n",
+                    tag,
+                    mdir->r.blocks[0],
+                    mdir->r.blocks[1]);
+
+        } else if (tag == LFS3_TAG_BRANCH) {
+            lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x btree 0x%x.%x\n",
+                    tag,
+                    rbyd->blocks[0], rbyd->trunk);
+
+        } else {
+            // this shouldn't happen
+            printf("traversal: 0x%x\n", tag);
+            assert(false);
+        }
+    }
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+
+## Truncate mroot tests ##
+
+# test some that some tricky truncated tags are rejected correctly
+[cases.test_mtree_truncated_tag]
+defines.OVERFLOW = [-3, -2, -1, 0, 1, 2, 3, 4, 5]
+in = 'lfs3.c'
+code = '''
+    // create a malformed mroot
+    uint8_t buffer[BLOCK_SIZE];
+    // fill with zeros to make parity checks easier
+    memset(buffer, 0, BLOCK_SIZE);
+    memcpy(&buffer[0], "evil", 4);
+    uint32_t cksum = lfs3_crc32c(0, &buffer[0], 4);
+
+    // make sure we're not caught by magic checks
+    buffer[4+0] = ((uint8_t)lfs3_parity(cksum) << 7)
+            | (uint8_t)(LFS3_TAG_MAGIC >> 8);
+    buffer[4+1] = (uint8_t)(LFS3_TAG_MAGIC >> 0);
+    buffer[4+2] = 0;
+    buffer[4+3] = 8;
+    memcpy(&buffer[4+4], "littlefs", 8);
+    cksum = lfs3_crc32c(cksum ^ ((uint32_t)lfs3_parity(cksum) << 7),
+            &buffer[4], 4+8);
+
+    // append a tag that overflows our block
+    lfs3_size_t size = BLOCK_SIZE - (16+7) + OVERFLOW;
+    buffer[16+0] = ((uint8_t)lfs3_parity(cksum) << 7)
+            | (uint8_t)(LFS3_TAG_ATTR >> 8);
+    buffer[16+1] = (uint8_t)(LFS3_TAG_ATTR >> 0);
+    buffer[16+2] = 0;
+    buffer[16+3] = 0x80 | (0x7f & (size >>  0));
+    buffer[16+4] = 0x80 | (0x7f & (size >>  7));
+    buffer[16+5] = 0x80 | (0x7f & (size >> 14));
+    buffer[16+6] = 0x00 | (0x7f & (size >> 21));
+    cksum = lfs3_crc32c(cksum ^ ((uint32_t)lfs3_parity(cksum) << 7),
+            &buffer[16], 7+size);
+
+    // make next tag look valid to make errors look more likely
+    if (OVERFLOW < 0) {
+        buffer[BLOCK_SIZE + OVERFLOW] = ((uint8_t)lfs3_parity(cksum) << 7);
+    }
+
+    // write to both mroot blocks
+    for (int i = 0; i < 2; i++) {
+        CFG->erase(CFG, i) => 0;
+        CFG->prog(CFG, i, 0, buffer, BLOCK_SIZE) => 0;
+    }
+
+    // try to mount, this should fail
+    lfs3_t lfs3;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => LFS3_ERR_CORRUPT;
+'''
+
+[cases.test_mtree_truncated_cksum]
+defines.OVERFLOW = [1, 2, 3, 4]
+defines.TRUNCATED_SIZE = [false, true]
+in = 'lfs3.c'
+code = '''
+    // create a malformed mroot
+    uint8_t buffer[BLOCK_SIZE];
+    // fill with zeros to make parity checks easier
+    memset(buffer, 0, BLOCK_SIZE);
+    memcpy(&buffer[0], "evil", 4);
+    uint32_t cksum = lfs3_crc32c(0, &buffer[0], 4);
+
+    // make sure we're not caught by magic checks
+    buffer[4+0] = ((uint8_t)lfs3_parity(cksum) << 7)
+            | (uint8_t)(LFS3_TAG_MAGIC >> 8);
+    buffer[4+1] = (uint8_t)(LFS3_TAG_MAGIC >> 0);
+    buffer[4+2] = 0;
+    buffer[4+3] = 8;
+    memcpy(&buffer[4+4], "littlefs", 8);
+    cksum = lfs3_crc32c(cksum ^ ((uint32_t)lfs3_parity(cksum) << 7),
+            &buffer[4], 4+8);
+
+    // append a tag for padding
+    lfs3_size_t size = BLOCK_SIZE - (16+7) - (7+4) + OVERFLOW;
+    buffer[16+0] = ((uint8_t)lfs3_parity(cksum) << 7)
+            | (uint8_t)(LFS3_TAG_ATTR >> 8);
+    buffer[16+1] = (uint8_t)(LFS3_TAG_ATTR >> 0);
+    buffer[16+2] = 0;
+    buffer[16+3] = 0x80 | (0x7f & (size >>  0));
+    buffer[16+4] = 0x80 | (0x7f & (size >>  7));
+    buffer[16+5] = 0x80 | (0x7f & (size >> 14));
+    buffer[16+6] = 0x00 | (0x7f & (size >> 21));
+    cksum = lfs3_crc32c(cksum ^ ((uint32_t)lfs3_parity(cksum) << 7),
+            &buffer[16], 7+size);
+
+    // append a truncated cksum tag
+    lfs3_off_t off = BLOCK_SIZE - (7+4) + OVERFLOW;
+    size = (TRUNCATED_SIZE) ? 4-OVERFLOW : 4;
+    buffer[off+0] = ((uint8_t)lfs3_parity(cksum) << 7)
+            | (uint8_t)(LFS3_TAG_CKSUM >> 8);
+    buffer[off+1] = (uint8_t)(LFS3_TAG_CKSUM >> 0);
+    buffer[off+2] = 0;
+    buffer[off+3] = 0x80 | (0x7f & (size >>  0));
+    buffer[off+4] = 0x80 | (0x7f & (size >>  7));
+    buffer[off+5] = 0x80 | (0x7f & (size >> 14));
+    buffer[off+6] = 0x00 | (0x7f & (size >> 21));
+
+    // write to both mroot blocks
+    for (int i = 0; i < 2; i++) {
+        CFG->erase(CFG, i) => 0;
+        CFG->prog(CFG, i, 0, buffer, BLOCK_SIZE) => 0;
+    }
+
+    // try to mount, this should fail
+    lfs3_t lfs3;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => LFS3_ERR_CORRUPT;
+'''
+
+[cases.test_mtree_truncated_ecksum]
+defines.OVERFLOW = [-3, -2, -1, 0, 1, 2, 3, 4, 5]
+defines.TRUNCATED_SIZE = [false, true]
+in = 'lfs3.c'
+code = '''
+    // create a malformed mroot
+    uint8_t buffer[BLOCK_SIZE];
+    // fill with zeros to make parity checks easier
+    memset(buffer, 0, BLOCK_SIZE);
+    memcpy(&buffer[0], "evil", 4);
+    uint32_t cksum = lfs3_crc32c(0, &buffer[0], 4);
+
+    // make sure we're not caught by magic checks
+    buffer[4+0] = ((uint8_t)lfs3_parity(cksum) << 7)
+            | (uint8_t)(LFS3_TAG_MAGIC >> 8);
+    buffer[4+1] = (uint8_t)(LFS3_TAG_MAGIC >> 0);
+    buffer[4+2] = 0;
+    buffer[4+3] = 8;
+    memcpy(&buffer[4+4], "littlefs", 8);
+    cksum = lfs3_crc32c(cksum ^ ((uint32_t)lfs3_parity(cksum) << 7),
+            &buffer[4], 4+8);
+
+    // append a tag for padding
+    lfs3_size_t size = BLOCK_SIZE - (16+7) - (7+5) + OVERFLOW;
+    buffer[16+0] = ((uint8_t)lfs3_parity(cksum) << 7)
+            | (uint8_t)(LFS3_TAG_ATTR >> 8);
+    buffer[16+1] = (uint8_t)(LFS3_TAG_ATTR >> 0);
+    buffer[16+2] = 0;
+    buffer[16+3] = 0x80 | (0x7f & (size >>  0));
+    buffer[16+4] = 0x80 | (0x7f & (size >>  7));
+    buffer[16+5] = 0x80 | (0x7f & (size >> 14));
+    buffer[16+6] = 0x00 | (0x7f & (size >> 21));
+    cksum = lfs3_crc32c(cksum ^ ((uint32_t)lfs3_parity(cksum) << 7),
+            &buffer[16], 7+size);
+
+    // append a truncated ecksum tag
+    lfs3_off_t off = BLOCK_SIZE - (7+5) + OVERFLOW;
+    size = (TRUNCATED_SIZE) ? 5-lfs3_smax(OVERFLOW, 0) : 5;
+    buffer[off+0] = ((uint8_t)lfs3_parity(cksum) << 7)
+            | (uint8_t)(LFS3_TAG_ECKSUM >> 8);
+    buffer[off+1] = (uint8_t)(LFS3_TAG_ECKSUM >> 0);
+    buffer[off+2] = 0;
+    buffer[off+3] = 0x80 | (0x7f & (size >>  0));
+    buffer[off+4] = 0x80 | (0x7f & (size >>  7));
+    buffer[off+5] = 0x80 | (0x7f & (size >> 14));
+    buffer[off+6] = 0x00 | (0x7f & (size >> 21));
+    cksum = lfs3_crc32c(cksum ^ ((uint32_t)lfs3_parity(cksum) << 7),
+            &buffer[16], 7+size);
+
+    // make next tag look valid to make errors look more likely
+    if (OVERFLOW < 0) {
+        buffer[BLOCK_SIZE + OVERFLOW] = ((uint8_t)lfs3_parity(cksum) << 7);
+    }
+
+    // write to both mroot blocks
+    for (int i = 0; i < 2; i++) {
+        CFG->erase(CFG, i) => 0;
+        CFG->prog(CFG, i, 0, buffer, BLOCK_SIZE) => 0;
+    }
+
+    // try to mount, this should fail
+    lfs3_t lfs3;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => LFS3_ERR_CORRUPT;
+'''
+
+[cases.test_mtree_truncated_gcksumdelta]
+defines.OVERFLOW = [-3, -2, -1, 0, 1, 2, 3, 4]
+defines.TRUNCATED_SIZE = [false, true]
+in = 'lfs3.c'
+code = '''
+    // create a malformed mroot
+    uint8_t buffer[BLOCK_SIZE];
+    // fill with zeros to make parity checks easier
+    memset(buffer, 0, BLOCK_SIZE);
+    memcpy(&buffer[0], "evil", 4);
+    uint32_t cksum = lfs3_crc32c(0, &buffer[0], 4);
+
+    // make sure we're not caught by magic checks
+    buffer[4+0] = ((uint8_t)lfs3_parity(cksum) << 7)
+            | (uint8_t)(LFS3_TAG_MAGIC >> 8);
+    buffer[4+1] = (uint8_t)(LFS3_TAG_MAGIC >> 0);
+    buffer[4+2] = 0;
+    buffer[4+3] = 8;
+    memcpy(&buffer[4+4], "littlefs", 8);
+    cksum = lfs3_crc32c(cksum ^ ((uint32_t)lfs3_parity(cksum) << 7),
+            &buffer[4], 4+8);
+
+    // append a tag for padding
+    lfs3_size_t size = BLOCK_SIZE - (16+7) - (7+4) + OVERFLOW;
+    buffer[16+0] = ((uint8_t)lfs3_parity(cksum) << 7)
+            | (uint8_t)(LFS3_TAG_ATTR >> 8);
+    buffer[16+1] = (uint8_t)(LFS3_TAG_ATTR >> 0);
+    buffer[16+2] = 0;
+    buffer[16+3] = 0x80 | (0x7f & (size >>  0));
+    buffer[16+4] = 0x80 | (0x7f & (size >>  7));
+    buffer[16+5] = 0x80 | (0x7f & (size >> 14));
+    buffer[16+6] = 0x00 | (0x7f & (size >> 21));
+    cksum = lfs3_crc32c(cksum ^ ((uint32_t)lfs3_parity(cksum) << 7),
+            &buffer[16], 7+size);
+
+    // append a truncated gcksumdelta tag
+    lfs3_off_t off = BLOCK_SIZE - (7+4) + OVERFLOW;
+    size = (TRUNCATED_SIZE) ? 4-lfs3_smax(OVERFLOW, 0) : 4;
+    buffer[off+0] = ((uint8_t)lfs3_parity(cksum) << 7)
+            | (uint8_t)(LFS3_TAG_GCKSUMDELTA >> 8);
+    buffer[off+1] = (uint8_t)(LFS3_TAG_GCKSUMDELTA >> 0);
+    buffer[off+2] = 0;
+    buffer[off+3] = 0x80 | (0x7f & (size >>  0));
+    buffer[off+4] = 0x80 | (0x7f & (size >>  7));
+    buffer[off+5] = 0x80 | (0x7f & (size >> 14));
+    buffer[off+6] = 0x00 | (0x7f & (size >> 21));
+    cksum = lfs3_crc32c(cksum ^ ((uint32_t)lfs3_parity(cksum) << 7),
+            &buffer[16], 7+size);
+
+    // make next tag look valid to make errors look more likely
+    if (OVERFLOW < 0) {
+        buffer[BLOCK_SIZE + OVERFLOW] = ((uint8_t)lfs3_parity(cksum) << 7);
+    }
+
+    // write to both mroot blocks
+    for (int i = 0; i < 2; i++) {
+        CFG->erase(CFG, i) => 0;
+        CFG->prog(CFG, i, 0, buffer, BLOCK_SIZE) => 0;
+    }
+
+    // try to mount, this should fail
+    lfs3_t lfs3;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => LFS3_ERR_CORRUPT;
+'''
+
+
+## Magic consistency ##
+
+# make sure our magic string ("littlefs") shows up in the same place (off=8)
+[cases.test_mtree_magic]
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+
+    // check our magic string
+    //
+    // note if we lose power we may not have the magic string in both blocks!
+    // but we don't lose power in this test so we can assert the magic string
+    // is present in both
+    uint8_t magic[LFS3_MAX(16, READ_SIZE)];
+    CFG->read(CFG, 0, 0, magic, LFS3_MAX(16, READ_SIZE)) => 0;
+    assert(memcmp(&magic[8], "littlefs", 8) == 0);
+    CFG->read(CFG, 1, 0, magic, LFS3_MAX(16, READ_SIZE)) => 0;
+    assert(memcmp(&magic[8], "littlefs", 8) == 0);
+'''
+
+[cases.test_mtree_magic_extend]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+# make it so blocks relocate every two compacts
+defines.BLOCK_RECYCLES = 0
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // prepare mroot with an entry
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'a', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    // force mroot to compact twice, this should extend the mroot
+    lfs3_mdir_t old_mroot = lfs3.mroot;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+    // assert we relocated
+    assert(lfs3_mdir_cmp(&old_mroot, &lfs3.mroot) != 0);
+
+    // assert that our entry is still in the mroot
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_unmount(&lfs3) => 0;
+
+    // check our magic string
+    //
+    // note if we lose power we may not have the magic string in both blocks!
+    // but we don't lose power in this test so we can assert the magic string
+    // is present in both
+    uint8_t magic[LFS3_MAX(16, READ_SIZE)];
+    CFG->read(CFG, 0, 0, magic, LFS3_MAX(16, READ_SIZE)) => 0;
+    assert(memcmp(&magic[8], "littlefs", 8) == 0);
+    CFG->read(CFG, 1, 0, magic, LFS3_MAX(16, READ_SIZE)) => 0;
+    assert(memcmp(&magic[8], "littlefs", 8) == 0);
+'''
+
+[cases.test_mtree_magic_extend_twice]
+# this should be set so only one entry can fit in a metadata block
+defines.SIZE = 'BLOCK_SIZE / 4'
+# make it so blocks relocate every two compacts
+defines.BLOCK_RECYCLES = 0
+# force our block to compact by setting prog_size=block_size, we don't have
+# any way to indirectly force the intermediary mroots to compact otherwise
+defines.PROG_SIZE = 'BLOCK_SIZE'
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR | F_FLAGS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | M_FLAGS, CFG) => 0;
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_data_t data;
+
+    // prepare mroot with an entry
+    uint8_t buffer[SIZE];
+    buffer[0] = '\0';
+    memset(buffer+1, 'a', SIZE-1);
+    lfs3_mdir_t mdir;
+    lfs3_mtree_namelookup(&lfs3, 0, (const char*)buffer+1, SIZE-1,
+            &mdir, NULL) => LFS3_ERR_NOENT;
+    lfs3_mdir_commit(&lfs3, &mdir, LFS3_RATTRS(
+            LFS3_RATTR(3, LFS3_TAG_REG, +1, LFS3_FROM_DATA),
+            LFS3_RATTR_ARG(SIZE),
+            LFS3_RATTR_ARG(buffer),
+            LFS3_RATTR_NULL)) => 0;
+    assert(mdir.r.weight == 2);
+
+    // force mroot to compact twice, this should extend the mroot
+    lfs3_mdir_t old_mroot = lfs3.mroot;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+    // assert we relocated
+    assert(lfs3_mdir_cmp(&old_mroot, &lfs3.mroot) != 0);
+
+    // force mroot to compact four times, this should relocate the mroot
+    // twice, forcing a second mroot extension
+    old_mroot = lfs3.mroot;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+    lfs3.mroot.r.eoff = -1;
+    lfs3_mdir_commit(&lfs3, &lfs3.mroot, LFS3_RATTRS(LFS3_RATTR_NULL)) => 0;
+    // assert we relocated
+    assert(lfs3_mdir_cmp(&old_mroot, &lfs3.mroot) != 0);
+
+    // assert that our rattr is still in the mroot
+    lfs3_mtree_lookup(&lfs3, (0 << lfs3.mbits)+1, &mdir) => 0;
+    assert(mdir.r.weight == 2);
+    lfs3_mdir_lookup(&lfs3, &mdir, LFS3_TAG_REG,
+            &data) => LFS3_TAG_REG;
+    lfs3_data_read(&lfs3, &data, buffer, SIZE) => SIZE;
+    assert(buffer[1] == 'a');
+
+    lfs3_unmount(&lfs3) => 0;
+
+    // check our magic string
+    //
+    // note if we lose power we may not have the magic string in both blocks!
+    // but we don't lose power in this test so we can assert the magic string
+    // is present in both
+    uint8_t magic[LFS3_MAX(16, READ_SIZE)];
+    CFG->read(CFG, 0, 0, magic, LFS3_MAX(16, READ_SIZE)) => 0;
+    assert(memcmp(&magic[8], "littlefs", 8) == 0);
+    CFG->read(CFG, 1, 0, magic, LFS3_MAX(16, READ_SIZE)) => 0;
+    assert(memcmp(&magic[8], "littlefs", 8) == 0);
+'''

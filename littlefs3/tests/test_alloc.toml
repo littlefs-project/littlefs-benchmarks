@@ -1,0 +1,940 @@
+# Tests covering properties of the block allocator
+
+# The ordering of these tests vs higher-level tests (files/dirs/etc) gets
+# a bit weird because there is an inherent cyclic dependency
+#
+# It's counter-intuitive, but we run the alloc tests _after_ file/dir tests,
+# since you can usually ignore allocator issues temporarily by making the test
+# device really big
+#
+after = ['test_mtree', 'test_gbmap', 'test_dirs', 'test_files']
+
+# Test both with and without the gbmap if available
+defines.GBMAP = [false, true]
+if = 'LFS3_IFYES_GBMAP(GBMAP, true, !GBMAP)'
+defines.FORMAT_BLOCK_COUNT = '(GBMAP) ? 3 : 2'
+
+
+# test that we can alloc
+[cases.test_alloc_alloc]
+defines.COUNT = [
+    'BLOCK_COUNT',
+    'BLOCK_COUNT-1',
+    'BLOCK_COUNT/2',
+    'BLOCK_COUNT/4',
+    '5',
+    'FORMAT_BLOCK_COUNT',
+]
+defines.ERASE = [false, true]
+if = 'COUNT >= FORMAT_BLOCK_COUNT'
+in = 'lfs3.c'
+code = '''
+    // test various block counts
+    struct lfs3_cfg cfg = *CFG;
+    cfg.block_count = COUNT;
+    lfs3_t lfs3;
+    lfs3_format(&lfs3,
+            LFS3_F_RDWR
+                | ((GBMAP) ? LFS3_IFDEF_GBMAP(LFS3_F_GBMAP, -1) : 0),
+            &cfg) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, &cfg) => 0;
+
+    // start allocating
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_size_t alloced = 0;
+    while (true) {
+        lfs3_sblock_t block = lfs3_alloc(&lfs3, ERASE);
+        assert(block >= 0 || block == LFS3_ERR_NOSPC);
+
+        if (block == LFS3_ERR_NOSPC) {
+            break;
+        }
+        alloced += 1;
+
+        // our allocator should stop at some point...
+        assert(alloced < 2*COUNT);
+    }
+
+    // excluding our mroot, we should have allocated exactly
+    // block_count-2 blocks (this gets more complicated with a gbmap)
+    printf("alloced %d/%d blocks\n", alloced, (lfs3_block_t)COUNT);
+    #ifndef LFS3_GBMAP
+    assert(alloced == COUNT-2);
+    #endif
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+# test that we can realloc after an ack
+[cases.test_alloc_reuse]
+defines.COUNT = [
+    'BLOCK_COUNT',
+    'BLOCK_COUNT-1',
+    'BLOCK_COUNT/2',
+    'BLOCK_COUNT/4',
+    '5',
+    'FORMAT_BLOCK_COUNT',
+]
+defines.ERASE = [false, true]
+if = 'COUNT >= FORMAT_BLOCK_COUNT'
+in = 'lfs3.c'
+code = '''
+    // test various block counts
+    struct lfs3_cfg cfg = *CFG;
+    cfg.block_count = COUNT;
+    lfs3_t lfs3;
+    lfs3_format(&lfs3,
+            LFS3_F_RDWR
+                | ((GBMAP) ? LFS3_IFDEF_GBMAP(LFS3_F_GBMAP, -1) : 0),
+            &cfg) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, &cfg) => 0;
+
+    // start allocating
+    lfs3_alloc_ckpoint(&lfs3);
+    lfs3_size_t alloced = 0;
+    while (true) {
+        lfs3_sblock_t block = lfs3_alloc(&lfs3, ERASE);
+        assert(block >= 0 || block == LFS3_ERR_NOSPC);
+
+        if (block == LFS3_ERR_NOSPC) {
+            break;
+        }
+        alloced += 1;
+
+        // our allocator should stop at some point...
+        assert(alloced < 2*COUNT);
+    }
+
+    // excluding our mroot, we should have allocated exactly
+    // block_count-2 blocks (this gets more complicated with a gbmap)
+    printf("alloced %d/%d blocks\n", alloced, (lfs3_block_t)COUNT);
+    #ifndef LFS3_GBMAP
+    assert(alloced == COUNT-2);
+    #endif
+
+    // ack again, effectively releasing all the previously alloced blocks
+    lfs3_alloc_ckpoint(&lfs3);
+    alloced = 0;
+    while (true) {
+        lfs3_sblock_t block = lfs3_alloc(&lfs3, ERASE);
+        assert(block >= 0 || block == LFS3_ERR_NOSPC);
+
+        if (block == LFS3_ERR_NOSPC) {
+            break;
+        }
+        alloced += 1;
+
+        // our allocator should stop at some point...
+        assert(alloced < 2*COUNT);
+    }
+
+    // excluding our mroot, we should have allocated exactly
+    // block_count-2 blocks (this gets more complicated with a gbmap)
+    printf("alloced %d/%d blocks\n", alloced, (lfs3_block_t)COUNT);
+    #ifndef LFS3_GBMAP
+    assert(alloced == COUNT-2);
+    #endif
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+
+# clobber tests test that our traversal algorithm works
+[cases.test_alloc_clobber_dirs]
+defines.N = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+defines.CKMETA = [false, true]
+defines.REMOUNT = [false, true]
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3,
+            LFS3_F_RDWR
+                | ((GBMAP) ? LFS3_IFDEF_GBMAP(LFS3_F_GBMAP, -1) : 0),
+            CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+
+    // create this many directories
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_mkdir(&lfs3, name) => 0;
+    }
+
+    // check that our mkdir worked
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        struct lfs3_info info;
+        lfs3_stat(&lfs3, name, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    lfs3_dir_t dir;
+    lfs3_dir_open(&lfs3, &dir, "/") => 0;
+    struct lfs3_info info;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_close(&lfs3, &dir) => 0;
+
+    // remount?
+    if (REMOUNT) {
+        lfs3_unmount(&lfs3) => 0;
+        lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+    }
+
+    // first traverse the tree to find all blocks in use
+    uint8_t *seen = malloc((BLOCK_COUNT+7)/8);
+    memset(seen, 0, (BLOCK_COUNT+7)/8);
+
+    lfs3_mtrv_t mtrv;
+    lfs3_mtrv_init(&mtrv,
+            LFS3_T_RDONLY
+                | ((CKMETA) ? LFS3_T_CKMETA : 0));
+    for (lfs3_block_t i = 0;; i++) {
+        // a bit hacky, but this catches infinite loops
+        assert(i < 2*BLOCK_COUNT);
+
+        lfs3_stag_t tag;
+        lfs3_bptr_t bptr;
+        tag = lfs3_mtree_traverse(&lfs3, &mtrv,
+                &bptr);
+        assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+        if (tag == LFS3_ERR_NOENT) {
+            break;
+        }
+
+        if (tag == LFS3_TAG_MDIR) {
+            lfs3_mdir_t *mdir = (lfs3_mdir_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x mdir 0x{%x,%x}\n",
+                    tag,
+                    mdir->r.blocks[0],
+                    mdir->r.blocks[1]);
+
+            // keep track of seen blocks
+            seen[mdir->r.blocks[1] / 8] |= 1 << (mdir->r.blocks[1] % 8);
+            seen[mdir->r.blocks[0] / 8] |= 1 << (mdir->r.blocks[0] % 8);
+
+        } else if (tag == LFS3_TAG_BRANCH) {
+            lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x btree 0x%x.%x\n",
+                    tag,
+                    rbyd->blocks[0], rbyd->trunk);
+
+            // keep track of seen blocks
+            seen[rbyd->blocks[0] / 8] |= 1 << (rbyd->blocks[0] % 8);
+
+        } else {
+            // this shouldn't happen
+            printf("traversal: 0x%x\n", tag);
+            assert(false);
+        }
+    }
+
+    // then clobber every other block
+    uint8_t clobber_buf[BLOCK_SIZE];
+    memset(clobber_buf, 0xcc, BLOCK_SIZE);
+    for (lfs3_block_t block = 0; block < BLOCK_COUNT; block++) {
+        if (!(seen[block / 8] & (1 << (block % 8)))) {
+            CFG->erase(CFG, block) => 0;
+            CFG->prog(CFG, block, 0, clobber_buf, BLOCK_SIZE) => 0;
+        }
+    }
+    free(seen);
+
+    // then check that we can read our directories after clobbering
+    for (int remount = 0; remount < 2; remount++) {
+        // remount?
+        if (remount) {
+            lfs3_unmount(&lfs3) => 0;
+            lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+        }
+
+        for (lfs3_size_t i = 0; i < N; i++) {
+            char name[256];
+            sprintf(name, "dir%03x", i);
+            struct lfs3_info info;
+            lfs3_stat(&lfs3, name, &info) => 0;
+            assert(strcmp(info.name, name) == 0);
+            assert(info.type == LFS3_TYPE_DIR);
+            assert(info.size == 0);
+        }
+
+        lfs3_dir_open(&lfs3, &dir, "/") => 0;
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, ".") == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, "..") == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+        for (lfs3_size_t i = 0; i < N; i++) {
+            char name[256];
+            sprintf(name, "dir%03x", i);
+            lfs3_dir_read(&lfs3, &dir, &info) => 0;
+            assert(strcmp(info.name, name) == 0);
+            assert(info.type == LFS3_TYPE_DIR);
+            assert(info.size == 0);
+        }
+        lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+        lfs3_dir_close(&lfs3, &dir) => 0;
+    }
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_alloc_clobber_files]
+defines.N = [1, 2, 4, 8, 16, 32, 64]
+defines.SIZE = [
+    '0',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
+    'BLOCK_SIZE/2',
+    'BLOCK_SIZE',
+    '2*BLOCK_SIZE',
+    '8*BLOCK_SIZE',
+]
+defines.CKMETA = [false, true]
+defines.REMOUNT = [false, true]
+in = 'lfs3.c'
+if = '(SIZE*N)/BLOCK_SIZE <= 32'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3,
+            LFS3_F_RDWR
+                | ((GBMAP) ? LFS3_IFDEF_GBMAP(LFS3_F_GBMAP, -1) : 0),
+            CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+
+    // create this many files
+    uint32_t prng = 42;
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "file%03x", i);
+
+        uint8_t wbuf[SIZE];
+        for (lfs3_size_t j = 0; j < SIZE; j++) {
+            wbuf[j] = 'a' + (TEST_PRNG(&prng) % 26);
+        }
+
+        lfs3_file_t file;
+        lfs3_file_open(&lfs3, &file, name,
+                LFS3_O_WRONLY | LFS3_O_CREAT | LFS3_O_EXCL) => 0;
+        lfs3_file_write(&lfs3, &file, wbuf, SIZE) => SIZE;
+        lfs3_file_close(&lfs3, &file) => 0;
+    }
+
+    // check that our writes worked
+    prng = 42;
+    for (lfs3_size_t i = 0; i < N; i++) {
+        // check with stat
+        char name[256];
+        sprintf(name, "file%03x", i);
+        struct lfs3_info info;
+        lfs3_stat(&lfs3, name, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_REG);
+        assert(info.size == SIZE);
+
+        // try reading the file, note we reset prng above
+        uint8_t wbuf[SIZE];
+        for (lfs3_size_t j = 0; j < SIZE; j++) {
+            wbuf[j] = 'a' + (TEST_PRNG(&prng) % 26);
+        }
+
+        lfs3_file_t file;
+        uint8_t rbuf[SIZE];
+        lfs3_file_open(&lfs3, &file, name, LFS3_O_RDONLY) => 0;
+        lfs3_file_read(&lfs3, &file, rbuf, SIZE) => SIZE;
+        assert(memcmp(rbuf, wbuf, SIZE) == 0);
+        lfs3_file_close(&lfs3, &file) => 0;
+    }
+
+    // remount?
+    if (REMOUNT) {
+        lfs3_unmount(&lfs3) => 0;
+        lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+    }
+
+    // first traverse the tree to find all blocks in use
+    uint8_t *seen = malloc((BLOCK_COUNT+7)/8);
+    memset(seen, 0, (BLOCK_COUNT+7)/8);
+
+    lfs3_mtrv_t mtrv;
+    lfs3_mtrv_init(&mtrv,
+            LFS3_T_RDONLY
+                | ((CKMETA) ? LFS3_T_CKMETA : 0));
+    for (lfs3_block_t i = 0;; i++) {
+        // a bit hacky, but this catches infinite loops
+        assert(i < 2*BLOCK_COUNT);
+
+        lfs3_stag_t tag;
+        lfs3_bptr_t bptr;
+        tag = lfs3_mtree_traverse(&lfs3, &mtrv,
+                &bptr);
+        assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+        if (tag == LFS3_ERR_NOENT) {
+            break;
+        }
+
+        if (tag == LFS3_TAG_MDIR) {
+            lfs3_mdir_t *mdir = (lfs3_mdir_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x mdir 0x{%x,%x}\n",
+                    tag,
+                    mdir->r.blocks[0],
+                    mdir->r.blocks[1]);
+
+            // keep track of seen blocks
+            seen[mdir->r.blocks[1] / 8] |= 1 << (mdir->r.blocks[1] % 8);
+            seen[mdir->r.blocks[0] / 8] |= 1 << (mdir->r.blocks[0] % 8);
+
+        } else if (tag == LFS3_TAG_BRANCH) {
+            lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x btree 0x%x.%x\n",
+                    tag,
+                    rbyd->blocks[0], rbyd->trunk);
+
+            // keep track of seen blocks
+            seen[rbyd->blocks[0] / 8] |= 1 << (rbyd->blocks[0] % 8);
+
+        } else if (tag == LFS3_TAG_BLOCK) {
+            printf("traversal: 0x%x block 0x%x\n",
+                    tag,
+                    bptr.d.u.disk.block);
+
+            // keep track of seen blocks
+            seen[bptr.d.u.disk.block / 8]
+                    |= 1 << (bptr.d.u.disk.block % 8);
+
+        } else {
+            // this shouldn't happen
+            printf("traversal: 0x%x\n", tag);
+            assert(false);
+        }
+    }
+
+    // then clobber every other block
+    uint8_t clobber_buf[BLOCK_SIZE];
+    memset(clobber_buf, 0xcc, BLOCK_SIZE);
+    for (lfs3_block_t block = 0; block < BLOCK_COUNT; block++) {
+        if (!(seen[block / 8] & (1 << (block % 8)))) {
+            CFG->erase(CFG, block) => 0;
+            CFG->prog(CFG, block, 0, clobber_buf, BLOCK_SIZE) => 0;
+        }
+    }
+    free(seen);
+
+    // then check that reading our files still works after clobbering
+    for (int remount = 0; remount < 2; remount++) {
+        // remount?
+        if (remount) {
+            lfs3_unmount(&lfs3) => 0;
+            lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+        }
+
+        prng = 42;
+        for (lfs3_size_t i = 0; i < N; i++) {
+            // check with stat
+            char name[256];
+            sprintf(name, "file%03x", i);
+            struct lfs3_info info;
+            lfs3_stat(&lfs3, name, &info) => 0;
+            assert(strcmp(info.name, name) == 0);
+            assert(info.type == LFS3_TYPE_REG);
+            assert(info.size == SIZE);
+
+            // try reading the file, note we reset prng above
+            uint8_t wbuf[SIZE];
+            for (lfs3_size_t j = 0; j < SIZE; j++) {
+                wbuf[j] = 'a' + (TEST_PRNG(&prng) % 26);
+            }
+
+            lfs3_file_t file;
+            uint8_t rbuf[SIZE];
+            lfs3_file_open(&lfs3, &file, name, LFS3_O_RDONLY) => 0;
+            lfs3_file_read(&lfs3, &file, rbuf, SIZE) => SIZE;
+            assert(memcmp(rbuf, wbuf, SIZE) == 0);
+            lfs3_file_close(&lfs3, &file) => 0;
+        }
+    }
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+# open files need to be tracked internally to make sure this doesn't break
+[cases.test_alloc_clobber_open_files]
+defines.N = [1, 2, 4, 8, 16, 32, 64]
+defines.SIZE = [
+    '0',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
+    'BLOCK_SIZE/2',
+    'BLOCK_SIZE',
+    '2*BLOCK_SIZE',
+    '8*BLOCK_SIZE',
+]
+defines.CKMETA = [false, true]
+in = 'lfs3.c'
+if = '(SIZE*N)/BLOCK_SIZE <= 32'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3,
+            LFS3_F_RDWR
+                | ((GBMAP) ? LFS3_IFDEF_GBMAP(LFS3_F_GBMAP, -1) : 0),
+            CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+
+    // create this many files
+    lfs3_file_t files[N];
+    uint32_t prng = 42;
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "file%03x", i);
+
+        uint8_t wbuf[SIZE];
+        for (lfs3_size_t j = 0; j < SIZE; j++) {
+            wbuf[j] = 'a' + (TEST_PRNG(&prng) % 26);
+        }
+
+        lfs3_file_open(&lfs3, &files[i], name,
+                LFS3_O_RDWR | LFS3_O_CREAT | LFS3_O_EXCL) => 0;
+        lfs3_file_write(&lfs3, &files[i], wbuf, SIZE) => SIZE;
+    }
+
+    // check that our writes worked
+    prng = 42;
+    for (lfs3_size_t i = 0; i < N; i++) {
+        // try reading the file, note we reset prng above
+        uint8_t wbuf[SIZE];
+        for (lfs3_size_t j = 0; j < SIZE; j++) {
+            wbuf[j] = 'a' + (TEST_PRNG(&prng) % 26);
+        }
+
+        uint8_t rbuf[SIZE];
+        lfs3_file_rewind(&lfs3, &files[i]) => 0;
+        lfs3_file_read(&lfs3, &files[i], rbuf, SIZE) => SIZE;
+        assert(memcmp(rbuf, wbuf, SIZE) == 0);
+    }
+
+    // first traverse the tree to find all blocks in use
+    uint8_t *seen = malloc((BLOCK_COUNT+7)/8);
+    memset(seen, 0, (BLOCK_COUNT+7)/8);
+
+    lfs3_mtrv_t mtrv;
+    lfs3_mtrv_init(&mtrv,
+            LFS3_T_RDONLY
+                | ((CKMETA) ? LFS3_T_CKMETA : 0));
+    for (lfs3_block_t i = 0;; i++) {
+        // a bit hacky, but this catches infinite loops
+        assert(i < 2*BLOCK_COUNT);
+
+        lfs3_stag_t tag;
+        lfs3_bptr_t bptr;
+        tag = lfs3_mtree_traverse(&lfs3, &mtrv,
+                &bptr);
+        assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+        if (tag == LFS3_ERR_NOENT) {
+            break;
+        }
+
+        if (tag == LFS3_TAG_MDIR) {
+            lfs3_mdir_t *mdir = (lfs3_mdir_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x mdir 0x{%x,%x}\n",
+                    tag,
+                    mdir->r.blocks[0],
+                    mdir->r.blocks[1]);
+
+            // keep track of seen blocks
+            seen[mdir->r.blocks[1] / 8]
+                    |= 1 << (mdir->r.blocks[1] % 8);
+            seen[mdir->r.blocks[0] / 8]
+                    |= 1 << (mdir->r.blocks[0] % 8);
+
+        } else if (tag == LFS3_TAG_BRANCH) {
+            lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.d.u.buffer;
+            printf("traversal: 0x%x btree 0x%x.%x\n",
+                    tag,
+                    rbyd->blocks[0], rbyd->trunk);
+
+            // keep track of seen blocks
+            seen[rbyd->blocks[0] / 8]
+                    |= 1 << (rbyd->blocks[0] % 8);
+
+        } else if (tag == LFS3_TAG_BLOCK) {
+            printf("traversal: 0x%x block 0x%x\n",
+                    tag,
+                    bptr.d.u.disk.block);
+
+            // keep track of seen blocks
+            seen[bptr.d.u.disk.block / 8]
+                    |= 1 << (bptr.d.u.disk.block % 8);
+
+        } else {
+            // this shouldn't happen
+            printf("traversal: 0x%x\n", tag);
+            assert(false);
+        }
+    }
+
+    // then clobber every other block
+    uint8_t clobber_buf[BLOCK_SIZE];
+    memset(clobber_buf, 0xcc, BLOCK_SIZE);
+    for (lfs3_block_t block = 0; block < BLOCK_COUNT; block++) {
+        if (!(seen[block / 8] & (1 << (block % 8)))) {
+            CFG->erase(CFG, block) => 0;
+            CFG->prog(CFG, block, 0, clobber_buf, BLOCK_SIZE) => 0;
+        }
+    }
+    free(seen);
+
+    // then check that reading our files still works after clobbering
+    prng = 42;
+    for (lfs3_size_t i = 0; i < N; i++) {
+        // try reading the file, note we reset prng above
+        uint8_t wbuf[SIZE];
+        for (lfs3_size_t j = 0; j < SIZE; j++) {
+            wbuf[j] = 'a' + (TEST_PRNG(&prng) % 26);
+        }
+
+        uint8_t rbuf[SIZE];
+        lfs3_file_rewind(&lfs3, &files[i]) => 0;
+        lfs3_file_read(&lfs3, &files[i], rbuf, SIZE) => SIZE;
+        assert(memcmp(rbuf, wbuf, SIZE) == 0);
+    }
+
+    // and everything is fine after saving the files
+    for (lfs3_size_t i = 0; i < N; i++) {
+        lfs3_file_close(&lfs3, &files[i]) => 0;
+    }
+
+    for (int remount = 0; remount < 2; remount++) {
+        // remount?
+        if (remount) {
+            lfs3_unmount(&lfs3) => 0;
+            lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+        }
+
+        prng = 42;
+        for (lfs3_size_t i = 0; i < N; i++) {
+            // check with stat
+            char name[256];
+            sprintf(name, "file%03x", i);
+            struct lfs3_info info;
+            lfs3_stat(&lfs3, name, &info) => 0;
+            assert(strcmp(info.name, name) == 0);
+            assert(info.type == LFS3_TYPE_REG);
+            assert(info.size == SIZE);
+
+            // try reading the file, note we reset prng above
+            uint8_t wbuf[SIZE];
+            for (lfs3_size_t j = 0; j < SIZE; j++) {
+                wbuf[j] = 'a' + (TEST_PRNG(&prng) % 26);
+            }
+
+            lfs3_file_t file;
+            uint8_t rbuf[SIZE];
+            lfs3_file_open(&lfs3, &file, name, LFS3_O_RDONLY) => 0;
+            lfs3_file_read(&lfs3, &file, rbuf, SIZE) => SIZE;
+            assert(memcmp(rbuf, wbuf, SIZE) == 0);
+            lfs3_file_close(&lfs3, &file) => 0;
+        }
+    }
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+
+
+# test that alloc can wrap around the disk
+[cases.test_alloc_wraparound_files]
+defines.COUNT = [
+    'BLOCK_COUNT',
+    'BLOCK_COUNT-1',
+    'BLOCK_COUNT/2',
+    'BLOCK_COUNT/4',
+    '5',
+    'FORMAT_BLOCK_COUNT',
+]
+defines.SIZE = [
+    'BLOCK_SIZE',
+    '2*BLOCK_SIZE',
+    '8*BLOCK_SIZE',
+]
+defines.N = ['5', 'BLOCK_COUNT/2']
+defines.WRAPAROUND = 3
+if = [
+    'COUNT >= FORMAT_BLOCK_COUNT',
+    'COUNT >= 2*N*SIZE/BLOCK_SIZE',
+]
+code = '''
+    // test various block counts
+    struct lfs3_cfg cfg = *CFG;
+    cfg.block_count = COUNT;
+    lfs3_t lfs3;
+    lfs3_format(&lfs3,
+            LFS3_F_RDWR
+                | ((GBMAP) ? LFS3_IFDEF_GBMAP(LFS3_F_GBMAP, -1) : 0),
+            &cfg) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, &cfg) => 0;
+
+    // create n files repeatedly until we're sure we've wrapped around
+    // a few times
+    uint32_t prng = 42;
+    uint32_t prng_ = prng;
+    for (lfs3_size_t i = 0;
+            i < (WRAPAROUND*COUNT)
+                / (N*(SIZE/BLOCK_SIZE));
+            i++) {
+        prng = prng_;
+        for (lfs3_size_t n = 0; n < N; n++) {
+            char name[256];
+            sprintf(name, "file%08d", n);
+
+            uint8_t wbuf[SIZE];
+            for (lfs3_size_t j = 0; j < SIZE; j++) {
+                wbuf[j] = 'a' + (TEST_PRNG(&prng_) % 26);
+            }
+
+            lfs3_file_t file;
+            lfs3_file_open(&lfs3, &file, name,
+                    LFS3_O_WRONLY | LFS3_O_CREAT | LFS3_O_TRUNC) => 0;
+            lfs3_file_write(&lfs3, &file, wbuf, SIZE) => SIZE;
+            lfs3_file_close(&lfs3, &file) => 0;
+        }
+    }
+
+    for (int remount = 0; remount < 2; remount++) {
+        // remount?
+        if (remount) {
+            lfs3_unmount(&lfs3) => 0;
+            lfs3_mount(&lfs3, LFS3_M_RDWR, &cfg) => 0;
+        }
+
+        // check that our file writes worked
+        prng_ = prng;
+        for (lfs3_size_t i = 0; i < N; i++) {
+            // check with stat
+            char name[256];
+            sprintf(name, "file%08d", i);
+            struct lfs3_info info;
+            lfs3_stat(&lfs3, name, &info) => 0;
+            assert(strcmp(info.name, name) == 0);
+            assert(info.type == LFS3_TYPE_REG);
+            assert(info.size == SIZE);
+
+            // try reading the file, note we reset prng above
+            uint8_t wbuf[SIZE];
+            for (lfs3_size_t j = 0; j < SIZE; j++) {
+                wbuf[j] = 'a' + (TEST_PRNG(&prng_) % 26);
+            }
+
+            lfs3_file_t file;
+            uint8_t rbuf[SIZE];
+            lfs3_file_open(&lfs3, &file, name, LFS3_O_RDONLY) => 0;
+            lfs3_file_read(&lfs3, &file, rbuf, SIZE) => SIZE;
+            assert(memcmp(rbuf, wbuf, SIZE) == 0);
+            lfs3_file_close(&lfs3, &file) => 0;
+        }
+    }
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+
+
+# test that alloc works up until nospc
+[cases.test_alloc_nospc_dirs]
+defines.COUNT = [
+    'BLOCK_COUNT',
+    'BLOCK_COUNT-1',
+    'BLOCK_COUNT/2',
+    'BLOCK_COUNT/4',
+    '5',
+    'FORMAT_BLOCK_COUNT',
+]
+if = 'COUNT >= FORMAT_BLOCK_COUNT'
+code = '''
+    // test various block counts
+    struct lfs3_cfg cfg = *CFG;
+    cfg.block_count = COUNT;
+    lfs3_t lfs3;
+    lfs3_format(&lfs3,
+            LFS3_F_RDWR
+                | ((GBMAP) ? LFS3_IFDEF_GBMAP(LFS3_F_GBMAP, -1) : 0),
+            &cfg) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, &cfg) => 0;
+
+    // create directories until we run out of space
+    lfs3_size_t n = 0;
+    for (;; n++) {
+        char name[256];
+        sprintf(name, "dir%08d", n);
+        int err = lfs3_mkdir(&lfs3, name);
+        assert(!err || err == LFS3_ERR_NOSPC);
+        if (err == LFS3_ERR_NOSPC) {
+            break;
+        }
+    }
+
+    for (int remount = 0; remount < 2; remount++) {
+        // remount?
+        if (remount) {
+            lfs3_unmount(&lfs3) => 0;
+            lfs3_mount(&lfs3, LFS3_M_RDWR, &cfg) => 0;
+        }
+
+        // check that our mkdir worked until we ran out of space
+        for (lfs3_size_t i = 0; i < n; i++) {
+            char name[256];
+            sprintf(name, "dir%08d", i);
+            struct lfs3_info info;
+            lfs3_stat(&lfs3, name, &info) => 0;
+            assert(strcmp(info.name, name) == 0);
+            assert(info.type == LFS3_TYPE_DIR);
+            assert(info.size == 0);
+        }
+
+        lfs3_dir_t dir;
+        lfs3_dir_open(&lfs3, &dir, "/") => 0;
+        struct lfs3_info info;
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, ".") == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, "..") == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+        for (lfs3_size_t i = 0; i < n; i++) {
+            char name[256];
+            sprintf(name, "dir%08d", i);
+            lfs3_dir_read(&lfs3, &dir, &info) => 0;
+            assert(strcmp(info.name, name) == 0);
+            assert(info.type == LFS3_TYPE_DIR);
+            assert(info.size == 0);
+        }
+        lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+        lfs3_dir_close(&lfs3, &dir) => 0;
+    }
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_alloc_nospc_files]
+defines.COUNT = [
+    'BLOCK_COUNT',
+    'BLOCK_COUNT-1',
+    'BLOCK_COUNT/2',
+    'BLOCK_COUNT/4',
+    '5',
+    'FORMAT_BLOCK_COUNT',
+]
+defines.SIZE = [
+    '0',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
+    'BLOCK_SIZE/2',
+    'BLOCK_SIZE',
+    '2*BLOCK_SIZE',
+    '8*BLOCK_SIZE',
+]
+if = 'COUNT >= FORMAT_BLOCK_COUNT'
+code = '''
+    // test various block counts
+    struct lfs3_cfg cfg = *CFG;
+    cfg.block_count = COUNT;
+    lfs3_t lfs3;
+    lfs3_format(&lfs3,
+            LFS3_F_RDWR
+                | ((GBMAP) ? LFS3_IFDEF_GBMAP(LFS3_F_GBMAP, -1) : 0),
+            &cfg) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, &cfg) => 0;
+
+    // create files until we run out of space
+    uint32_t prng = 42;
+    lfs3_size_t n = 0;
+    for (;; n++) {
+        char name[256];
+        sprintf(name, "file%08d", n);
+
+        uint8_t wbuf[SIZE];
+        for (lfs3_size_t j = 0; j < SIZE; j++) {
+            wbuf[j] = 'a' + (TEST_PRNG(&prng) % 26);
+        }
+
+        lfs3_file_t file;
+        int err = lfs3_file_open(&lfs3, &file, name,
+                LFS3_O_WRONLY | LFS3_O_CREAT | LFS3_O_EXCL);
+        assert(!err || err == LFS3_ERR_NOSPC);
+        if (err == LFS3_ERR_NOSPC) {
+            break;
+        }
+
+        lfs3_ssize_t size = lfs3_file_write(&lfs3, &file, wbuf, SIZE);
+        assert(size == SIZE || size == LFS3_ERR_NOSPC);
+        if (size == LFS3_ERR_NOSPC) {
+            lfs3_file_close(&lfs3, &file) => 0;
+            break;
+        }
+
+        err = lfs3_file_close(&lfs3, &file);
+        assert(!err || err == LFS3_ERR_NOSPC);
+        if (err == LFS3_ERR_NOSPC) {
+            break;
+        }
+    }
+
+    for (int remount = 0; remount < 2; remount++) {
+        // remount?
+        if (remount) {
+            lfs3_unmount(&lfs3) => 0;
+            lfs3_mount(&lfs3, LFS3_M_RDWR, &cfg) => 0;
+        }
+
+        // check that our file writes worked until we ran out of space
+        prng = 42;
+        for (lfs3_size_t i = 0; i < n; i++) {
+            // check with stat
+            char name[256];
+            sprintf(name, "file%08d", i);
+            struct lfs3_info info;
+            lfs3_stat(&lfs3, name, &info) => 0;
+            assert(strcmp(info.name, name) == 0);
+            assert(info.type == LFS3_TYPE_REG);
+            assert(info.size == SIZE);
+
+            // try reading the file, note we reset prng above
+            uint8_t wbuf[SIZE];
+            for (lfs3_size_t j = 0; j < SIZE; j++) {
+                wbuf[j] = 'a' + (TEST_PRNG(&prng) % 26);
+            }
+
+            lfs3_file_t file;
+            uint8_t rbuf[SIZE];
+            lfs3_file_open(&lfs3, &file, name, LFS3_O_RDONLY) => 0;
+            lfs3_file_read(&lfs3, &file, rbuf, SIZE) => SIZE;
+            assert(memcmp(rbuf, wbuf, SIZE) == 0);
+            lfs3_file_close(&lfs3, &file) => 0;
+        }
+    }
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+

@@ -1,0 +1,1913 @@
+# Test the annoying subtle corner cases of directory seeking+reading
+#
+# Note there may be some overlap with test_dirs, since some dir operations
+# are needed to validate the directory tree works
+after = 'test_dirs'
+
+
+# test some dir functions
+
+[cases.test_dread_tell]
+defines.N = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+defines.PARENT = [false, true]
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+
+    if (PARENT) {
+        lfs3_mkdir(&lfs3, "pricklypear") => 0;
+    }
+
+    // make this many directories
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), i);
+        lfs3_mkdir(&lfs3, name) => 0;
+    }
+
+    // read our directory
+    //
+    // Note tell's value is not guaranteed! We can test the exact value only
+    // because these tests are tightly bound to the current littlefs version.
+    //
+    lfs3_dir_t dir;
+    lfs3_dir_open(&lfs3, &dir, ((PARENT) ? "pricklypear" : "/")) => 0;
+    lfs3_dir_tell(&lfs3, &dir) => 0;
+    struct lfs3_info info;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_tell(&lfs3, &dir) => 1;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    for (lfs3_size_t i = 0; i < N; i++) {
+        lfs3_dir_tell(&lfs3, &dir) => 2 + i;
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+    lfs3_dir_tell(&lfs3, &dir) => 2 + N;
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_tell(&lfs3, &dir) => 2 + N;
+    lfs3_dir_close(&lfs3, &dir) => 0;
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_dread_rewind]
+defines.N = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+defines.PARENT = [false, true]
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+
+    if (PARENT) {
+        lfs3_mkdir(&lfs3, "pricklypear") => 0;
+    }
+
+    // make this many directories
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), i);
+        lfs3_mkdir(&lfs3, name) => 0;
+    }
+
+    lfs3_dir_t dir;
+    lfs3_dir_open(&lfs3, &dir, ((PARENT) ? "pricklypear" : "/")) => 0;
+
+    // read our directory once
+    lfs3_dir_tell(&lfs3, &dir) => 0;;
+    struct lfs3_info info;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_tell(&lfs3, &dir) => 1;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    for (lfs3_size_t i = 0; i < N; i++) {
+        lfs3_dir_tell(&lfs3, &dir) => 2 + i;
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+    lfs3_dir_tell(&lfs3, &dir) => 2 + N;
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_tell(&lfs3, &dir) => 2 + N;
+
+    // now read it again
+    lfs3_dir_rewind(&lfs3, &dir) => 0;
+    lfs3_dir_tell(&lfs3, &dir) => 0;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_tell(&lfs3, &dir) => 1;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    for (lfs3_size_t i = 0; i < N; i++) {
+        lfs3_dir_tell(&lfs3, &dir) => 2 + i;
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+    lfs3_dir_tell(&lfs3, &dir) => 2 + N;
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_tell(&lfs3, &dir) => 2 + N;
+
+    lfs3_dir_close(&lfs3, &dir) => 0;
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_dread_seek]
+defines.N = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+defines.PARENT = [false, true]
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+
+    if (PARENT) {
+        lfs3_mkdir(&lfs3, "pricklypear") => 0;
+    }
+
+    // make this many directories
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), i);
+        lfs3_mkdir(&lfs3, name) => 0;
+    }
+
+    lfs3_dir_t dir;
+    lfs3_dir_open(&lfs3, &dir, ((PARENT) ? "pricklypear" : "/")) => 0;
+
+    // read our directory once
+    lfs3_dir_tell(&lfs3, &dir) => 0;
+    struct lfs3_info info;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_tell(&lfs3, &dir) => 1;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    for (lfs3_size_t i = 0; i < N; i++) {
+        lfs3_dir_tell(&lfs3, &dir) => 2 + i;
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+    lfs3_dir_tell(&lfs3, &dir) => 2 + N;
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_tell(&lfs3, &dir) => 2 + N;
+
+    // now try to seek to each entry explicitly
+    lfs3_dir_seek(&lfs3, &dir, 0) => 0;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_seek(&lfs3, &dir, 1) => 0;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    for (lfs3_size_t i = 0; i < N; i++) {
+        lfs3_dir_seek(&lfs3, &dir, 2 + i) => 0;
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+    lfs3_dir_seek(&lfs3, &dir, 2 + N) => 0;
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_seek(&lfs3, &dir, 2 + N) => 0;
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+
+    lfs3_dir_close(&lfs3, &dir) => 0;
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+# test we don't ever get extra entries back after we reach
+# the end of a directory
+[cases.test_dread_read_idempotent]
+defines.PARENT = [false, true]
+# NEIGHBORS&0x2 = left neighbor
+# NEIGHBORS&0x1 = right neighbor
+defines.NEIGHBORS = [0x0, 0x1, 0x2, 0x3]
+# neighbors only make sense if we have a parent
+if = 'PARENT || NEIGHBORS == 0'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+
+    if (PARENT) {
+        lfs3_mkdir(&lfs3, "pricklypear") => 0;
+
+        if (NEIGHBORS & 0x2) {
+            assert(lfs3_crc32c(0, "a_IplRNrPH", 10) == 0x00000000);
+            lfs3_mkdir(&lfs3, "a_IplRNrPH") => 0;
+            lfs3_mkdir(&lfs3, "a_IplRNrPH/a_child") => 0;
+        }
+
+        if (NEIGHBORS & 0x1) {
+            assert(lfs3_crc32c(0, "f_VtoMnwRH", 10) == 0xffffffff);
+            lfs3_mkdir(&lfs3, "f_VtoMnwRH") => 0;
+            lfs3_mkdir(&lfs3, "f_VtoMnwRH/f_child") => 0;
+        }
+    }
+
+    char name[256];
+    sprintf(name, "%s/ardvark", ((PARENT) ? "pricklypear" : ""));
+    lfs3_mkdir(&lfs3, name) => 0;
+
+    // read to the end
+    lfs3_dir_t dir;
+    lfs3_dir_open(&lfs3, &dir, ((PARENT) ? "pricklypear" : "/")) => 0;
+
+    struct lfs3_info info;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "ardvark") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_tell(&lfs3, &dir) => 3;
+
+    // reading again should still return noent
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+
+    // seeking past the end of the directory should still return noent
+    lfs3_dir_seek(&lfs3, &dir, 3) => 0;
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+
+    lfs3_dir_seek(&lfs3, &dir, 4) => 0;
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+
+    lfs3_dir_seek(&lfs3, &dir, 1000) => 0;
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+
+    // but we should be able to read again
+    lfs3_dir_rewind(&lfs3, &dir) => 0;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "ardvark") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+
+    lfs3_dir_close(&lfs3, &dir) => 0;
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+# test neighbor changes don't mess with an unrelated dir read
+[cases.test_dread_read_neighbor_mkdirs]
+defines.N = 5
+# where in the dir read do we mkdir?
+defines.I = 'range(6)'
+defines.PARENT = true
+# NEIGHBORS&0x2 = left neighbor
+# NEIGHBORS&0x1 = right neighbor
+defines.NEIGHBORS = [0x1, 0x2, 0x3]
+# more neighbors ensures mdir splits which can be its own source
+# of problems
+defines.NEIGHBOR_N = [1, 10, 100]
+# SEEK=0 => don't seek
+# SEEK=1 => seek
+# SEEK=2 => rewind then seek
+# SEEK=3 => seek with offset before mutation
+# SEEK=4 => rewind then seek with offset before mutation
+defines.SEEK = [0, 1, 2, 3, 4]
+# neighbors only make sense if we have a parent
+if = 'PARENT || NEIGHBORS == 0'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+
+    if (PARENT) {
+        lfs3_mkdir(&lfs3, "pricklypear") => 0;
+
+        if (NEIGHBORS & 0x2) {
+            assert(lfs3_crc32c(0, "a_IplRNrPH", 10) == 0x00000000);
+            lfs3_mkdir(&lfs3, "a_IplRNrPH") => 0;
+        }
+
+        if (NEIGHBORS & 0x1) {
+            assert(lfs3_crc32c(0, "f_VtoMnwRH", 10) == 0xffffffff);
+            lfs3_mkdir(&lfs3, "f_VtoMnwRH") => 0;
+        }
+    }
+
+    // create our directories
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), i);
+        lfs3_mkdir(&lfs3, name) => 0;
+    }
+
+    // start reading
+    lfs3_dir_t dir;
+    lfs3_dir_open(&lfs3, &dir, ((PARENT) ? "pricklypear" : "/")) => 0;
+    struct lfs3_info info;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+
+    // read until I
+    for (lfs3_size_t i = 0; i < I; i++) {
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    // since modification is unrelated, the dir position should go unchanged
+    lfs3_soff_t off = lfs3_dir_tell(&lfs3, &dir);
+    assert(off == I+2);
+
+    // make unrelated dirs
+    if (NEIGHBORS & 0x2) {
+        for (lfs3_size_t i = 0; i < NEIGHBOR_N; i++) {
+            char name[256];
+            sprintf(name, "a_IplRNrPH/a_%03x", i);
+            lfs3_mkdir(&lfs3, name) => 0;
+        }
+    }
+
+    if (NEIGHBORS & 0x1) {
+        for (lfs3_size_t i = 0; i < NEIGHBOR_N; i++) {
+            char name[256];
+            sprintf(name, "f_VtoMnwRH/f_%03x", i);
+            lfs3_mkdir(&lfs3, name) => 0;
+        }
+    }
+
+    // seek after mkdir?
+    if (SEEK) {
+        // note dir pos after reaching end of dir can be anything
+        lfs3_soff_t off_ = lfs3_dir_tell(&lfs3, &dir);
+        assert(off_ >= 0);
+        if (I < N) {
+            assert(off_ == off);
+        }
+
+        if (SEEK == 2 || SEEK == 4) {
+            lfs3_dir_rewind(&lfs3, &dir) => 0;
+        }
+
+        if (SEEK == 3 || SEEK == 4) {
+            lfs3_dir_seek(&lfs3, &dir, off) => 0;
+        } else {
+            lfs3_dir_seek(&lfs3, &dir, off_) => 0;
+        }
+    }
+
+    // we should be able to keep reading where we left off
+    for (lfs3_size_t i = I; i < N; i++) {
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_close(&lfs3, &dir) => 0;
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_dread_read_neighbor_rms]
+defines.N = 5
+# where in the dir read do we mkdir?
+defines.I = 'range(6)'
+defines.PARENT = true
+# NEIGHBORS&0x2 = left neighbor
+# NEIGHBORS&0x1 = right neighbor
+defines.NEIGHBORS = [0x1, 0x2, 0x3]
+# more neighbors ensures mdir splits which can be its own source
+# of problems
+defines.NEIGHBOR_N = [1, 10, 100]
+# SEEK=0 => don't seek
+# SEEK=1 => seek
+# SEEK=2 => rewind then seek
+# SEEK=3 => seek with offset before mutation
+# SEEK=4 => rewind then seek with offset before mutation
+defines.SEEK = [0, 1, 2, 3, 4]
+# neighbors only make sense if we have a parent
+if = 'PARENT || NEIGHBORS == 0'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+
+    if (PARENT) {
+        lfs3_mkdir(&lfs3, "pricklypear") => 0;
+
+        if (NEIGHBORS & 0x2) {
+            assert(lfs3_crc32c(0, "a_IplRNrPH", 10) == 0x00000000);
+            lfs3_mkdir(&lfs3, "a_IplRNrPH") => 0;
+            for (lfs3_size_t i = 0; i < NEIGHBOR_N; i++) {
+                char name[256];
+                sprintf(name, "a_IplRNrPH/a_%03x", i);
+                lfs3_mkdir(&lfs3, name) => 0;
+            }
+        }
+
+        if (NEIGHBORS & 0x1) {
+            assert(lfs3_crc32c(0, "f_VtoMnwRH", 10) == 0xffffffff);
+            lfs3_mkdir(&lfs3, "f_VtoMnwRH") => 0;
+            for (lfs3_size_t i = 0; i < NEIGHBOR_N; i++) {
+                char name[256];
+                sprintf(name, "f_VtoMnwRH/f_%03x", i);
+                lfs3_mkdir(&lfs3, name) => 0;
+            }
+        }
+    }
+
+    // create our directories
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), i);
+        lfs3_mkdir(&lfs3, name) => 0;
+    }
+
+    // start reading
+    lfs3_dir_t dir;
+    lfs3_dir_open(&lfs3, &dir, ((PARENT) ? "pricklypear" : "/")) => 0;
+    struct lfs3_info info;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+
+    // read until I
+    for (lfs3_size_t i = 0; i < I; i++) {
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    // since modification is unrelated, the dir position should go unchanged
+    lfs3_soff_t off = lfs3_dir_tell(&lfs3, &dir);
+    assert(off == I+2);
+
+    // remove unrelated dirs
+    if (NEIGHBORS & 0x2) {
+        for (lfs3_size_t i = 0; i < NEIGHBOR_N; i++) {
+            char name[256];
+            sprintf(name, "a_IplRNrPH/a_%03x", i);
+            lfs3_remove(&lfs3, name) => 0;
+        }
+    }
+
+    if (NEIGHBORS & 0x1) {
+        for (lfs3_size_t i = 0; i < NEIGHBOR_N; i++) {
+            char name[256];
+            sprintf(name, "f_VtoMnwRH/f_%03x", i);
+            lfs3_remove(&lfs3, name) => 0;
+        }
+    }
+
+    // seek after mkdir?
+    if (SEEK) {
+        // note dir pos after reaching end of dir can be anything
+        lfs3_soff_t off_ = lfs3_dir_tell(&lfs3, &dir);
+        assert(off_ >= 0);
+        if (I < N) {
+            assert(off_ == off);
+        }
+
+        if (SEEK == 2 || SEEK == 4) {
+            lfs3_dir_rewind(&lfs3, &dir) => 0;
+        }
+
+        if (SEEK == 3 || SEEK == 4) {
+            lfs3_dir_seek(&lfs3, &dir, off) => 0;
+        } else {
+            lfs3_dir_seek(&lfs3, &dir, off_) => 0;
+        }
+    }
+
+    // we should be able to keep reading where we left off
+    for (lfs3_size_t i = I; i < N; i++) {
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_close(&lfs3, &dir) => 0;
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_dread_read_neighbor_mvs]
+defines.N = 5
+# where in the dir read do we mkdir?
+defines.I = 'range(6)'
+defines.PARENT = true
+# NEIGHBORS&0x2 = left neighbor
+# NEIGHBORS&0x1 = right neighbor
+defines.NEIGHBORS = [0x1, 0x2, 0x3]
+# more neighbors ensures mdir splits which can be its own source
+# of problems
+defines.NEIGHBOR_N = [1, 10, 100]
+# SEEK=0 => don't seek
+# SEEK=1 => seek
+# SEEK=2 => rewind then seek
+# SEEK=3 => seek with offset before mutation
+# SEEK=4 => rewind then seek with offset before mutation
+defines.SEEK = [0, 1, 2, 3, 4]
+# neighbors only make sense if we have a parent
+if = 'PARENT || NEIGHBORS == 0'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+
+    if (PARENT) {
+        lfs3_mkdir(&lfs3, "pricklypear") => 0;
+
+        if (NEIGHBORS & 0x2) {
+            assert(lfs3_crc32c(0, "a_IplRNrPH", 10) == 0x00000000);
+            lfs3_mkdir(&lfs3, "a_IplRNrPH") => 0;
+            for (lfs3_size_t i = 0; i < NEIGHBOR_N; i++) {
+                char name[256];
+                sprintf(name, "a_IplRNrPH/a_%03x", i);
+                lfs3_mkdir(&lfs3, name) => 0;
+            }
+        }
+
+        if (NEIGHBORS & 0x1) {
+            assert(lfs3_crc32c(0, "f_VtoMnwRH", 10) == 0xffffffff);
+            lfs3_mkdir(&lfs3, "f_VtoMnwRH") => 0;
+            for (lfs3_size_t i = 0; i < NEIGHBOR_N; i++) {
+                char name[256];
+                sprintf(name, "f_VtoMnwRH/f_%03x", i);
+                lfs3_mkdir(&lfs3, name) => 0;
+            }
+        }
+    }
+
+    // create our directories
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), i);
+        lfs3_mkdir(&lfs3, name) => 0;
+    }
+
+    // start reading
+    lfs3_dir_t dir;
+    lfs3_dir_open(&lfs3, &dir, ((PARENT) ? "pricklypear" : "/")) => 0;
+    struct lfs3_info info;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+
+    // read until I
+    for (lfs3_size_t i = 0; i < I; i++) {
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    // since modification is unrelated, the dir position should go unchanged
+    lfs3_soff_t off = lfs3_dir_tell(&lfs3, &dir);
+    assert(off == I+2);
+
+    // rename unrelated dirs
+    if (NEIGHBORS & 0x2) {
+        for (lfs3_size_t i = 0; i < NEIGHBOR_N; i++) {
+            char name[256];
+            sprintf(name, "a_IplRNrPH/a_%03x", i);
+            char name_[256];
+            sprintf(name_, "a_IplRNrPH/b_%03x", i);
+            lfs3_rename(&lfs3, name, name_) => 0;
+        }
+    }
+
+    if (NEIGHBORS & 0x1) {
+        for (lfs3_size_t i = 0; i < NEIGHBOR_N; i++) {
+            char name[256];
+            sprintf(name, "f_VtoMnwRH/f_%03x", i);
+            char name_[256];
+            sprintf(name_, "f_VtoMnwRH/b_%03x", i);
+            lfs3_rename(&lfs3, name, name_) => 0;
+        }
+    }
+
+    // seek after mkdir?
+    if (SEEK) {
+        // note dir pos after reaching end of dir can be anything
+        lfs3_soff_t off_ = lfs3_dir_tell(&lfs3, &dir);
+        assert(off_ >= 0);
+        if (I < N) {
+            assert(off_ == off);
+        }
+
+        if (SEEK == 2 || SEEK == 4) {
+            lfs3_dir_rewind(&lfs3, &dir) => 0;
+        }
+
+        if (SEEK == 3 || SEEK == 4) {
+            lfs3_dir_seek(&lfs3, &dir, off) => 0;
+        } else {
+            lfs3_dir_seek(&lfs3, &dir, off_) => 0;
+        }
+    }
+
+    // we should be able to keep reading where we left off
+    for (lfs3_size_t i = I; i < N; i++) {
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_close(&lfs3, &dir) => 0;
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+# test dir read has somewhat reasonable behaviour when the dir is modified
+[cases.test_dread_read_with_mkdirs]
+defines.N = 5
+# where in the dir read do we mkdir?
+defines.I = 'range(6)'
+# where do we mkdir?
+defines.J = 'range(6)'
+defines.PARENT = [false, true]
+# NEIGHBORS&0x2 = left neighbor
+# NEIGHBORS&0x1 = right neighbor
+defines.NEIGHBORS = [0x0, 0x1, 0x2, 0x3]
+# SEEK=0 => don't seek
+# SEEK=1 => seek
+# SEEK=2 => rewind then seek
+defines.SEEK = [0, 1, 2]
+# neighbors only make sense if we have a parent
+if = 'PARENT || NEIGHBORS == 0'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+
+    if (PARENT) {
+        lfs3_mkdir(&lfs3, "pricklypear") => 0;
+
+        if (NEIGHBORS & 0x2) {
+            assert(lfs3_crc32c(0, "a_IplRNrPH", 10) == 0x00000000);
+            lfs3_mkdir(&lfs3, "a_IplRNrPH") => 0;
+            lfs3_mkdir(&lfs3, "a_IplRNrPH/a_child") => 0;
+        }
+
+        if (NEIGHBORS & 0x1) {
+            assert(lfs3_crc32c(0, "f_VtoMnwRH", 10) == 0xffffffff);
+            lfs3_mkdir(&lfs3, "f_VtoMnwRH") => 0;
+            lfs3_mkdir(&lfs3, "f_VtoMnwRH/f_child") => 0;
+        }
+    }
+
+    // create our directories
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), i+1);
+        lfs3_mkdir(&lfs3, name) => 0;
+    }
+
+    // start reading
+    lfs3_dir_t dir;
+    lfs3_dir_open(&lfs3, &dir, ((PARENT) ? "pricklypear" : "/")) => 0;
+    struct lfs3_info info;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+
+    // read until I
+    for (lfs3_size_t i = 0; i < I; i++) {
+        char name[256];
+        sprintf(name, "dir%03x", i+1);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    // make a dir at J
+    char name[256];
+    sprintf(name, "%s/dir%03x_", ((PARENT) ? "pricklypear" : ""), (int)J);
+    lfs3_mkdir(&lfs3, name) => 0;
+
+    // seek after mkdir? this tests that the internal position is
+    // updated correctly
+    if (SEEK) {
+        lfs3_ssize_t off = lfs3_dir_tell(&lfs3, &dir);
+        assert(off >= 0);
+        if (SEEK >= 2) {
+            lfs3_dir_rewind(&lfs3, &dir) => 0;
+        }
+        lfs3_dir_seek(&lfs3, &dir, off) => 0;
+    }
+
+    // we should be able to keep reading, though we may pick up J
+    for (lfs3_size_t i = I + ((I >= J) ? 1 : 0); i < N+1; i++) {
+        char name[256];
+        sprintf(name, "dir%03x%s",
+                i+1 - ((i >= J) ? 1 : 0),
+                (i == J) ? "_" : "");
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_close(&lfs3, &dir) => 0;
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_dread_read_with_rms]
+defines.N = 5
+# where in the dir read do we rm?
+defines.I = 'range(5)'
+# where do we rm?
+defines.J = 'range(5)'
+defines.PARENT = [false, true]
+# NEIGHBORS&0x2 = left neighbor
+# NEIGHBORS&0x1 = right neighbor
+defines.NEIGHBORS = [0x0, 0x1, 0x2, 0x3]
+# SEEK=0 => don't seek
+# SEEK=1 => seek
+# SEEK=2 => rewind then seek
+defines.SEEK = [0, 1, 2]
+# neighbors only make sense if we have a parent
+if = 'PARENT || NEIGHBORS == 0'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+
+    if (PARENT) {
+        lfs3_mkdir(&lfs3, "pricklypear") => 0;
+
+        if (NEIGHBORS & 0x2) {
+            assert(lfs3_crc32c(0, "a_IplRNrPH", 10) == 0x00000000);
+            lfs3_mkdir(&lfs3, "a_IplRNrPH") => 0;
+            lfs3_mkdir(&lfs3, "a_IplRNrPH/a_child") => 0;
+        }
+
+        if (NEIGHBORS & 0x1) {
+            assert(lfs3_crc32c(0, "f_VtoMnwRH", 10) == 0xffffffff);
+            lfs3_mkdir(&lfs3, "f_VtoMnwRH") => 0;
+            lfs3_mkdir(&lfs3, "f_VtoMnwRH/f_child") => 0;
+        }
+    }
+
+    // create our directories
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), i);
+        lfs3_mkdir(&lfs3, name) => 0;
+    }
+
+    // start reading
+    lfs3_dir_t dir;
+    lfs3_dir_open(&lfs3, &dir, ((PARENT) ? "pricklypear" : "/")) => 0;
+    struct lfs3_info info;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+
+    // read until I
+    for (lfs3_size_t i = 0; i < I; i++) {
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    // remove the dir at J
+    char name[256];
+    sprintf(name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), (int)J);
+    lfs3_remove(&lfs3, name) => 0;
+
+    // seek after remove? this tests that the internal position is
+    // updated correctly
+    if (SEEK) {
+        lfs3_ssize_t off = lfs3_dir_tell(&lfs3, &dir);
+        assert(off >= 0);
+        if (SEEK >= 2) {
+            lfs3_dir_rewind(&lfs3, &dir) => 0;
+        }
+        lfs3_dir_seek(&lfs3, &dir, off) => 0;
+    }
+
+    // we should be able to keep reading
+    for (lfs3_size_t i = I; i < N; i++) {
+        if (i == J) {
+            continue;
+        }
+
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_close(&lfs3, &dir) => 0;
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_dread_read_with_mvs]
+defines.N = 5
+# where in the dir read do we rm?
+defines.I = 'range(5)'
+# where do we rm?
+defines.J = 'range(5)'
+defines.K = 'range(5)'
+defines.BEFORE = [false, true]
+# PARENT=0 => no
+# PARENT=1 => yes
+# PARENT=2 => yes, and rename to new parent
+defines.PARENT = [0, 1, 2]
+# NEIGHBORS&0x2 = left neighbor
+# NEIGHBORS&0x1 = right neighbor
+defines.NEIGHBORS = [0x0, 0x1, 0x2, 0x3]
+# SEEK=0 => don't seek
+# SEEK=1 => seek
+# SEEK=2 => rewind then seek
+defines.SEEK = [0, 1, 2]
+# neighbors only make sense if we have a parent
+if = 'PARENT || NEIGHBORS == 0'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+
+    if (PARENT) {
+        lfs3_mkdir(&lfs3, "pricklypear") => 0;
+        if (PARENT >= 2) {
+            lfs3_mkdir(&lfs3, "quiabentia") => 0;
+        }
+
+        if (NEIGHBORS & 0x2) {
+            assert(lfs3_crc32c(0, "a_IplRNrPH", 10) == 0x00000000);
+            lfs3_mkdir(&lfs3, "a_IplRNrPH") => 0;
+            lfs3_mkdir(&lfs3, "a_IplRNrPH/a_child") => 0;
+        }
+
+        if (NEIGHBORS & 0x1) {
+            assert(lfs3_crc32c(0, "f_VtoMnwRH", 10) == 0xffffffff);
+            lfs3_mkdir(&lfs3, "f_VtoMnwRH") => 0;
+            lfs3_mkdir(&lfs3, "f_VtoMnwRH/f_child") => 0;
+        }
+    }
+
+    // create our directories
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), i);
+        lfs3_mkdir(&lfs3, name) => 0;
+    }
+
+    // start reading
+    lfs3_dir_t dir;
+    lfs3_dir_open(&lfs3, &dir, ((PARENT) ? "pricklypear" : "/")) => 0;
+    struct lfs3_info info;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+
+    // read until I
+    for (lfs3_size_t i = 0; i < I; i++) {
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    // rename the dir at J
+    char old_name[256];
+    sprintf(old_name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), (int)J);
+    char new_name[256];
+    sprintf(new_name, "%s/%smved%03x",
+            ((PARENT == 1) ? "pricklypear"
+                : (PARENT >= 2) ? "quiabentia"
+                : ""),
+            ((BEFORE) ? "0" : ""),
+            (int)J);
+    lfs3_rename(&lfs3, old_name, new_name) => 0;
+
+    // seek after remove? this tests that the internal position is
+    // updated correctly
+    if (SEEK) {
+        lfs3_ssize_t off = lfs3_dir_tell(&lfs3, &dir);
+        assert(off >= 0);
+        if (SEEK >= 2) {
+            lfs3_dir_rewind(&lfs3, &dir) => 0;
+        }
+        lfs3_dir_seek(&lfs3, &dir, off) => 0;
+    }
+
+    // we should be able to keep reading
+    for (lfs3_size_t i = I; i < N; i++) {
+        if (i == J) {
+            continue;
+        }
+
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    int err = lfs3_dir_read(&lfs3, &dir, &info);
+    assert(err == LFS3_ERR_NOENT || (!BEFORE && PARENT < 2));
+    lfs3_dir_close(&lfs3, &dir) => 0;
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+# dir reads with 2x ops have better chances of catching bugs that depend on
+# invalid dir states
+
+[cases.test_dread_read_with_2_mkdirs]
+defines.N = 5
+# where in the dir read do we mkdir?
+defines.I = 'range(6)'
+# where do we mkdir?
+defines.J = 'range(6)'
+defines.K = 'range(6)'
+defines.PARENT = [false, true]
+# NEIGHBORS&0x2 = left neighbor
+# NEIGHBORS&0x1 = right neighbor
+defines.NEIGHBORS = [0x0, 0x1, 0x2, 0x3]
+# SEEK=0 => don't seek
+# SEEK=1 => seek
+# SEEK=2 => rewind then seek
+defines.SEEK = [0, 1, 2]
+if = [
+    'J != K',
+    # neighbors only make sense if we have a parent
+    'PARENT || NEIGHBORS == 0',
+]
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+
+    if (PARENT) {
+        lfs3_mkdir(&lfs3, "pricklypear") => 0;
+
+        if (NEIGHBORS & 0x2) {
+            assert(lfs3_crc32c(0, "a_IplRNrPH", 10) == 0x00000000);
+            lfs3_mkdir(&lfs3, "a_IplRNrPH") => 0;
+        }
+
+        if (NEIGHBORS & 0x1) {
+            assert(lfs3_crc32c(0, "f_VtoMnwRH", 10) == 0xffffffff);
+            lfs3_mkdir(&lfs3, "f_VtoMnwRH") => 0;
+        }
+    }
+
+    // create our directories
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), i+1);
+        lfs3_mkdir(&lfs3, name) => 0;
+    }
+
+    // start reading
+    lfs3_dir_t dir;
+    lfs3_dir_open(&lfs3, &dir, ((PARENT) ? "pricklypear" : "/")) => 0;
+    struct lfs3_info info;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+
+    // read until I
+    for (lfs3_size_t i = 0; i < I; i++) {
+        char name[256];
+        sprintf(name, "dir%03x", i+1);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    // make a dir at J
+    char name[256];
+    sprintf(name, "%s/dir%03x_", ((PARENT) ? "pricklypear" : ""), (int)J);
+    lfs3_mkdir(&lfs3, name) => 0;
+
+    // make a dir at K
+    sprintf(name, "%s/dir%03x_", ((PARENT) ? "pricklypear" : ""), (int)K);
+    lfs3_mkdir(&lfs3, name) => 0;
+
+    // seek after mkdir? this tests that the internal position is
+    // updated correctly
+    if (SEEK) {
+        lfs3_ssize_t off = lfs3_dir_tell(&lfs3, &dir);
+        assert(off >= 0);
+        if (SEEK >= 2) {
+            lfs3_dir_rewind(&lfs3, &dir) => 0;
+        }
+        lfs3_dir_seek(&lfs3, &dir, off) => 0;
+    }
+
+    // we should be able to keep reading, though we may pick up J
+    for (lfs3_size_t i = I + ((I >= J) ? 1 : 0) + ((I >= K) ? 1 : 0);
+            i < N+2;
+            i++) {
+        char name[256];
+        sprintf(name, "dir%03x%s",
+                i+1 - (i >= J + ((J >= K) ? 1 : 0) ? 1 : 0)
+                    - (i >= K + ((K >= J) ? 1 : 0) ? 1 : 0),
+                (i == J + ((J > K) ? 1 : 0) || i == K + ((K > J) ? 1 : 0)
+                    ? "_" : ""));
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_close(&lfs3, &dir) => 0;
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_dread_read_with_2_rms]
+defines.N = 5
+# where in the dir read do we rm?
+defines.I = 'range(5)'
+# where do we rm?
+defines.J = 'range(5)'
+defines.K = 'range(5)'
+defines.PARENT = [false, true]
+# NEIGHBORS&0x2 = left neighbor
+# NEIGHBORS&0x1 = right neighbor
+defines.NEIGHBORS = [0x0, 0x1, 0x2, 0x3]
+# SEEK=0 => don't seek
+# SEEK=1 => seek
+# SEEK=2 => rewind then seek
+defines.SEEK = [0, 1, 2]
+if = [
+    'J != K',
+    # neighbors only make sense if we have a parent
+    'PARENT || NEIGHBORS == 0',
+]
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+
+    if (PARENT) {
+        lfs3_mkdir(&lfs3, "pricklypear") => 0;
+
+        if (NEIGHBORS & 0x2) {
+            assert(lfs3_crc32c(0, "a_IplRNrPH", 10) == 0x00000000);
+            lfs3_mkdir(&lfs3, "a_IplRNrPH") => 0;
+            lfs3_mkdir(&lfs3, "a_IplRNrPH/a_child") => 0;
+        }
+
+        if (NEIGHBORS & 0x1) {
+            assert(lfs3_crc32c(0, "f_VtoMnwRH", 10) == 0xffffffff);
+            lfs3_mkdir(&lfs3, "f_VtoMnwRH") => 0;
+            lfs3_mkdir(&lfs3, "f_VtoMnwRH/f_child") => 0;
+        }
+    }
+
+    // create our directories
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), i);
+        lfs3_mkdir(&lfs3, name) => 0;
+    }
+
+    // start reading
+    lfs3_dir_t dir;
+    lfs3_dir_open(&lfs3, &dir, ((PARENT) ? "pricklypear" : "/")) => 0;
+    struct lfs3_info info;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+
+    // read until I
+    for (lfs3_size_t i = 0; i < I; i++) {
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    // remove the dir at J
+    char name[256];
+    sprintf(name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), (int)J);
+    lfs3_remove(&lfs3, name) => 0;
+
+    // remove the dir at K
+    sprintf(name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), (int)K);
+    lfs3_remove(&lfs3, name) => 0;
+
+    // seek after remove? this tests that the internal position is
+    // updated correctly
+    if (SEEK) {
+        lfs3_ssize_t off = lfs3_dir_tell(&lfs3, &dir);
+        assert(off >= 0);
+        if (SEEK >= 2) {
+            lfs3_dir_rewind(&lfs3, &dir) => 0;
+        }
+        lfs3_dir_seek(&lfs3, &dir, off) => 0;
+    }
+
+    // we should be able to keep reading
+    for (lfs3_size_t i = I; i < N; i++) {
+        if (i == J || i == K) {
+            continue;
+        }
+
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_close(&lfs3, &dir) => 0;
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_dread_read_with_2_mvs]
+defines.N = 5
+# where in the dir read do we rm?
+defines.I = 'range(5)'
+# where do we rm?
+defines.J = 'range(5)'
+defines.K = 'range(5)'
+defines.BEFORE = [false, true]
+# PARENT=0 => no
+# PARENT=1 => yes
+# PARENT=2 => yes, and rename to new parent
+defines.PARENT = [0, 1, 2]
+# NEIGHBORS&0x2 = left neighbor
+# NEIGHBORS&0x1 = right neighbor
+defines.NEIGHBORS = [0x0, 0x1, 0x2, 0x3]
+# SEEK=0 => don't seek
+# SEEK=1 => seek
+# SEEK=2 => rewind then seek
+defines.SEEK = [0, 1, 2]
+# neighbors only make sense if we have a parent
+if = [
+    'J != K',
+    # neighbors only make sense if we have a parent
+    'PARENT || NEIGHBORS == 0',
+]
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+
+    if (PARENT) {
+        lfs3_mkdir(&lfs3, "pricklypear") => 0;
+        if (PARENT >= 2) {
+            lfs3_mkdir(&lfs3, "quiabentia") => 0;
+        }
+
+        if (NEIGHBORS & 0x2) {
+            assert(lfs3_crc32c(0, "a_IplRNrPH", 10) == 0x00000000);
+            lfs3_mkdir(&lfs3, "a_IplRNrPH") => 0;
+            lfs3_mkdir(&lfs3, "a_IplRNrPH/a_child") => 0;
+        }
+
+        if (NEIGHBORS & 0x1) {
+            assert(lfs3_crc32c(0, "f_VtoMnwRH", 10) == 0xffffffff);
+            lfs3_mkdir(&lfs3, "f_VtoMnwRH") => 0;
+            lfs3_mkdir(&lfs3, "f_VtoMnwRH/f_child") => 0;
+        }
+    }
+
+    // create our directories
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), i);
+        lfs3_mkdir(&lfs3, name) => 0;
+    }
+
+    // start reading
+    lfs3_dir_t dir;
+    lfs3_dir_open(&lfs3, &dir, ((PARENT) ? "pricklypear" : "/")) => 0;
+    struct lfs3_info info;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+
+    // read until I
+    for (lfs3_size_t i = 0; i < I; i++) {
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    // rename the dir at J
+    char old_name[256];
+    sprintf(old_name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), (int)J);
+    char new_name[256];
+    sprintf(new_name, "%s/%smved%03x",
+            ((PARENT == 1) ? "pricklypear"
+                : (PARENT >= 2) ? "quiabentia"
+                : ""),
+            ((BEFORE) ? "0" : ""),
+            (int)J);
+    lfs3_rename(&lfs3, old_name, new_name) => 0;
+
+    // rename the dir at K
+    sprintf(old_name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), (int)K);
+    sprintf(new_name, "%s/%smved%03x",
+            ((PARENT == 1) ? "pricklypear"
+                : (PARENT >= 2) ? "quiabentia"
+                : ""),
+            ((BEFORE) ? "0" : ""),
+            (int)K);
+    lfs3_rename(&lfs3, old_name, new_name) => 0;
+
+    // seek after remove? this tests that the internal position is
+    // updated correctly
+    if (SEEK) {
+        lfs3_ssize_t off = lfs3_dir_tell(&lfs3, &dir);
+        assert(off >= 0);
+        if (SEEK >= 2) {
+            lfs3_dir_rewind(&lfs3, &dir) => 0;
+        }
+        lfs3_dir_seek(&lfs3, &dir, off) => 0;
+    }
+
+    // we should be able to keep reading
+    for (lfs3_size_t i = I; i < N; i++) {
+        if (i == J || i == K) {
+            continue;
+        }
+
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    int err = lfs3_dir_read(&lfs3, &dir, &info);
+    assert(err == LFS3_ERR_NOENT || (!BEFORE && PARENT < 2));
+    lfs3_dir_close(&lfs3, &dir) => 0;
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+# test removing the directory we are iterating over
+[cases.test_dread_read_rm]
+defines.N = 5
+# where in the dir read do we remove?
+defines.I = 'range(6)'
+# NEIGHBORS&0x2 = left neighbor
+# NEIGHBORS&0x1 = right neighbor
+defines.NEIGHBORS = [0x0, 0x1, 0x2, 0x3]
+# SEEK=0 => don't seek
+# SEEK=1 => seek
+# SEEK=2 => rewind then seek
+defines.SEEK = [0, 1, 2]
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+
+    lfs3_mkdir(&lfs3, "pricklypear") => 0;
+
+    if (NEIGHBORS & 0x2) {
+        assert(lfs3_crc32c(0, "a_IplRNrPH", 10) == 0x00000000);
+        lfs3_mkdir(&lfs3, "a_IplRNrPH") => 0;
+        lfs3_mkdir(&lfs3, "a_IplRNrPH/a_child") => 0;
+    }
+
+    if (NEIGHBORS & 0x1) {
+        assert(lfs3_crc32c(0, "f_VtoMnwRH", 10) == 0xffffffff);
+        lfs3_mkdir(&lfs3, "f_VtoMnwRH") => 0;
+        lfs3_mkdir(&lfs3, "f_VtoMnwRH/f_child") => 0;
+    }
+
+    // create our directories
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "pricklypear/dir%03x", i+1);
+        lfs3_mkdir(&lfs3, name) => 0;
+    }
+
+    // start reading
+    lfs3_dir_t dir;
+    lfs3_dir_open(&lfs3, &dir, "pricklypear") => 0;
+    struct lfs3_info info;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+
+    // read until I
+    for (lfs3_size_t i = 0; i < I; i++) {
+        char name[256];
+        sprintf(name, "dir%03x", i+1);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    // remove the directory
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "pricklypear/dir%03x", i+1);
+        lfs3_remove(&lfs3, name) => 0;
+    }
+    lfs3_remove(&lfs3, "pricklypear") => 0;
+
+    // seek after mkdir?
+    if (SEEK) {
+        lfs3_ssize_t off = lfs3_dir_tell(&lfs3, &dir);
+        assert(off >= 0);
+        if (SEEK >= 2) {
+            lfs3_dir_rewind(&lfs3, &dir) => 0;
+        }
+        lfs3_dir_seek(&lfs3, &dir, off) => 0;
+    }
+
+    // try to read, but this should return an error
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_close(&lfs3, &dir) => 0;
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+# test removing and recreating the directory we are iterating over
+[cases.test_dread_read_rm_remkdir]
+defines.N = 5
+# where in the dir read do we remove?
+defines.I = 'range(6)'
+# NEIGHBORS&0x2 = left neighbor
+# NEIGHBORS&0x1 = right neighbor
+defines.NEIGHBORS = [0x0, 0x1, 0x2, 0x3]
+# SEEK=0 => don't seek
+# SEEK=1 => seek
+# SEEK=2 => rewind then seek
+defines.SEEK = [0, 1, 2]
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+
+    lfs3_mkdir(&lfs3, "pricklypear") => 0;
+
+    if (NEIGHBORS & 0x2) {
+        assert(lfs3_crc32c(0, "a_IplRNrPH", 10) == 0x00000000);
+        lfs3_mkdir(&lfs3, "a_IplRNrPH") => 0;
+        lfs3_mkdir(&lfs3, "a_IplRNrPH/a_child") => 0;
+    }
+
+    if (NEIGHBORS & 0x1) {
+        assert(lfs3_crc32c(0, "f_VtoMnwRH", 10) == 0xffffffff);
+        lfs3_mkdir(&lfs3, "f_VtoMnwRH") => 0;
+        lfs3_mkdir(&lfs3, "f_VtoMnwRH/f_child") => 0;
+    }
+
+    // create our directories
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "pricklypear/dir%03x", i+1);
+        lfs3_mkdir(&lfs3, name) => 0;
+    }
+
+    // start reading
+    lfs3_dir_t dir;
+    lfs3_dir_open(&lfs3, &dir, "pricklypear") => 0;
+    struct lfs3_info info;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+
+    // read until I
+    for (lfs3_size_t i = 0; i < I; i++) {
+        char name[256];
+        sprintf(name, "dir%03x", i+1);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    // remove the directory
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "pricklypear/dir%03x", i+1);
+        lfs3_remove(&lfs3, name) => 0;
+    }
+    lfs3_remove(&lfs3, "pricklypear") => 0;
+
+    // recreate the directory, note this is technically a different
+    // directory
+    lfs3_mkdir(&lfs3, "pricklypear") => 0;
+
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "pricklypear/dir%03x", i+1);
+        lfs3_mkdir(&lfs3, name) => 0;
+    }
+
+    // we should have ended up with the same did, which is what makes
+    // this tricky
+    lfs3_dir_t dir_;
+    lfs3_dir_open(&lfs3, &dir_, "pricklypear") => 0;
+    assert(dir.did == dir_.did);
+    lfs3_dir_close(&lfs3, &dir_) => 0;
+
+    // seek after mkdir?
+    if (SEEK) {
+        lfs3_ssize_t off = lfs3_dir_tell(&lfs3, &dir);
+        assert(off >= 0);
+        if (SEEK >= 2) {
+            lfs3_dir_rewind(&lfs3, &dir) => 0;
+        }
+        lfs3_dir_seek(&lfs3, &dir, off) => 0;
+    }
+
+    // try to read, but this should return an error
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_close(&lfs3, &dir) => 0;
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+
+
+## Recursive tests
+
+# Recursive here just refers to removing entries in a directory while
+# iterating over the directory
+#
+# This is a useful feature, but it's unintuitive if this should have
+# well-defined behavior, so make sure to test for it
+[cases.test_dread_recursive_rm]
+defines.N = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+defines.PARENT = [false, true]
+# SEEK=0 => don't seek
+# SEEK=1 => seek
+# SEEK=2 => rewind then seek
+defines.SEEK = [0, 1, 2]
+# limit powerloss testing due to time
+if = '!TEST_PLS || N <= 16'
+reentrant = true
+code = '''
+    // format once per test
+    lfs3_t lfs3;
+    int err = lfs3_mount(&lfs3, LFS3_M_RDWR, CFG);
+    if (err) {
+        lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+        lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+    }
+
+    if (PARENT) {
+        err = lfs3_mkdir(&lfs3, "pricklypear");
+        assert(!err || (TEST_PLS && err == LFS3_ERR_EXIST));
+    }
+
+    // make this many directories
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), i);
+        err = lfs3_mkdir(&lfs3, name);
+        assert(!err || (TEST_PLS && err == LFS3_ERR_EXIST));
+    }
+
+    // check that our mkdir worked
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), i);
+        struct lfs3_info info;
+        lfs3_stat(&lfs3, name, &info) => 0;
+        char name2[256];
+        sprintf(name2, "dir%03x", i);
+        assert(strcmp(info.name, name2) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    lfs3_dir_t dir;
+    lfs3_dir_open(&lfs3, &dir, ((PARENT) ? "pricklypear" : "/")) => 0;
+    struct lfs3_info info;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_close(&lfs3, &dir) => 0;
+
+    // now remove directories recursively
+    lfs3_dir_open(&lfs3, &dir, ((PARENT) ? "pricklypear" : "/")) => 0;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "dir%03x", i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+
+        char path[1024];
+        sprintf(path, "%s/%s", ((PARENT) ? "pricklypear" : ""), info.name);
+        lfs3_remove(&lfs3, path) => 0;
+
+        // seek between removes? this tests that the internal position is
+        // updated correctly
+        if (SEEK) {
+            lfs3_ssize_t off = lfs3_dir_tell(&lfs3, &dir);
+            assert(off >= 0);
+            if (SEEK >= 2) {
+                lfs3_dir_rewind(&lfs3, &dir) => 0;
+            }
+            lfs3_dir_seek(&lfs3, &dir, off) => 0;
+        }
+    }
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_close(&lfs3, &dir) => 0;
+
+    // check that our removes worked
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), i);
+        struct lfs3_info info;
+        lfs3_stat(&lfs3, name, &info) => LFS3_ERR_NOENT;
+    }
+
+    lfs3_dir_open(&lfs3, &dir, ((PARENT) ? "pricklypear" : "/")) => 0;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_close(&lfs3, &dir) => 0;
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+# Recursive here just refers to renaming entries in a directory while
+# iterating over the directory
+#
+# This is a useful feature, but it's unintuitive if this should have
+# well-defined behavior, so make sure to test for it
+[cases.test_dread_recursive_mv]
+defines.N = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+defines.BEFORE = [false, true]
+# PARENT=0 => no
+# PARENT=1 => yes
+# PARENT=2 => yes, and rename to new parent
+defines.PARENT = [0, 1, 2]
+# SEEK=0 => don't seek
+# SEEK=1 => seek
+# SEEK=2 => rewind then seek
+defines.SEEK = [0, 1, 2]
+# limit powerloss testing due to time
+if = '!TEST_PLS || N <= 16'
+reentrant = true
+code = '''
+    // format once per test
+    lfs3_t lfs3;
+    int err = lfs3_mount(&lfs3, LFS3_M_RDWR, CFG);
+    if (err) {
+        lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+        lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+    }
+
+    if (PARENT) {
+        err = lfs3_mkdir(&lfs3, "pricklypear");
+        assert(!err || (TEST_PLS && err == LFS3_ERR_EXIST));
+        if (PARENT >= 2) {
+            err = lfs3_mkdir(&lfs3, "quiabentia");
+            assert(!err || (TEST_PLS && err == LFS3_ERR_EXIST));
+        }
+    }
+
+    // check if we have already started renaming, in case of powerloss
+    struct lfs3_info info;
+    err = lfs3_stat(&lfs3,
+            ((PARENT == 1) ? ((BEFORE)
+                    ? "pricklypear/0mved000"
+                    : "pricklypear/mved000")
+                : (PARENT >= 2) ? ((BEFORE)
+                    ? "quiabentia/0mved000"
+                    : "quiabentia/mved000")
+                : ((BEFORE)
+                    ? "/0mved000"
+                    : "/mved000")), &info);
+    if (err == LFS3_ERR_NOENT) {
+        // make this many directories
+        for (lfs3_size_t i = 0; i < N; i++) {
+            char name[256];
+            sprintf(name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), i);
+            err = lfs3_mkdir(&lfs3, name);
+            assert(!err || (TEST_PLS && err == LFS3_ERR_EXIST));
+        }
+
+        // check that our mkdir worked
+        for (lfs3_size_t i = 0; i < N; i++) {
+            char name[256];
+            sprintf(name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), i);
+            struct lfs3_info info;
+            lfs3_stat(&lfs3, name, &info) => 0;
+            char name2[256];
+            sprintf(name2, "dir%03x", i);
+            assert(strcmp(info.name, name2) == 0);
+            assert(info.type == LFS3_TYPE_DIR);
+            assert(info.size == 0);
+        }
+
+        lfs3_dir_t dir;
+        lfs3_dir_open(&lfs3, &dir, ((PARENT) ? "pricklypear" : "/")) => 0;
+        struct lfs3_info info;
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, ".") == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, "..") == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+        for (lfs3_size_t i = 0; i < N; i++) {
+            char name[256];
+            sprintf(name, "dir%03x", i);
+            lfs3_dir_read(&lfs3, &dir, &info) => 0;
+            assert(strcmp(info.name, name) == 0);
+            assert(info.type == LFS3_TYPE_DIR);
+            assert(info.size == 0);
+        }
+        lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+        lfs3_dir_close(&lfs3, &dir) => 0;
+    }
+
+    // now rename directories recursively
+    lfs3_dir_t dir;
+    lfs3_dir_open(&lfs3, &dir, ((PARENT) ? "pricklypear" : "/")) => 0;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    for (lfs3_size_t i = 0;; i++) {
+        int err = lfs3_dir_read(&lfs3, &dir, &info);
+        assert(!err || err == LFS3_ERR_NOENT);
+        // reached the end?
+        if (err == LFS3_ERR_NOENT) {
+            break;
+        }
+        // skip already moved?
+        if (memcmp(info.name, "dir", strlen("dir")) != 0) {
+            continue;
+        }
+        assert(i < 2*N);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+
+        char old_path[1024];
+        sprintf(old_path, "%s/%s", ((PARENT) ? "pricklypear" : ""), info.name);
+        char new_path[1024];
+        sprintf(new_path, "%s/%smved%s",
+                ((PARENT == 1) ? "pricklypear"
+                    : (PARENT >= 2) ? "quiabentia"
+                    : ""),
+                ((BEFORE) ? "0" : ""),
+                &info.name[strlen("dir")]);
+        err = lfs3_rename(&lfs3, old_path, new_path);
+        assert(!err || (TEST_PLS && err == LFS3_ERR_NOENT));
+
+        // seek between renames? this tests that the internal position is
+        // updated correctly
+        if (SEEK) {
+            lfs3_ssize_t off = lfs3_dir_tell(&lfs3, &dir);
+            assert(off >= 0);
+            if (SEEK >= 2) {
+                lfs3_dir_rewind(&lfs3, &dir) => 0;
+            }
+            lfs3_dir_seek(&lfs3, &dir, off) => 0;
+        }
+    }
+    lfs3_dir_close(&lfs3, &dir) => 0;
+
+    // check that our renames worked
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "%s/dir%03x", ((PARENT) ? "pricklypear" : ""), i);
+        struct lfs3_info info;
+        lfs3_stat(&lfs3, name, &info) => LFS3_ERR_NOENT;
+
+        sprintf(name, "%s/%smved%03x",
+                ((PARENT == 1) ? "pricklypear"
+                    : (PARENT >= 2) ? "quiabentia"
+                    : ""),
+                ((BEFORE) ? "0" : ""),
+                i);
+        lfs3_stat(&lfs3, name, &info) => 0;
+        char name2[256];
+        sprintf(name2, "%smved%03x", ((BEFORE) ? "0" : ""), i);
+        assert(strcmp(info.name, name2) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+
+    lfs3_dir_open(&lfs3, &dir,
+            ((PARENT == 1) ? "pricklypear"
+                : (PARENT >= 2) ? "quiabentia"
+                : "/")) => 0;
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, ".") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    lfs3_dir_read(&lfs3, &dir, &info) => 0;
+    assert(strcmp(info.name, "..") == 0);
+    assert(info.type == LFS3_TYPE_DIR);
+    assert(info.size == 0);
+    for (lfs3_size_t i = 0; i < N; i++) {
+        char name[256];
+        sprintf(name, "%smved%03x", ((BEFORE) ? "0" : ""), i);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, name) == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+    }
+    lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+    lfs3_dir_close(&lfs3, &dir) => 0;
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
