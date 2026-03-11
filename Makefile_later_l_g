@@ -81,6 +81,14 @@ F_lfs3ns = 8 # octagon
 BENCH_LFS3NS_RUNNER ?= $(BENCH_LFS3_RUNNER)
 BENCH_LFS3NS_FILTER ?= $(BENCH_LFS3_FILTER)
 
+# custom labels
+L_lfs3 = lfs3
+L_lfs3nb = (no gbmap)
+L_lfs3f = (fragmented)
+L_lfs3nf = (no fruncate)
+L_lfs3ns = (no set)
+L_lfs2 = lfs2
+
 
 # use our bench rules
 BENCH_RULES ?= \
@@ -183,7 +191,11 @@ $(PLOTSDIR)/bench_p26_later_l_g_wt.%.svg: \
 	$(strip ./scripts/plotmpl.py $^ \
 		-W1150 -H475 $(filter, -W1150 -H350 $(filter,-W1500 -H350)) \
 		--wpad=2 --hpad=0.5 \
-		--title='simulated write throughput - $* - disk geometry' \
+		$(if $(filter nor,$*),$\
+			--title='%56ssimulated write throughput - $* - disk geometry%8s$\
+				(default rs=1B$(,) ps=1B$(,) bs=4KiB)',$\
+			--title='%64ssimulated write throughput - $* - disk geometry%8s$\
+				(default rs=1B$(,) ps=512B$(,) bs=128KiB)') \
 		-bFS \
 		-ybench_throughput \
 		--y2 --yunits=B/s \
@@ -364,7 +376,7 @@ $(PLOTSDIR)/bench_p26_later_l_g_wt.%.svg: \
 				--xlabel='block size'\"" \
 		--legend \
 		$(foreach fs, $(BENCH_FSS),$\
-    		-L'$(N_$(fs))=$(fs)') \
+    		-L'$(N_$(fs))=$(L_$(fs))') \
 		$(foreach fs, $(BENCH_FSS),$\
 		    -C'$(N_$(fs))=$(C_$(fs))') \
 		$(foreach fs, $(BENCH_FSS),$\

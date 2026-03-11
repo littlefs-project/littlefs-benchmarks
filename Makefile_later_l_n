@@ -78,6 +78,14 @@ F_lfs3ns = 8 # octagon
 BENCH_LFS3NS_RUNNER ?= $(BENCH_LFS3_RUNNER)
 BENCH_LFS3NS_FILTER ?= $(BENCH_LFS3_FILTER)
 
+# custom labels
+L_lfs3 = lfs3
+L_lfs3nb = (no gbmap)
+L_lfs3f = (fragmented)
+L_lfs3nf = (no fruncate)
+L_lfs3ns = (no set)
+L_lfs2 = lfs2
+
 
 # use our bench rules
 BENCH_RULES ?= \
@@ -214,7 +222,7 @@ $(PLOTSDIR)/bench_p26_later_l_n_wt.%.svg: \
 					-H0.5\"" \
 		--legend \
 		$(foreach fs, $(BENCH_FSS),$\
-    		-L'$(N_$(fs)),bench_throughput=$(fs)' \
+    		-L'$(N_$(fs)),bench_throughput=$(L_$(fs))' \
     		-L'$(N_$(fs)),bench_ram=') \
 		$(foreach fs, $(BENCH_FSS),$\
 		    -C'$(N_$(fs))=$(C_$(fs))') \
