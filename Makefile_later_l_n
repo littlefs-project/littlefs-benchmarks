@@ -70,9 +70,9 @@ U_lfs3ns = LFS3NS
 N_lfs3ns = 33
 I_lfs3ns = 8
 ifdef LIGHT
-C_lfs3ns = \#937860bf # brown
+C_lfs3ns = \#da8bc3bf # pink
 else
-C_lfs3ns = \#debb9bbf # brown
+C_lfs3ns = \#fab0e4bf # pink
 endif
 F_lfs3ns = 8 # octagon
 BENCH_LFS3NS_RUNNER ?= $(BENCH_LFS3_RUNNER)
@@ -174,42 +174,50 @@ $(PLOTSDIR)/bench_p26_later_l_n_wt.%.svg: \
 		-xSIZE \
 		--subplot=" \
 					-Dcase=bench_p26_wt_linear \
+					-UFS=$(N_lfs3nf),$(N_lfs3ns) \
 					-ybench_throughput \
 					--y2 --yunits=B/s \
 					--title=sequential \
 			--subplot-below=\" \
 					-Dcase=bench_p26_wt_linear \
+					-UFS=$(N_lfs3nf),$(N_lfs3ns) \
 					-ybench_ram \
 					--y2 --yunits=B \
 					-H0.5\"" \
 		--subplot-right=" \
 					-Dcase=bench_p26_wt_random \
+					-UFS=$(N_lfs3nf),$(N_lfs3ns) \
 					-ybench_throughput \
 					--y2 --yunits=B/s \
 					--title=random \
 			--subplot-below=\" \
 					-Dcase=bench_p26_wt_random \
+					-UFS=$(N_lfs3nf),$(N_lfs3ns) \
 					-ybench_ram \
 					--y2 --yunits=B \
 					-H0.5\"" \
 		--subplot-right=" \
 					-Dcase=bench_p26_wt_logging \
+					-UFS=$(N_lfs3ns) \
 					-ybench_throughput \
 					--y2 --yunits=B/s \
 					--title=logging \
 			--subplot-below=\" \
 					-Dcase=bench_p26_wt_logging \
+					-UFS=$(N_lfs3ns) \
 					-ybench_ram \
 					--y2 --yunits=B \
 					-H0.5\"" \
 		--subplot-right=" \
 					-Dcase=bench_p26_wt_many \
+					-UFS=$(N_lfs3nf) \
 					-ybench_throughput \
 					--y2 --yunits=B/s \
 					--title=many \
 				$(if $(filter nand,$*), \
 					--subplot-below=\" \
 						-Dcase=bench_p26_wt_many \
+						-UFS=$(N_lfs3nf) \
 						-ybench_throughput \
 						--y2 --yunits=B/s \
 						-I$(N_lfs3) -I$(N_lfs3nb) -I$(N_lfs3f) \
@@ -217,6 +225,7 @@ $(PLOTSDIR)/bench_p26_later_l_n_wt.%.svg: \
 						-H0.5\") \
 			--subplot-below=\" \
 					-Dcase=bench_p26_wt_many \
+					-UFS=$(N_lfs3nf) \
 					-ybench_ram \
 					--y2 --yunits=B \
 					-H0.5\"" \

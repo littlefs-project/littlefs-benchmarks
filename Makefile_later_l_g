@@ -73,9 +73,9 @@ U_lfs3ns = LFS3NS
 N_lfs3ns = 33
 I_lfs3ns = 8
 ifdef LIGHT
-C_lfs3ns = \#937860bf # brown
+C_lfs3ns = \#da8bc3bf # pink
 else
-C_lfs3ns = \#debb9bbf # brown
+C_lfs3ns = \#fab0e4bf # pink
 endif
 F_lfs3ns = 8 # octagon
 BENCH_LFS3NS_RUNNER ?= $(BENCH_LFS3_RUNNER)
@@ -201,6 +201,7 @@ $(PLOTSDIR)/bench_p26_later_l_g_wt.%.svg: \
 		--y2 --yunits=B/s \
 		--subplot=" \
 				-Dcase=bench_p26_wt_linear \
+				-UFS=$(N_lfs3nf),$(N_lfs3ns) \
 				-Dg=rs \
 				-xREAD_SIZE \
 				--xlog --x2 --xunits=B \
@@ -217,6 +218,7 @@ $(PLOTSDIR)/bench_p26_later_l_g_wt.%.svg: \
 				--xlabel='read size' \
 			--subplot-below=\" \
 				-Dcase=bench_p26_wt_linear \
+				-UFS=$(N_lfs3nf),$(N_lfs3ns) \
 				-Dg=ps \
 				-xPROG_SIZE \
 				--xlog --x2 --xunits=B \
@@ -232,6 +234,7 @@ $(PLOTSDIR)/bench_p26_later_l_g_wt.%.svg: \
 				--xlabel='prog size'\" \
 			--subplot-below=\" \
 				-Dcase=bench_p26_wt_linear \
+				-UFS=$(N_lfs3nf),$(N_lfs3ns) \
 				-Dg=bs \
 				-xBLOCK_SIZE \
 				--xlog --x2 --xunits=B \
@@ -247,6 +250,7 @@ $(PLOTSDIR)/bench_p26_later_l_g_wt.%.svg: \
 				--xlabel='block size'\"" \
 		--subplot-right=" \
 				-Dcase=bench_p26_wt_random \
+				-UFS=$(N_lfs3nf),$(N_lfs3ns) \
 				-Dg=rs \
 				-xREAD_SIZE \
 				--xlog --x2 --xunits=B \
@@ -262,6 +266,7 @@ $(PLOTSDIR)/bench_p26_later_l_g_wt.%.svg: \
 				--xlabel='read size' \
 			--subplot-below=\" \
 				-Dcase=bench_p26_wt_random \
+				-UFS=$(N_lfs3nf),$(N_lfs3ns) \
 				-Dg=ps \
 				-xPROG_SIZE \
 				--xlog --x2 --xunits=B \
@@ -276,6 +281,7 @@ $(PLOTSDIR)/bench_p26_later_l_g_wt.%.svg: \
 				--xlabel='prog size'\" \
 			--subplot-below=\" \
 				-Dcase=bench_p26_wt_random \
+				-UFS=$(N_lfs3nf),$(N_lfs3ns) \
 				-Dg=bs \
 				-xBLOCK_SIZE \
 				--xlog --x2 --xunits=B \
@@ -290,6 +296,7 @@ $(PLOTSDIR)/bench_p26_later_l_g_wt.%.svg: \
 				--xlabel='block size'\"" \
 		--subplot-right=" \
 				-Dcase=bench_p26_wt_logging \
+				-UFS=$(N_lfs3ns) \
 				-Dg=rs \
 				-xREAD_SIZE \
 				--xlog --x2 --xunits=B \
@@ -305,6 +312,7 @@ $(PLOTSDIR)/bench_p26_later_l_g_wt.%.svg: \
 				--xlabel='read size' \
 			--subplot-below=\" \
 				-Dcase=bench_p26_wt_logging \
+				-UFS=$(N_lfs3ns) \
 				-Dg=ps \
 				-xPROG_SIZE \
 				--xlog --x2 --xunits=B \
@@ -319,6 +327,7 @@ $(PLOTSDIR)/bench_p26_later_l_g_wt.%.svg: \
 				--xlabel='prog size'\" \
 			--subplot-below=\" \
 				-Dcase=bench_p26_wt_logging \
+				-UFS=$(N_lfs3ns) \
 				-Dg=bs \
 				-xBLOCK_SIZE \
 				--xlog --x2 --xunits=B \
@@ -333,6 +342,7 @@ $(PLOTSDIR)/bench_p26_later_l_g_wt.%.svg: \
 				--xlabel='block size'\"" \
 		--subplot-right=" \
 				-Dcase=bench_p26_wt_many \
+				-UFS=$(N_lfs3nf) \
 				-Dg=rs \
 				-xREAD_SIZE \
 				--xlog --x2 --xunits=B \
@@ -348,6 +358,7 @@ $(PLOTSDIR)/bench_p26_later_l_g_wt.%.svg: \
 				--xlabel='read size' \
 			--subplot-below=\" \
 				-Dcase=bench_p26_wt_many \
+				-UFS=$(N_lfs3nf) \
 				-Dg=ps \
 				-xPROG_SIZE \
 				--xlog --x2 --xunits=B \
@@ -362,6 +373,7 @@ $(PLOTSDIR)/bench_p26_later_l_g_wt.%.svg: \
 				--xlabel='prog size'\" \
 			--subplot-below=\" \
 				-Dcase=bench_p26_wt_many \
+				-UFS=$(N_lfs3nf) \
 				-Dg=bs \
 				-xBLOCK_SIZE \
 				--xlog --x2 --xunits=B \
