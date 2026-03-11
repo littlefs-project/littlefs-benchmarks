@@ -29,7 +29,7 @@ SIM_TIME ?= 60000000000 # 1 minute
 endif
 
 # focus littlefs3/2, but explore some different configurations
-BENCH_FSS ?= lfs3 lfs3nb lfs3f lfs3nf lfs2
+BENCH_FSS ?= lfs3 lfs3nb lfs3f lfs3nf lfs3ns lfs2
 # use our fancy bus+buffer sim
 BENCH_SIMS ?= nor nand
 #BENCH_SIMPLE ?= 1
@@ -54,17 +54,29 @@ F_lfs3f = h # hexagon
 BENCH_LFS3F_RUNNER ?= $(BENCH_LFS3_RUNNER)
 BENCH_LFS3F_FILTER ?= $(BENCH_LFS3_FILTER)
 
-U_lfs3nf = LFS3F
+U_lfs3nf = LFS3NF
 N_lfs3nf = 32
 I_lfs3nf = 7
 ifdef LIGHT
-C_lfs3nf = \#937860bf # brown
+C_lfs3nf = \#8172b3bf # purple
 else
-C_lfs3nf = \#debb9bbf # brown
+C_lfs3nf = \#d0bbffbf # purple
 endif
 F_lfs3nf = p # pentagon
 BENCH_LFS3NF_RUNNER ?= $(BENCH_LFS3_RUNNER)
 BENCH_LFS3NF_FILTER ?= $(BENCH_LFS3_FILTER)
+
+U_lfs3ns = LFS3NS
+N_lfs3ns = 33
+I_lfs3ns = 8
+ifdef LIGHT
+C_lfs3ns = \#937860bf # brown
+else
+C_lfs3ns = \#debb9bbf # brown
+endif
+F_lfs3ns = 8 # octagon
+BENCH_LFS3NS_RUNNER ?= $(BENCH_LFS3_RUNNER)
+BENCH_LFS3NS_FILTER ?= $(BENCH_LFS3_FILTER)
 
 
 # use our bench rules
@@ -101,6 +113,7 @@ $1: $(BENCH_$(U_$2)_RUNNER)
 		-DFS=$(N_$2) \
 		$(if $(filter lfs3f,$2),-DCRYSTAL_THRESH=-1) \
 		$(if $(filter lfs3nf,$2),-DNO_FRUNCATE=1) \
+		$(if $(filter lfs3ns,$2),-DNO_SET=1) \
 		-DDISK_SIZE=$(DISK_SIZE) \
 		-DDISK_GEOMETRY=$(N_$3) \
 		$(if $(BENCH_SIMPLE),-DDISK_SIM=1) \
@@ -186,6 +199,14 @@ $(PLOTSDIR)/bench_p26_later_l_n_wt.%.svg: \
 					-ybench_throughput \
 					--y2 --yunits=B/s \
 					--title=many \
+				$(if $(filter nand,$*), \
+					--subplot-below=\" \
+						-Dcase=bench_p26_wt_many \
+						-ybench_throughput \
+						--y2 --yunits=B/s \
+						-I$(N_lfs3) -I$(N_lfs3nb) -I$(N_lfs3f) \
+						-I$(N_lfs3nf) -I$(N_lfs3ns) \
+						-H0.5\") \
 			--subplot-below=\" \
 					-Dcase=bench_p26_wt_many \
 					-ybench_ram \

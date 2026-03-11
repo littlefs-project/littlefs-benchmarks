@@ -32,7 +32,7 @@ SIM_TIME ?= 60000000000 # 1 minute
 endif
 
 # focus littlefs3/2, but explore some different configurations
-BENCH_FSS ?= lfs3 lfs3nb lfs3f lfs3nf lfs2
+BENCH_FSS ?= lfs3 lfs3nb lfs3f lfs3nf lfs3ns lfs2
 # use our fancy bus+buffer sim
 BENCH_SIMS ?= nor nand
 #BENCH_SIMPLE ?= 1
@@ -57,17 +57,29 @@ F_lfs3f = h # hexagon
 BENCH_LFS3F_RUNNER ?= $(BENCH_LFS3_RUNNER)
 BENCH_LFS3F_FILTER ?= $(BENCH_LFS3_FILTER)
 
-U_lfs3nf = LFS3F
+U_lfs3nf = LFS3NF
 N_lfs3nf = 32
 I_lfs3nf = 7
 ifdef LIGHT
-C_lfs3nf = \#937860bf # brown
+C_lfs3nf = \#8172b3bf # purple
 else
-C_lfs3nf = \#debb9bbf # brown
+C_lfs3nf = \#d0bbffbf # purple
 endif
 F_lfs3nf = p # pentagon
 BENCH_LFS3NF_RUNNER ?= $(BENCH_LFS3_RUNNER)
 BENCH_LFS3NF_FILTER ?= $(BENCH_LFS3_FILTER)
+
+U_lfs3ns = LFS3NS
+N_lfs3ns = 33
+I_lfs3ns = 8
+ifdef LIGHT
+C_lfs3ns = \#937860bf # brown
+else
+C_lfs3ns = \#debb9bbf # brown
+endif
+F_lfs3ns = 8 # octagon
+BENCH_LFS3NS_RUNNER ?= $(BENCH_LFS3_RUNNER)
+BENCH_LFS3NS_FILTER ?= $(BENCH_LFS3_FILTER)
 
 
 # use our bench rules
@@ -105,6 +117,7 @@ $1: $(BENCH_$(U_$2)_RUNNER)
 		-DFS=$(N_$2) \
 		$(if $(filter lfs3f,$2),-DCRYSTAL_THRESH=-1) \
 		$(if $(filter lfs3nf,$2),-DNO_FRUNCATE=1) \
+		$(if $(filter lfs3ns,$2),-DNO_SET=1) \
 		-DDISK_SIZE=$(DISK_SIZE) \
 		-DDISK_GEOMETRY=$(N_$3) \
 		$(if $(BENCH_SIMPLE),-DDISK_SIM=1) \
@@ -138,14 +151,7 @@ $(foreach fs,$(BENCH_FSS),$\
 			$(RESULTSDIR)/bench_p26_later_l_g_wt.$(fs).$(sim).bs.csv,$\
 			$(fs),$\
 			$(sim),$\
-			-DBLOCK_SIZE="$(if $(and \
-					$(filter lfs2,$(fs)), \
-					$(filter nor,$(sim))), \
-				$(subst $(space),$(comma),$(strip \
-					$(filter-out 131072 262144 524288 1048576, \
-						$(subst $(comma),$(space), \
-							$(BENCH_BLOCK_SIZES))))), \
-				$(BENCH_BLOCK_SIZES))"))))
+			-DBLOCK_SIZE=$(BENCH_BLOCK_SIZES)))))
 
 
 ## Plot geometry wt benchmarks
@@ -176,7 +182,7 @@ $(PLOTSDIR)/bench_p26_later_l_g_wt.%.svg: \
 			$(PLOTSDIR)/bench_p26_later_l_g_wt.$(fs).%.csv)
 	$(strip ./scripts/plotmpl.py $^ \
 		-W1150 -H475 $(filter, -W1150 -H350 $(filter,-W1500 -H350)) \
-		--wpad=2 --hpad=2 \
+		--wpad=2 --hpad=0.5 \
 		--title='simulated write throughput - $* - disk geometry' \
 		-bFS \
 		-ybench_throughput \

@@ -24,6 +24,9 @@ defines.SKIP_WARMUP = false
 # don't fruncate, this is logging specific
 defines.NO_FRUNCATE = 0
 
+# don't use lfs3_set, this is many specific
+defines.NO_SET = 0
+
 # spiffs is limited to 32-bit disks
 if = 'BENCH_IFDEF_SPIFFS(DISK_SIZE < 0x100000000ULL, true)'
 
@@ -424,15 +427,22 @@ code = '''
         char name[256];
         sprintf(name, "bench_%08x", pos);
         uint8_t wbuf[CHUNK];
+        memset(wbuf, 'a'+(BENCH_PRNG(&prng) % 26), CHUNK);
 
         // create the file
         //
         // note file == CHUNK here, the sum of all files should add up
         // roughly to the benchmark SIZE
         #if defined(LFS3)
-        lfs3_file_t file;
-        lfs3_file_open(&lfs3, &file, name,
-                LFS3_O_WRONLY | LFS3_O_CREAT | LFS3_O_TRUNC) => 0;
+        if (!NO_SET) {
+            lfs3_set(&lfs3, name, wbuf, CHUNK) => 0;
+        } else {
+            lfs3_file_t file;
+            lfs3_file_open(&lfs3, &file, name,
+                    LFS3_O_WRONLY | LFS3_O_CREAT | LFS3_O_TRUNC) => 0;
+            lfs3_file_write(&lfs3, &file, wbuf, CHUNK) => CHUNK;
+            lfs3_file_close(&lfs3, &file) => 0;
+        }
         #elif defined(LFS2)
         lfs2_file_t file;
         err = lfs2_file_open(&lfs2, &file, name,
@@ -445,37 +455,7 @@ code = '''
             __builtin_trap();
             return;
         }
-        #elif defined(SPIFFS)
-        spiffs_file fd = SPIFFS_open(&spiffs, name,
-                SPIFFS_WRONLY | SPIFFS_CREAT | SPIFFS_TRUNC, 0777);
-        assert(fd >= 0);
-        #elif defined(YAFFS2)
-        int fd = yaffs_open(name, O_WRONLY | O_CREAT | O_TRUNC, 0777);
-        assert(fd >= 0);
-        #endif
-        for (lfs3_size_t i = 0; i < (FILE_SIZE+(CHUNK-1))/CHUNK; i++) {
-            lfs3_ssize_t d = lfs3_min(CHUNK, FILE_SIZE);
-            memset(wbuf, 'a'+(BENCH_PRNG(&prng) % 26), d);
-            #if defined(LFS3)
-            lfs3_file_write(&lfs3, &file, wbuf, d) => d;
-            #elif defined(LFS2)
-            lfs2_file_write(&lfs2, &file, wbuf, d) => d;
-            #elif defined(SPIFFS)
-            SPIFFS_write(&spiffs, fd, wbuf, d) => d;
-            #elif defined(YAFFS2)
-            yaffs_write(fd, wbuf, d) => d;
-            #endif
-
-            written += d;
-
-            // taking too long?
-            if (SIM_TIME && BENCH_SIMTIME() >= SIM_TIME) {
-                break;
-            }
-        }
-        #if defined(LFS3)
-        lfs3_file_close(&lfs3, &file) => 0;
-        #elif defined(LFS2)
+        lfs2_file_write(&lfs2, &file, wbuf, CHUNK) => CHUNK;
         err = lfs2_file_close(&lfs2, &file);
         // TODO littlefs2 bug?
         assert(!err || err == LFS2_ERR_NOENT);
@@ -485,10 +465,19 @@ code = '''
             return;
         }
         #elif defined(SPIFFS)
+        spiffs_file fd = SPIFFS_open(&spiffs, name,
+                SPIFFS_WRONLY | SPIFFS_CREAT | SPIFFS_TRUNC, 0777);
+        assert(fd >= 0);
+        SPIFFS_write(&spiffs, fd, wbuf, CHUNK) => CHUNK;
         SPIFFS_close(&spiffs, fd) => 0;
         #elif defined(YAFFS2)
+        int fd = yaffs_open(name, O_WRONLY | O_CREAT | O_TRUNC, 0777);
+        assert(fd >= 0);
+        yaffs_write(fd, wbuf, CHUNK) => CHUNK;
         yaffs_close(fd) => 0;
         #endif
+
+        written += CHUNK;
     }
     // report the amount we managed to write
     BENCH_STOP("write", written);
