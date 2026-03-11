@@ -6,6 +6,8 @@ TARGET ?= $(BUILDDIR)/lfs3
 else
 TARGET ?= $(BUILDDIR)/liblfs3.a
 endif
+# process substitution my beloved
+SHELL := /bin/bash
 
 
 # find source files
@@ -20,7 +22,8 @@ TESTS ?= $(wildcard tests/*.toml)
 TEST_SRC ?= \
 		$(SRC) \
 		$(filter-out %.t.c %.b.c %.a.c,$(wildcard bd/*.c)) \
-		runners/test_runner.c
+		$(filter-out %.t.c %.b.c %.a.c,$(wildcard runners/test_*.c)) \
+		$(filter-out %.t.c %.b.c %.a.c,$(wildcard tests/*.c))
 TEST_RUNNER ?= $(BUILDDIR)/runners/test_runner
 TEST_C     := \
 		$(TESTS:%.toml=$(BUILDDIR)/%.t.c) \
@@ -39,7 +42,8 @@ BENCHES ?= $(wildcard benches/*.toml)
 BENCH_SRC ?= \
 		$(SRC) \
 		$(filter-out %.t.c %.b.c %.a.c,$(wildcard bd/*.c)) \
-		runners/bench_runner.c
+		$(filter-out %.t.c %.b.c %.a.c,$(wildcard runners/bench_*.c)) \
+		$(filter-out %.t.c %.b.c %.a.c,$(wildcard benches/*.c))
 BENCH_RUNNER ?= $(BUILDDIR)/runners/bench_runner
 BENCH_C     := \
 		$(BENCHES:%.toml=$(BUILDDIR)/%.b.c) \
@@ -95,13 +99,28 @@ CFLAGS += -fno-omit-frame-pointer
 endif
 
 # also forward all LFS3_* environment variables
-CFLAGS += $(foreach D,$(filter LFS3_%,$(.VARIABLES)),-D$D=$($D))
+CFLAGS += $(foreach d,$(filter LFS3_%,$(.VARIABLES)),-D$d=$($d))
 
 TEST_CFLAGS += -Wno-unused-function
 TEST_CFLAGS += -Wno-format-overflow
 
 BENCH_CFLAGS += -Wno-unused-function
 BENCH_CFLAGS += -Wno-format-overflow
+ifndef NO_STACK
+BENCH_CFLAGS += -DBENCH_STACK
+BENCH_CFLAGS += -Wl,--wrap=printf
+BENCH_CFLAGS += -Wl,--wrap=vprintf
+endif
+ifndef NO_HEAP
+BENCH_CFLAGS += -DBENCH_HEAP
+BENCH_CFLAGS += -Wl,--wrap=malloc
+BENCH_CFLAGS += -Wl,--wrap=free
+BENCH_CFLAGS += -Wl,--wrap=realloc
+ifdef NO_STACK
+BENCH_CFLAGS += -Wl,--wrap=printf
+BENCH_CFLAGS += -Wl,--wrap=vprintf
+endif
+endif
 
 ifdef VERBOSE
 CODEFLAGS    += -v
@@ -145,7 +164,7 @@ endif
 ifdef TESTMARKS
 TESTFLAGS  += -o$(TEST_CSV)
 endif
-ifdef BENCHMARKS
+ifndef NO_BENCHMARKS
 BENCHFLAGS += -o$(BENCH_CSV)
 endif
 ifdef VERBOSE
@@ -169,6 +188,22 @@ endif
 ifneq ($(PERF),perf)
 TESTFLAGS  += --perf-path="$(PERF)"
 BENCHFLAGS += --perf-path="$(PERF)"
+endif
+
+# default to not running litmus benches
+ifndef BENCH_ALL
+BENCHFLAGS += --no-litmus
+endif
+
+# alternative bench geometries (defaults to NOR flash)
+ifdef BENCH_NOR
+BENCHFLAGS += -DDISK_GEOMETRY=0
+endif
+ifdef BENCH_NAND
+BENCHFLAGS += -DDISK_GEOMETRY=1
+endif
+ifdef BENCH_PERBYTE
+BENCHFLAGS += -DDISK_SIM=1
 endif
 
 # this is a bit of a hack, but we want to make sure the BUILDDIR
@@ -291,7 +326,6 @@ ctx-diff: $(CI)
 ## Find function sizes
 .PHONY: funcs
 funcs: SUMMARYFLAGS+=-S
-funcs: SHELL=/bin/bash
 funcs: $(OBJ) $(CI)
 	$(strip ./scripts/csv.py \
 		<(./scripts/code.py $(OBJ) $(CODEFLAGS) -o-) \
@@ -305,7 +339,6 @@ funcs: $(OBJ) $(CI)
 
 ## Save function sizes
 .PHONY: funcs-csv
-funcs-csv: SHELL=/bin/bash
 funcs-csv: \
 		$(BUILDDIR)/lfs3.code.csv \
 		$(BUILDDIR)/lfs3.stack.csv \
@@ -313,7 +346,6 @@ funcs-csv: \
 
 ## Compare function sizes
 .PHONY: funcs-diff
-funcs-diff: SHELL=/bin/bash
 funcs-diff: $(OBJ) $(CI)
 	$(strip ./scripts/csv.py \
 		<(./scripts/code.py $(OBJ) $(CODEFLAGS) -o-) \
@@ -348,7 +380,7 @@ structs-csv: $(BUILDDIR)/lfs3.structs.csv
 structs-diff: $(OBJ)
 	./scripts/structs.py $^ $(STRUCTSFLAGS) -d $(BUILDDIR)/lfs3.structs.csv
 
-## Find the line/branch coverage after a test run
+## Find line/branch coverage after a test run with COVGEN
 .PHONY: cov
 cov: COVFLAGS+=-s
 cov: $(GCDA)
@@ -367,7 +399,7 @@ cov-diff: $(GCDA)
 		$(patsubst %,-F%,$(SRC)) \
 		$(COVFLAGS) -d $(BUILDDIR)/lfs3.cov.csv)
 
-## Find the perf results after bench run with PERFGEN
+## Find perf results after bench run with PERFGEN
 .PHONY: perf
 perf: PERFFLAGS+=-S
 perf: $(BENCH_PERF)
@@ -386,7 +418,7 @@ perf-diff: $(BENCH_PERF)
 		$(patsubst %,-F%,$(SRC)) \
 		$(PERFFLAGS) -d $(BUILDDIR)/lfs3.perf.csv)
 
-## Find the perfbd results after a bench run
+## Find perfbd results after a bench run with PERFBDGEN
 .PHONY: perfbd
 perfbd: PERFBDFLAGS+=-S
 perfbd: $(BENCH_TRACE)
@@ -407,7 +439,6 @@ perfbd-diff: $(BENCH_TRACE)
 
 ## Find a summary of compile-time sizes
 .PHONY: summary sizes
-summary sizes: SHELL=/bin/bash
 summary sizes: $(OBJ) $(CI)
 	$(strip ./scripts/csv.py \
 		<(./scripts/code.py $(OBJ) $(CODEFLAGS) -o-) \
@@ -423,7 +454,6 @@ summary sizes: $(OBJ) $(CI)
 
 ## Save compile-time sizes
 .PHONY: summary-csv sizes-csv
-summary-csv sizes-csv: SHELL=/bin/bash
 summary-csv sizes-csv: \
 		$(BUILDDIR)/lfs3.code.csv \
 		$(BUILDDIR)/lfs3.data.csv \
@@ -432,7 +462,6 @@ summary-csv sizes-csv: \
 
 ## Compare compile-time sizes
 .PHONY: summary-diff sizes-diff
-summary-diff sizes-diff: SHELL=/bin/bash
 summary-diff sizes-diff: $(OBJ) $(CI)
 	$(strip ./scripts/csv.py \
 		<(./scripts/csv.py \
@@ -457,7 +486,7 @@ summary-diff sizes-diff: $(OBJ) $(CI)
 			-fstack='max(stack_limit)' \
 			-fctx='max(ctx_size)' \
 			-o-) \
-		-bbuild -cBEFORE -Q $(SUMMARYFLAGS))
+		-bbuild -CBEFORE --small-table $(SUMMARYFLAGS))
 
 
 ## Generate a codemap svg
@@ -498,27 +527,40 @@ test-list list-tests: test-runner
 	./scripts/test.py -R$(TEST_RUNNER) $(TESTFLAGS) -l
 
 ## Summarize the test results
-.PHONY: testmarks
-testmarks: SUMMARYFLAGS+=-spassed -Stime
-testmarks: $(TEST_CSV)
+.PHONY: test-marks
+test-marks: SUMMARYFLAGS+=-Si
+test-marks: $(TEST_CSV)
 	$(strip ./scripts/csv.py $^ \
+		-Fi='min(i)' \
 		-bsuite \
 		-fpassed=test_passed \
-		-ftime=test_time \
+		-fruntime=test_runtime \
 		$(SUMMARYFLAGS))
 
-## Save the test results
-.PHONY: testmarks-csv
-testmarks-csv: $(BUILDDIR)/lfs3.test.csv
+## Save the test results with TESTMARKS
+.PHONY: test-marks-csv
+test-marks-csv: $(BUILDDIR)/lfs3.test.csv
 
 ## Compare test results against a previous run
-.PHONY: testmarks-diff
-testmarks-diff: $(TEST_CSV)
+.PHONY: test-marks-diff
+test-marks-diff: $(TEST_CSV)
 	$(strip ./scripts/csv.py $^ \
+		-Fi='min(i)' \
 		-bsuite \
 		-fpassed=test_passed \
-		-ftime=test_time \
+		-fruntime=test_runtime \
 		$(SUMMARYFLAGS) -d $(BUILDDIR)/lfs3.test.csv)
+
+## Show which tests took the most time
+.PHONY: test-bottlenecks
+test-bottlenecks: SUMMARYFLAGS+=-Sruntime
+test-bottlenecks: $(TEST_CSV)
+	$(strip ./scripts/csv.py $^ \
+		-Fi='min(i)' \
+		-bcase \
+		-fpassed=test_passed \
+		-fruntime=test_runtime \
+		$(SUMMARYFLAGS))
 
 ## Build the bench-runner
 .PHONY: bench-runner build-benches
@@ -547,29 +589,143 @@ bench-list list-benches: bench-runner
 	./scripts/bench.py -R$(BENCH_RUNNER) $(BENCHFLAGS) -l
 
 ## Summarize the bench results
-.PHONY: benchmarks
-benchmarks: SUMMARYFLAGS+=-Serased -Sproged -Sreaded
-benchmarks: $(BENCH_CSV)
-	$(strip ./scripts/csv.py $^ \
-		-bsuite \
-		-freaded=bench_readed \
-		-fproged=bench_proged \
-		-ferased=bench_erased \
+.PHONY: bench-marks
+bench-marks: SUMMARYFLAGS+=-Si
+bench-marks: $(BENCH_CSV)
+	$(strip ./scripts/csv.py \
+		<(./scripts/csv.py $^ \
+			-Uprobe=stack,heap,usage \
+			-Fi='min(i)' \
+			-bprobe='%(case)s+%(probe)s' \
+			-fn='max(n)' \
+			-ft='max(float(bench_simtime)/1.0e9)' \
+			-o-) \
+		-bprobe \
+		-Hprobe=bench+probe \
+		-fn \
+		-ft \
+		-fthroughput='avg(float(n) / max(t, 1.0e-9))' \
 		$(SUMMARYFLAGS))
 
 ## Save the bench results
-.PHONY: benchmarks-csv
-benchmarks-csv: $(BUILDDIR)/lfs3.bench.csv
+.PHONY: bench-marks-csv
+bench-marks-csv: $(BUILDDIR)/lfs3.bench.csv
 
 ## Compare bench results against a previous run
-.PHONY: benchmarks-diff
-benchmarks-diff: $(BENCH_CSV)
+.PHONY: bench-marks-diff
+bench-marks-diff: $(BENCH_CSV)
+	$(strip ./scripts/csv.py \
+		<(./scripts/csv.py $^ \
+			-Uprobe=stack,heap,usage \
+			-Fi='min(i)' \
+			-bprobe='%(case)s+%(probe)s' \
+			-fn='max(n)' \
+			-ft='max(float(bench_simtime)/1.0e9)' \
+			-o-) \
+		-d <(./scripts/csv.py $(BUILDDIR)/lfs3.bench.csv \
+			-Uprobe=stack,heap,usage \
+			-Fi='min(i)' \
+			-bprobe='%(case)s+%(probe)s' \
+			-fn='max(n)' \
+			-ft='max(float(bench_simtime)/1.0e9)' \
+			-o-) \
+		-bprobe \
+		-Hprobe=bench+probe \
+		-fthroughput='avg(float(n) / max(t, 1.0e-9))' \
+		$(SUMMARYFLAGS))
+
+## Show which benches took the most time
+.PHONY: bench-bottlenecks
+bench-bottlenecks: SUMMARYFLAGS+=-Sruntime
+bench-bottlenecks: $(BENCH_CSV)
+	$(strip ./scripts/csv.py \
+		<(./scripts/csv.py $^ \
+			-Uprobe=stack,heap,usage \
+			-Fi='min(i)' \
+			-bprobe='%(case)s+%(probe)s' \
+			-fn='max(n)' \
+			-ft='max(float(bench_simtime)/1.0e9)' \
+			-fruntime='max(bench_runtime)' \
+			-o-) \
+		-bprobe \
+		-Hprobe=bench+probe \
+		-fn \
+		-ft \
+		-fruntime \
+		$(SUMMARYFLAGS))
+
+## Show the amount readed/progged/erased
+.PHONY: bench-ops
+bench-ops: SUMMARYFLAGS+=-Si
+bench-ops: $(BENCH_CSV)
 	$(strip ./scripts/csv.py $^ \
-		-bsuite \
-		-freaded=bench_readed \
-		-fproged=bench_proged \
-		-ferased=bench_erased \
-		$(SUMMARYFLAGS) -d $(BUILDDIR)/lfs3.bench.csv)
+		-Uprobe=stack,heap,usage \
+		-Fi='min(i)' \
+		-bprobe='%(case)s+%(probe)s' \
+		-Hprobe=bench+probe \
+		-freads='bench_reads' \
+		-fprogs='bench_progs' \
+		-ferases='bench_erases' \
+		-freaded='bench_readed' \
+		-fprogged='bench_progged' \
+		-ferased='bench_erased' \
+		$(SUMMARYFLAGS))
+
+## Show average readed/progged/erased per width
+.PHONY: bench-widths
+bench-widths: SUMMARYFLAGS+=-Si
+bench-widths: $(BENCH_CSV)
+	$(strip ./scripts/csv.py $^ \
+		-Uprobe=stack,heap,usage \
+		-Fi='min(i)' \
+		-bprobe='%(case)s+%(probe)s' \
+		-Hprobe=bench+probe \
+		-freaded="avg(saturate(ffrac( \
+			float(bench_readed)/float(bench_reads), \
+			max(1, $$( \
+				./scripts/bench.py -R$(BENCH_RUNNER) $(BENCHFLAGS) \
+					--query-implicit-define=READ_WIDTH)))))" \
+		-fprogged="avg(saturate(ffrac( \
+			float(bench_progged)/float(bench_progs), \
+			max(1, $$( \
+				./scripts/bench.py -R$(BENCH_RUNNER) $(BENCHFLAGS) \
+					--query-implicit-define=PROG_WIDTH)))))" \
+		-ferased="avg(saturate(ffrac( \
+			float(bench_erased)/float(bench_erases), \
+			max(1, $$( \
+				./scripts/bench.py -R$(BENCH_RUNNER) $(BENCHFLAGS) \
+					--query-implicit-define=ERASE_WIDTH)))))" \
+		$(SUMMARYFLAGS))
+
+## Show heap/stack/disk usage
+.PHONY: bench-ram bench-usage
+bench-ram bench-usage: SUMMARYFLAGS+=-Si
+bench-ram bench-usage: $(BENCH_CSV)
+	$(strip ./scripts/csv.py \
+		<(./scripts/csv.py $^ \
+			-Dprobe=stack \
+			-Fi='min(i)' \
+			-bcase \
+			-fstack='max(bench_simtime)' \
+			-o-) \
+		<(./scripts/csv.py $^ \
+			-Dprobe=heap \
+			-Fi='min(i)' \
+			-bcase \
+			-fheap='max(bench_simtime)' \
+			-o-) \
+		<(./scripts/csv.py $^ \
+			-Dprobe=usage \
+			-Fi='min(i)' \
+			-bcase \
+			-fdisk='max(bench_simtime)' \
+			-o-) \
+		-bcase \
+		-fstack \
+		-fheap \
+		-fdisk \
+		$(SUMMARYFLAGS))
+
 
 
 

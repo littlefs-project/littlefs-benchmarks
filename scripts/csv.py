@@ -24,6 +24,38 @@ import os
 import re
 import sys
 
+SI_PREFIXES = {
+    18:  'E',
+    15:  'P',
+    12:  'T',
+    9:   'G',
+    6:   'M',
+    3:   'K',
+    0:   '',
+    -3:  'm',
+    -6:  'u',
+    -9:  'n',
+    -12: 'p',
+    -15: 'f',
+    -18: 'a',
+}
+
+SI2_PREFIXES = {
+    60:  'Ei',
+    50:  'Pi',
+    40:  'Ti',
+    30:  'Gi',
+    20:  'Mi',
+    10:  'Ki',
+    0:   '',
+    -10: 'mi',
+    -20: 'ui',
+    -30: 'ni',
+    -40: 'pi',
+    -50: 'fi',
+    -60: 'ai',
+}
+
 
 # various field types
 
@@ -33,7 +65,7 @@ class CsvInt(co.namedtuple('CsvInt', 'a')):
     def __new__(cls, a=0):
         if isinstance(a, CsvInt):
             return a
-        if isinstance(a, str):
+        elif isinstance(a, str):
             try:
                 a = int(a, 0)
             except ValueError:
@@ -44,9 +76,7 @@ class CsvInt(co.namedtuple('CsvInt', 'a')):
                     a = -mt.inf
                 else:
                     raise
-        if not (isinstance(a, int) or mt.isinf(a)):
-            a = int(a)
-        return super().__new__(cls, a)
+        return super().__new__(cls, float(a) if mt.isinf(a) else int(a))
 
     def __repr__(self):
         return '%s(%r)' % (self.__class__.__name__, self.a)
@@ -143,7 +173,7 @@ class CsvFloat(co.namedtuple('CsvFloat', 'a')):
     def __new__(cls, a=0.0):
         if isinstance(a, CsvFloat):
             return a
-        if isinstance(a, str):
+        elif isinstance(a, str):
             try:
                 a = float(a)
             except ValueError:
@@ -154,9 +184,7 @@ class CsvFloat(co.namedtuple('CsvFloat', 'a')):
                     a = -mt.inf
                 else:
                     raise
-        if not isinstance(a, float):
-            a = float(a)
-        return super().__new__(cls, a)
+        return super().__new__(cls, float(a))
 
     def __repr__(self):
         return '%s(%r)' % (self.__class__.__name__, self.a)
@@ -252,9 +280,11 @@ class CsvFrac(co.namedtuple('CsvFrac', 'a,b')):
     def __new__(cls, a=0, b=None):
         if isinstance(a, CsvFrac) and b is None:
             return a
-        if isinstance(a, str) and b is None:
+        elif hasattr(a, '__frac__') and b is None:
+            a, b = a.__frac__()
+        elif isinstance(a, str) and b is None:
             a, b = a.split('/', 1)
-        if b is None:
+        elif b is None:
             b = a
         return super().__new__(cls, CsvInt(a), CsvInt(b))
 
@@ -275,6 +305,9 @@ class CsvFrac(co.namedtuple('CsvFrac', 'a,b')):
 
     def __float__(self):
         return float(self.a)
+
+    def __frac__(self):
+        return self.a, self.b
 
     none = '%11s' % '-'
     def table(self):
@@ -329,10 +362,11 @@ class CsvFrac(co.namedtuple('CsvFrac', 'a,b')):
     def __mod__(self, other):
         return self.__class__(self.a % other.a, self.b % other.b)
 
+    def __hash__(self):
+        return super().__hash__()
+
     def __eq__(self, other):
-        self_a, self_b = self if self.b.a else (CsvInt(1), CsvInt(1))
-        other_a, other_b = other if other.b.a else (CsvInt(1), CsvInt(1))
-        return self_a * other_b == other_a * self_b
+        return super().__eq__(other)
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -351,40 +385,182 @@ class CsvFrac(co.namedtuple('CsvFrac', 'a,b')):
     def __ge__(self, other):
         return not self.__lt__(other)
 
+# fractional float fields, a/b
+class CsvFfrac(co.namedtuple('CsvFfrac', 'a,b')):
+    __slots__ = ()
+    def __new__(cls, a=0, b=None):
+        if isinstance(a, CsvFfrac) and b is None:
+            return a
+        elif hasattr(a, '__frac__') and b is None:
+            a, b = a.__frac__()
+        elif isinstance(a, str) and b is None:
+            a, b = a.split('/', 1)
+        elif b is None:
+            b = a
+        return super().__new__(cls, CsvFloat(a), CsvFloat(b))
+
+    def __repr__(self):
+        return '%s(%r, %r)' % (self.__class__.__name__, self.a.a, self.b.a)
+
+    def __str__(self):
+        return '%s/%s' % (self.a, self.b)
+
+    def __csv__(self):
+        return '%s/%s' % (self.a.__csv__(), self.b.__csv__())
+
+    def __bool__(self):
+        return bool(self.a)
+
+    def __int__(self):
+        return int(self.a)
+
+    def __float__(self):
+        return float(self.a)
+
+    def __frac__(self):
+        return self.a, self.b
+
+    none = '%11s' % '-'
+    def table(self):
+        return '%11s' % (self,)
+
+    def notes(self):
+        if self.b.a == 0 and self.a.a == 0:
+            t = 1.0
+        elif self.b.a == 0:
+            t = mt.copysign(mt.inf, self.a.a)
+        else:
+            t = self.a.a / self.b.a
+        return ['∞%' if t == +mt.inf
+                else '-∞%' if t == -mt.inf
+                else '%.1f%%' % (100*t)]
+
+    def diff(self, other):
+        new_a, new_b = self if self else (CsvFloat(0), CsvFloat(0))
+        old_a, old_b = other if other else (CsvFloat(0), CsvFloat(0))
+        return '%11s' % ('%s/%s' % (
+                new_a.diff(old_a).strip(),
+                new_b.diff(old_b).strip()))
+
+    def ratio(self, other):
+        new_a, new_b = self if self else (CsvFloat(0), CsvFloat(0))
+        old_a, old_b = other if other else (CsvFloat(0), CsvFloat(0))
+        new = new_a.a/new_b.a if new_b.a else 1.0
+        old = old_a.a/old_b.a if old_b.a else 1.0
+        return new - old
+
+    def __pos__(self):
+        return self.__class__(+self.a, +self.b)
+
+    def __neg__(self):
+        return self.__class__(-self.a, -self.b)
+
+    def __abs__(self):
+        return self.__class__(abs(self.a), abs(self.b))
+
+    def __add__(self, other):
+        return self.__class__(self.a + other.a, self.b + other.b)
+
+    def __sub__(self, other):
+        return self.__class__(self.a - other.a, self.b - other.b)
+
+    def __mul__(self, other):
+        return self.__class__(self.a * other.a, self.b * other.b)
+
+    def __truediv__(self, other):
+        return self.__class__(self.a / other.a, self.b / other.b)
+
+    def __mod__(self, other):
+        return self.__class__(self.a % other.a, self.b % other.b)
+
+    def __hash__(self):
+        return super().__hash__()
+
+    def __eq__(self, other):
+        return super().__eq__(other)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __lt__(self, other):
+        self_a, self_b = self if self.b.a else (CsvFloat(1), CsvFloat(1))
+        other_a, other_b = other if other.b.a else (CsvFloat(1), CsvFloat(1))
+        return self_a * other_b < other_a * self_b
+
+    def __gt__(self, other):
+        return self.__class__.__lt__(other, self)
+
+    def __le__(self, other):
+        return not self.__gt__(other)
+
+    def __ge__(self, other):
+        return not self.__lt__(other)
+
 
 # various fold operations
-class CsvSum:
+class CsvFold:
+    def type(self, type):
+        return type
+
+    def __call__(self, xs):
+        assert False
+
+class CsvSum(CsvFold):
     def __call__(self, xs):
         return sum(xs[1:], start=xs[0])
 
-class CsvProd:
+class CsvProd(CsvFold):
     def __call__(self, xs):
         return mt.prod(xs[1:], start=xs[0])
 
-class CsvMin:
+class CsvMin(CsvFold):
     def __call__(self, xs):
         return min(xs)
 
-class CsvMax:
+class CsvMax(CsvFold):
     def __call__(self, xs):
         return max(xs)
 
-class CsvAvg:
+class CsvAvg(CsvFold):
+    def type(self, t):
+        return CsvFfrac if hasattr(t, '__frac__') else CsvFloat
+
     def __call__(self, xs):
+        if hasattr(xs[0], '__frac__'):
+            return CsvFfrac(self([x.a for x in xs]), self([x.b for x in xs]))
+
         return CsvFloat(sum(float(x) for x in xs) / len(xs))
 
-class CsvStddev:
+class CsvStddev(CsvFold):
+    def type(self, t):
+        return CsvFfrac if hasattr(t, '__frac__') else CsvFloat
+
     def __call__(self, xs):
+        if hasattr(xs[0], '__frac__'):
+            return CsvFfrac(self([x.a for x in xs]), self([x.b for x in xs]))
+
         avg = sum(float(x) for x in xs) / len(xs)
         return CsvFloat(mt.sqrt(
                 sum((float(x) - avg)**2 for x in xs) / len(xs)))
 
-class CsvGMean:
+class CsvGMean(CsvFold):
+    def type(self, t):
+        return CsvFfrac if hasattr(t, '__frac__') else CsvFloat
+
     def __call__(self, xs):
+        if hasattr(xs[0], '__frac__'):
+            return CsvFfrac(self([x.a for x in xs]), self([x.b for x in xs]))
+
         return CsvFloat(mt.prod(float(x) for x in xs)**(1/len(xs)))
 
-class CsvGStddev:
+class CsvGStddev(CsvFold):
+    def type(self, t):
+        return CsvFfrac if hasattr(t, '__frac__') else CsvFloat
+
     def __call__(self, xs):
+        if hasattr(xs[0], '__frac__'):
+            return CsvFfrac(self([x.a for x in xs]), self([x.b for x in xs]))
+
         gmean = mt.prod(float(x) for x in xs)**(1/len(xs))
         return CsvFloat(
                 mt.exp(mt.sqrt(
@@ -478,7 +654,12 @@ class CsvExpr:
 
     # expr node base class
     class Expr:
-        def __init__(self, *args):
+        def __init__(self, *args, by=None):
+            self.by = by or []
+            for k in self.by:
+                if not isinstance(k, CsvExpr.Field):
+                    raise CsvExpr.Error("complicated by? %s" % k)
+
             for k, v in zip('abcdefghijklmnopqrstuvwxyz', args):
                 setattr(self, k, v)
 
@@ -492,8 +673,10 @@ class CsvExpr:
             return sum(1 for _ in self)
 
         def __repr__(self):
-            return '%s(%s)' % (
+            return '%s(%s%s)' % (
                     self.__class__.__name__,
+                    '%s;' % (','.join(repr(k) for k in self.by))
+                        if self.by else '',
                     ','.join(repr(v) for v in self))
 
         def fields(self):
@@ -506,10 +689,13 @@ class CsvExpr:
             return t
 
         def fold(self, types={}):
-            return self.a.fold(types)
+            f = self.a.fold(types)
+            if not all(f == v.fold(types) for v in it.islice(self, 1, None)):
+                raise CsvExpr.Error("mismatched folds? %r" % self)
+            return f
 
-        def eval(self, fields={}):
-            return self.a.eval(fields)
+        def eval(self, fields={}, state=None):
+            return self.a.eval(fields, state)
 
     # expr nodes
 
@@ -522,9 +708,9 @@ class CsvExpr:
             return CsvInt
 
         def fold(self, types={}):
-            return CsvSum, CsvInt
+            return CsvSum
 
-        def eval(self, fields={}):
+        def eval(self, fields={}, state=None):
             return self.a
 
     class FloatLit(Expr):
@@ -535,9 +721,9 @@ class CsvExpr:
             return CsvFloat
 
         def fold(self, types={}):
-            return CsvSum, CsvFloat
+            return CsvSum
 
-        def eval(self, fields={}):
+        def eval(self, fields={}, state=None):
             return self.a
 
     # field expr
@@ -553,16 +739,20 @@ class CsvExpr:
         def fold(self, types={}):
             if self.a not in types:
                 raise CsvExpr.Error("unfoldable field? %s" % self.a)
-            return CsvSum, types[self.a]
+            return CsvSum
 
-        def eval(self, fields={}):
+        def eval(self, fields={}, state=None):
             if self.a not in fields:
                 raise CsvExpr.Error("unknown field? %s" % self.a)
             return fields[self.a]
 
     # func expr helper
     def func(funcs):
-        def func(name, args="a"):
+        def func(name, by=None, args=None):
+            if by is None and args is None:
+                by, args = None, "a"
+            elif args is None:
+                by, args = None, by
             def func(f):
                 f._func = name
                 f._fargs = args
@@ -579,31 +769,57 @@ class CsvExpr:
     class Int(Expr):
         """Convert to an integer"""
         def type(self, types={}):
+            super().type(types)
             return CsvInt
 
-        def eval(self, fields={}):
-            return CsvInt(self.a.eval(fields))
+        def eval(self, fields={}, state=None):
+            return CsvInt(self.a.eval(fields, state))
 
     @func('float', 'a')
     class Float(Expr):
         """Convert to a float"""
         def type(self, types={}):
+            super().type(types)
             return CsvFloat
 
-        def eval(self, fields={}):
-            return CsvFloat(self.a.eval(fields))
+        def eval(self, fields={}, state=None):
+            return CsvFloat(self.a.eval(fields, state))
 
     @func('frac', 'a[, b]')
     class Frac(Expr):
         """Convert to a fraction"""
         def type(self, types={}):
+            self.a.type(types)
+            if len(self) > 1:
+                self.b.type(types)
             return CsvFrac
 
-        def eval(self, fields={}):
+        def eval(self, fields={}, state=None):
             if len(self) == 1:
-                return CsvFrac(self.a.eval(fields))
+                return CsvFrac(
+                        self.a.eval(fields, state))
             else:
-                return CsvFrac(self.a.eval(fields), self.b.eval(fields))
+                return CsvFrac(
+                        self.a.eval(fields, state),
+                        self.b.eval(fields, state))
+
+    @func('ffrac', 'a[, b]')
+    class Ffrac(Expr):
+        """Convert to a float fraction"""
+        def type(self, types={}):
+            self.a.type(types)
+            if len(self) > 1:
+                self.b.type(types)
+            return CsvFfrac
+
+        def eval(self, fields={}, state=None):
+            if len(self) == 1:
+                return CsvFfrac(
+                        self.a.eval(fields, state))
+            else:
+                return CsvFfrac(
+                        self.a.eval(fields, state),
+                        self.b.eval(fields, state))
 
     # fold exprs
     @func('sum', 'a[, ...]')
@@ -611,157 +827,233 @@ class CsvExpr:
         """Find the sum of this column or fields"""
         def fold(self, types={}):
             if len(self) == 1:
-                return CsvSum, self.a.type(types)
+                return CsvSum
             else:
                 return self.a.fold(types)
 
-        def eval(self, fields={}):
+        def eval(self, fields={}, state=None):
             if len(self) == 1:
-                return self.a.eval(fields)
+                return self.a.eval(fields, state)
             else:
-                return CsvSum()([v.eval(fields) for v in self])
+                return CsvSum()([v.eval(fields, state) for v in self])
 
     @func('prod', 'a[, ...]')
     class Prod(Expr):
         """Find the product of this column or fields"""
         def fold(self, types={}):
             if len(self) == 1:
-                return Prod, self.a.type(types)
+                return Prod
             else:
                 return self.a.fold(types)
 
-        def eval(self, fields={}):
+        def eval(self, fields={}, state=None):
             if len(self) == 1:
-                return self.a.eval(fields)
+                return self.a.eval(fields, state)
             else:
-                return Prod()([v.eval(fields) for v in self])
+                return Prod()([v.eval(fields, state) for v in self])
 
     @func('min', 'a[, ...]')
     class Min(Expr):
         """Find the minimum of this column or fields"""
         def fold(self, types={}):
             if len(self) == 1:
-                return CsvMin, self.a.type(types)
+                return CsvMin
             else:
                 return self.a.fold(types)
 
-        def eval(self, fields={}):
+        def eval(self, fields={}, state=None):
             if len(self) == 1:
-                return self.a.eval(fields)
+                return self.a.eval(fields, state)
             else:
-                return CsvMin()([v.eval(fields) for v in self])
+                return CsvMin()([v.eval(fields, state) for v in self])
 
     @func('max', 'a[, ...]')
     class Max(Expr):
         """Find the maximum of this column or fields"""
         def fold(self, types={}):
             if len(self) == 1:
-                return CsvMax, self.a.type(types)
+                return CsvMax
             else:
                 return self.a.fold(types)
 
-        def eval(self, fields={}):
+        def eval(self, fields={}, state=None):
             if len(self) == 1:
-                return self.a.eval(fields)
+                return self.a.eval(fields, state)
             else:
-                return CsvMax()([v.eval(fields) for v in self])
+                return CsvMax()([v.eval(fields, state) for v in self])
 
     @func('avg', 'a[, ...]')
     class Avg(Expr):
         """Find the average of this column or fields"""
         def type(self, types={}):
+            t = super().type(types)
             if len(self) == 1:
-                return self.a.type(types)
+                return t
             else:
-                return CsvFloat
+                return CsvFfrac if hasattr(t, '__frac__') else CsvFloat
 
         def fold(self, types={}):
             if len(self) == 1:
-                return CsvAvg, CsvFloat
+                return CsvAvg
             else:
                 return self.a.fold(types)
 
-        def eval(self, fields={}):
+        def eval(self, fields={}, state=None):
             if len(self) == 1:
-                return self.a.eval(fields)
+                return self.a.eval(fields, state)
             else:
-                return CsvAvg()([v.eval(fields) for v in self])
+                return CsvAvg()([v.eval(fields, state) for v in self])
 
     @func('stddev', 'a[, ...]')
     class Stddev(Expr):
         """Find the standard deviation of this column or fields"""
         def type(self, types={}):
+            t = super().type(types)
             if len(self) == 1:
-                return self.a.type(types)
+                return t
             else:
-                return CsvFloat
+                return CsvFfrac if hasattr(t, '__frac__') else CsvFloat
 
         def fold(self, types={}):
             if len(self) == 1:
-                return CsvStddev, CsvFloat
+                return CsvStddev
             else:
                 return self.a.fold(types)
 
-        def eval(self, fields={}):
+        def eval(self, fields={}, state=None):
             if len(self) == 1:
-                return self.a.eval(fields)
+                return self.a.eval(fields, state)
             else:
-                return CsvStddev()([v.eval(fields) for v in self])
+                return CsvStddev()([v.eval(fields, state) for v in self])
 
     @func('gmean', 'a[, ...]')
     class GMean(Expr):
         """Find the geometric mean of this column or fields"""
         def type(self, types={}):
+            t = super().type(types)
             if len(self) == 1:
-                return self.a.type(types)
+                return t
             else:
-                return CsvFloat
+                return CsvFfrac if hasattr(t, '__frac__') else CsvFloat
 
         def fold(self, types={}):
             if len(self) == 1:
-                return CsvGMean, CsvFloat
+                return CsvGMean
             else:
                 return self.a.fold(types)
 
-        def eval(self, fields={}):
+        def eval(self, fields={}, state=None):
             if len(self) == 1:
-                return self.a.eval(fields)
+                return self.a.eval(fields, state)
             else:
-                return CsvGMean()([v.eval(fields) for v in self])
+                return CsvGMean()([v.eval(fields, state) for v in self])
 
     @func('gstddev', 'a[, ...]')
     class GStddev(Expr):
         """Find the geometric stddev of this column or fields"""
         def type(self, types={}):
+            t = super().type(types)
             if len(self) == 1:
-                return self.a.type(types)
+                return t
             else:
-                return CsvFloat
+                return CsvFfrac if hasattr(t, '__frac__') else CsvFloat
 
         def fold(self, types={}):
             if len(self) == 1:
-                return CsvGStddev, CsvFloat
+                return CsvGStddev
             else:
                 return self.a.fold(types)
 
-        def eval(self, fields={}):
+        def eval(self, fields={}, state=None):
             if len(self) == 1:
-                return self.a.eval(fields)
+                return self.a.eval(fields, state)
             else:
-                return CsvGStddev()([v.eval(fields) for v in self])
+                return CsvGStddev()([v.eval(fields, state) for v in self])
+
+    # enumerate exprs
+    @func('enumerate', '[by;]')
+    class Enumerate(Expr):
+        """A [per by] number incremented for each result"""
+        def fields(self):
+            return set()
+
+        def type(self, types={}):
+            return CsvInt
+
+        def fold(self, types={}):
+            return CsvSum
+
+        def eval(self, fields={}, state=None):
+            if state is None:
+                return CsvInt(0)
+
+            # enumerate
+            k = ('enumerate', id(self)) + tuple(
+                    fields.get(k.a) for k in self.by)
+            x = state.get(k)
+            if x is None:
+                z = 0
+            else:
+                z = x + 1
+            # keep track of unique enumerate state
+            state[k] = z
+            return CsvInt(z)
+
+    @func('accumulate', '[by;] a')
+    class Accumulate(Expr):
+        """A [per by] running sum across results"""
+        def eval(self, fields={}, state=None):
+            y = self.a.eval(fields, state)
+            if state is None:
+                return y
+
+            # accumulate
+            k = ('accumulate', id(self)) + tuple(
+                    fields.get(k.a) for k in self.by)
+            x = state.get(k)
+            if x is None:
+                z = y
+            else:
+                z = x + y
+            # keep track of unique accumulate state
+            state[k] = z
+            return z
+
+    @func('delta', '[by;] a')
+    class Delta(Expr):
+        """A [per by] difference between subsequent results"""
+        def eval(self, fields={}, state=None):
+            y = self.a.eval(fields, state)
+            if state is None:
+                return y
+
+            # compute delta
+            k = ('delta', id(self)) + tuple(
+                    fields.get(k.a) for k in self.by)
+            x = state.get(k)
+            if x is None:
+                z = y
+            else:
+                z = y - x
+            # keep track of unique delta state
+            state[k] = y
+            return z
 
     # functions
     @func('ratio', 'a')
     class Ratio(Expr):
         """Ratio of a fraction as a float"""
         def type(self, types={}):
+            super().type(types)
             return CsvFloat
 
-        def eval(self, fields={}):
-            v = CsvFrac(self.a.eval(fields))
-            if not float(v.b) and not float(v.a):
+        def eval(self, fields={}, state=None):
+            v = self.a.eval(fields, state)
+            if not hasattr(v, '__frac__'):
+                return CsvFloat(1) # emulates cast + eval
+            elif not v.b and not v.a:
                 return CsvFloat(1)
-            elif not float(v.b):
+            elif not v.b:
                 return CsvFloat(mt.copysign(mt.inf, float(v.a)))
             else:
                 return CsvFloat(float(v.a) / float(v.b))
@@ -770,82 +1062,143 @@ class CsvExpr:
     class Total(Expr):
         """Total part of a fraction"""
         def type(self, types={}):
-            return CsvInt
+            t = super().type(types)
+            return CsvFloat if t in {CsvFloat, CsvFfrac} else CsvInt
 
-        def eval(self, fields={}):
-            return CsvFrac(self.a.eval(fields)).b
+        def eval(self, fields={}, state=None):
+            v = self.a.eval(fields, state)
+            if not hasattr(v, '__frac__'):
+                return v # emulates cast + eval
+            else:
+                return v.b
+
+    @func('saturate', 'a')
+    class Saturate(Expr):
+        """Limit to total part of a fraction"""
+        def eval(self, fields={}, state=None):
+            v = self.a.eval(fields, state)
+            if not hasattr(v, '__frac__'):
+                return v
+            elif isinstance(v, CsvFrac):
+                return CsvFrac(min(max(v.a, CsvInt(0)), v.b), v.b)
+            elif isinstance(v, CsvFfrac):
+                return CsvFfrac(min(max(v.a, CsvFloat(0)), v.b), v.b)
 
     @func('abs', 'a')
     class Abs(Expr):
         """Absolute value"""
-        def eval(self, fields={}):
-            return abs(self.a.eval(fields))
+        def eval(self, fields={}, state=None):
+            return abs(self.a.eval(fields, state))
 
     @func('ceil', 'a')
     class Ceil(Expr):
         """Round up to nearest integer"""
         def type(self, types={}):
-            return CsvFloat
+            t = super().type(types)
+            return CsvFfrac if hasattr(t, '__frac__') else CsvFloat
 
-        def eval(self, fields={}):
-            return CsvFloat(mt.ceil(float(self.a.eval(fields))))
+        def eval(self, fields={}, state=None):
+            v = self.a.eval(fields, state)
+            if hasattr(v, '__frac__'):
+                return CsvFfrac(mt.ceil(float(v.a)), mt.ceil(float(v.b)))
+            else:
+                return CsvFloat(mt.ceil(float(v)))
 
     @func('floor', 'a')
     class Floor(Expr):
         """Round down to nearest integer"""
         def type(self, types={}):
-            return CsvFloat
+            t = super().type(types)
+            return CsvFfrac if hasattr(t, '__frac__') else CsvFloat
 
-        def eval(self, fields={}):
-            return CsvFloat(mt.floor(float(self.a.eval(fields))))
+        def eval(self, fields={}, state=None):
+            v = self.a.eval(fields, state)
+            if hasattr(v, '__frac__'):
+                return CsvFfrac(mt.floor(float(v.a)), mt.floor(float(v.b)))
+            else:
+                return CsvFloat(mt.floor(float(v)))
 
     @func('log', 'a[, b]')
     class Log(Expr):
         """Log of a with base e, or log of a with base b"""
         def type(self, types={}):
-            return CsvFloat
+            t  = self.a.type(types)
+            if len(self) > 1:
+                self.b.type(types)
+            return CsvFfrac if hasattr(t, '__frac__') else CsvFloat
 
-        def eval(self, fields={}):
+        def eval(self, fields={}, state=None):
+            v = self.a.eval(fields, state)
             if len(self) == 1:
-                return CsvFloat(mt.log(
-                        float(self.a.eval(fields))))
+                if hasattr(v, '__frac__'):
+                    return CsvFfrac(
+                            mt.log(float(v.a)),
+                            mt.log(float(v.b)))
+                else:
+                    return CsvFloat(
+                            mt.log(float(v)))
             else:
-                return CsvFloat(mt.log(
-                        float(self.a.eval(fields)),
-                        float(self.b.eval(fields))))
+                e = float(self.b.eval(fields, state))
+                if hasattr(v, '__frac__'):
+                    return CsvFfrac(
+                            mt.log(float(v.a), e),
+                            mt.log(float(v.b), e))
+                else:
+                    return CsvFloat(
+                            mt.log(float(v), e))
 
     @func('pow', 'a[, b]')
     class Pow(Expr):
         """e to the power of a, or a to the power of b"""
         def type(self, types={}):
-            return CsvFloat
+            t  = self.a.type(types)
+            if len(self) > 1:
+                self.b.type(types)
+            return CsvFfrac if hasattr(t, '__frac__') else CsvFloat
 
-        def eval(self, fields={}):
+        def eval(self, fields={}, state=None):
+            v = self.a.eval(fields, state)
             if len(self) == 1:
-                return CsvFloat(mt.exp(
-                        float(self.a.eval(fields))))
+                if hasattr(v, '__frac__'):
+                    return CsvFfrac(
+                            mt.exp(float(v.a)),
+                            mt.exp(float(v.b)))
+                else:
+                    return CsvFloat(
+                            mt.exp(float(v)))
             else:
-                return CsvFloat(mt.pow(
-                        float(self.a.eval(fields)),
-                        float(self.b.eval(fields))))
+                e = float(self.b.eval(fields, state))
+                if hasattr(v, '__frac__'):
+                    return CsvFfrac(
+                            mt.pow(float(v.a), e),
+                            mt.pow(float(v.b), e))
+                else:
+                    return CsvFloat(
+                            mt.pow(float(v), e))
 
     @func('sqrt', 'a')
     class Sqrt(Expr):
         """Square root"""
         def type(self, types={}):
-            return CsvFloat
+            t = super().type(types)
+            return CsvFfrac if hasattr(t, '__frac__') else CsvFloat
 
-        def eval(self, fields={}):
-            return CsvFloat(mt.sqrt(float(self.a.eval(fields))))
+        def eval(self, fields={}, state=None):
+            v = self.a.eval(fields, state)
+            if hasattr(v, '__frac__'):
+                return CsvFfrac(mt.sqrt(float(v.a)), mt.sqrt(float(v.b)))
+            else:
+                return CsvFloat(mt.sqrt(float(v)))
 
     @func('isint', 'a')
     class IsInt(Expr):
         """1 if a is an integer, otherwise 0"""
         def type(self, types={}):
+            super().type(types)
             return CsvInt
 
-        def eval(self, fields={}):
-            if isinstance(self.a.eval(fields), CsvInt):
+        def eval(self, fields={}, state=None):
+            if isinstance(self.a.eval(fields, state), CsvInt):
                 return CsvInt(1)
             else:
                 return CsvInt(0)
@@ -854,10 +1207,11 @@ class CsvExpr:
     class IsFloat(Expr):
         """1 if a is a float, otherwise 0"""
         def type(self, types={}):
+            super().type(types)
             return CsvInt
 
-        def eval(self, fields={}):
-            if isinstance(self.a.eval(fields), CsvFloat):
+        def eval(self, fields={}, state=None):
+            if isinstance(self.a.eval(fields, state), CsvFloat):
                 return CsvInt(1)
             else:
                 return CsvInt(0)
@@ -866,10 +1220,24 @@ class CsvExpr:
     class IsFrac(Expr):
         """1 if a is a fraction, otherwise 0"""
         def type(self, types={}):
+            super().type(types)
             return CsvInt
 
-        def eval(self, fields={}):
-            if isinstance(self.a.eval(fields), CsvFrac):
+        def eval(self, fields={}, state=None):
+            if isinstance(self.a.eval(fields, state), CsvFrac):
+                return CsvInt(1)
+            else:
+                return CsvInt(0)
+
+    @func('isffrac', 'a')
+    class IsFfrac(Expr):
+        """1 if a is a fraction, otherwise 0"""
+        def type(self, types={}):
+            super().type(types)
+            return CsvInt
+
+        def eval(self, fields={}, state=None):
+            if isinstance(self.a.eval(fields, state), CsvFfrac):
                 return CsvInt(1)
             else:
                 return CsvInt(0)
@@ -878,10 +1246,11 @@ class CsvExpr:
     class IsInf(Expr):
         """1 if a is infinite, otherwise 0"""
         def type(self, types={}):
+            super().type(types)
             return CsvInt
 
-        def eval(self, fields={}):
-            if mt.isinf(self.a.eval(fields)):
+        def eval(self, fields={}, state=None):
+            if mt.isinf(self.a.eval(fields, state)):
                 return CsvInt(1)
             else:
                 return CsvInt(0)
@@ -890,10 +1259,11 @@ class CsvExpr:
     class IsNan(Expr):
         """1 if a is a NAN, otherwise 0"""
         def type(self, types={}):
+            super().type(types)
             return CsvInt
 
-        def eval(self, fields={}):
-            if mt.isnan(self.a.eval(fields)):
+        def eval(self, fields={}, state=None):
+            if mt.isnan(self.a.eval(fields, state)):
                 return CsvInt(1)
             else:
                 return CsvInt(0)
@@ -915,23 +1285,24 @@ class CsvExpr:
     @uop('+')
     class Pos(Expr):
         """Non-negation"""
-        def eval(self, fields={}):
-            return +self.a.eval(fields)
+        def eval(self, fields={}, state=None):
+            return +self.a.eval(fields, state)
 
     @uop('-')
     class Neg(Expr):
         """Negation"""
-        def eval(self, fields={}):
-            return -self.a.eval(fields)
+        def eval(self, fields={}, state=None):
+            return -self.a.eval(fields, state)
 
     @uop('!')
     class NotNot(Expr):
         """1 if a is zero, otherwise 0"""
         def type(self, types={}):
+            super().type(types)
             return CsvInt
 
-        def eval(self, fields={}):
-            if self.a.eval(fields):
+        def eval(self, fields={}, state=None):
+            if self.a.eval(fields, state):
                 return CsvInt(0)
             else:
                 return CsvInt(1)
@@ -956,40 +1327,42 @@ class CsvExpr:
     @bop('*', 10)
     class Mul(Expr):
         """Multiplication"""
-        def eval(self, fields={}):
-            return self.a.eval(fields) * self.b.eval(fields)
+        def eval(self, fields={}, state=None):
+            return self.a.eval(fields, state) * self.b.eval(fields, state)
 
     @bop('/', 10)
     class Div(Expr):
         """Division"""
-        def eval(self, fields={}):
-            return self.a.eval(fields) / self.b.eval(fields)
+        def eval(self, fields={}, state=None):
+            return self.a.eval(fields, state) / self.b.eval(fields, state)
 
     @bop('%', 10)
     class Mod(Expr):
         """Modulo"""
-        def eval(self, fields={}):
-            return self.a.eval(fields) % self.b.eval(fields)
+        def eval(self, fields={}, state=None):
+            return self.a.eval(fields, state) % self.b.eval(fields, state)
 
     @bop('+', 9)
     class Add(Expr):
         """Addition"""
-        def eval(self, fields={}):
-            a = self.a.eval(fields)
-            b = self.b.eval(fields)
-            return a + b
+        def eval(self, fields={}, state=None):
+            return self.a.eval(fields, state) + self.b.eval(fields, state)
 
     @bop('-', 9)
     class Sub(Expr):
         """Subtraction"""
-        def eval(self, fields={}):
-            return self.a.eval(fields) - self.b.eval(fields)
+        def eval(self, fields={}, state=None):
+            return self.a.eval(fields, state) - self.b.eval(fields, state)
 
     @bop('==', 4)
     class Eq(Expr):
         """1 if a equals b, otherwise 0"""
-        def eval(self, fields={}):
-            if self.a.eval(fields) == self.b.eval(fields):
+        def type(self, types={}):
+            super().type(types)
+            return CsvInt
+
+        def eval(self, fields={}, state=None):
+            if self.a.eval(fields, state) == self.b.eval(fields, state):
                 return CsvInt(1)
             else:
                 return CsvInt(0)
@@ -997,8 +1370,12 @@ class CsvExpr:
     @bop('!=', 4)
     class Ne(Expr):
         """1 if a does not equal b, otherwise 0"""
-        def eval(self, fields={}):
-            if self.a.eval(fields) != self.b.eval(fields):
+        def type(self, types={}):
+            super().type(types)
+            return CsvInt
+
+        def eval(self, fields={}, state=None):
+            if self.a.eval(fields, state) != self.b.eval(fields, state):
                 return CsvInt(1)
             else:
                 return CsvInt(0)
@@ -1006,8 +1383,12 @@ class CsvExpr:
     @bop('<', 4)
     class Lt(Expr):
         """1 if a is less than b"""
-        def eval(self, fields={}):
-            if self.a.eval(fields) < self.b.eval(fields):
+        def type(self, types={}):
+            super().type(types)
+            return CsvInt
+
+        def eval(self, fields={}, state=None):
+            if self.a.eval(fields, state) < self.b.eval(fields, state):
                 return CsvInt(1)
             else:
                 return CsvInt(0)
@@ -1015,8 +1396,12 @@ class CsvExpr:
     @bop('<=', 4)
     class Le(Expr):
         """1 if a is less than or equal to b"""
-        def eval(self, fields={}):
-            if self.a.eval(fields) <= self.b.eval(fields):
+        def type(self, types={}):
+            super().type(types)
+            return CsvInt
+
+        def eval(self, fields={}, state=None):
+            if self.a.eval(fields, state) <= self.b.eval(fields, state):
                 return CsvInt(1)
             else:
                 return CsvInt(0)
@@ -1024,8 +1409,12 @@ class CsvExpr:
     @bop('>', 4)
     class Gt(Expr):
         """1 if a is greater than b"""
-        def eval(self, fields={}):
-            if self.a.eval(fields) > self.b.eval(fields):
+        def type(self, types={}):
+            super().type(types)
+            return CsvInt
+
+        def eval(self, fields={}, state=None):
+            if self.a.eval(fields, state) > self.b.eval(fields, state):
                 return CsvInt(1)
             else:
                 return CsvInt(0)
@@ -1033,8 +1422,12 @@ class CsvExpr:
     @bop('>=', 4)
     class Ge(Expr):
         """1 if a is greater than or equal to b"""
-        def eval(self, fields={}):
-            if self.a.eval(fields) >= self.b.eval(fields):
+        def type(self, types={}):
+            super().type(types)
+            return CsvInt
+
+        def eval(self, fields={}, state=None):
+            if self.a.eval(fields, state) >= self.b.eval(fields, state):
                 return CsvInt(1)
             else:
                 return CsvInt(0)
@@ -1042,22 +1435,22 @@ class CsvExpr:
     @bop('&&', 3)
     class AndAnd(Expr):
         """b if a is non-zero, otherwise a"""
-        def eval(self, fields={}):
-            a = self.a.eval(fields)
+        def eval(self, fields={}, state=None):
+            a = self.a.eval(fields, state)
             if a:
-                return self.b.eval(fields)
+                return self.b.eval(fields, state)
             else:
                 return a
 
     @bop('||', 2)
     class OrOr(Expr):
         """a if a is non-zero, otherwise b"""
-        def eval(self, fields={}):
-            a = self.a.eval(fields)
+        def eval(self, fields={}, state=None):
+            a = self.a.eval(fields, state)
             if a:
                 return a
             else:
-                return self.b.eval(fields)
+                return self.b.eval(fields, state)
 
     # ternary expr help
     def top(tops, tprecs):
@@ -1089,12 +1482,12 @@ class CsvExpr:
         def fold(self, types={}):
             return self.b.fold(types)
 
-        def eval(self, fields={}):
-            a = self.a.eval(fields)
+        def eval(self, fields={}, state=None):
+            a = self.a.eval(fields, state)
             if a:
-                return self.b.eval(fields)
+                return self.b.eval(fields, state)
             else:
-                return self.c.eval(fields)
+                return self.c.eval(fields, state)
 
     # show expr help text
     @classmethod
@@ -1111,7 +1504,9 @@ class CsvExpr:
         print('funcs:')
         for func in cls.funcs.keys():
             print('  %-21s %s' % (
-                    '%s(%s)' % (func, CsvExpr.funcs[func]._fargs),
+                    '%s(%s)' % (
+                        func,
+                        CsvExpr.funcs[func]._fargs),
                     CsvExpr.funcs[func].__doc__))
 
     # parse an expr
@@ -1129,7 +1524,7 @@ class CsvExpr:
                 p.chomp()
 
             # floats
-            elif p.match('[+-]?(?:[_0-9]*\.[_0-9eE]*|nan)'):
+            elif p.match('[+-]?(?:[_0-9]*\.(?:[_0-9]|[eE][+-]?)*|nan)'):
                 a = CsvExpr.FloatLit(CsvFloat(p.chomp()))
 
             # ints
@@ -1144,19 +1539,24 @@ class CsvExpr:
                     p.chomp()
                     if a not in CsvExpr.funcs:
                         raise CsvExpr.Error("unknown function? %s" % a)
+                    by = None
                     args = []
                     while True:
-                        b = p_expr(p)
-                        args.append(b)
-                        if p.match(','):
-                            p.chomp()
-                            continue
-                        else:
-                            if not p.match('\)'):
-                                raise CsvExpr.Error("mismatched parens? %s" % p)
-                            p.chomp()
-                            a = CsvExpr.funcs[a](*args)
-                            break
+                        if not p.match('\)'):
+                            b = p_expr(p)
+                            args.append(b)
+                            if p.match(','):
+                                p.chomp()
+                                continue
+                            elif p.match(';'):
+                                by, args = args, []
+                                p.chomp()
+                                continue
+                        if not p.match('\)'):
+                            raise CsvExpr.Error("mismatched parens? %s" % p)
+                        p.chomp()
+                        a = CsvExpr.funcs[a](*args, by=by)
+                        break
                 else:
                     a = CsvExpr.Field(a)
 
@@ -1264,9 +1664,9 @@ class CsvExpr:
             sys.exit(3)
 
     # recursive evaluate the expr
-    def eval(self, fields={}):
+    def eval(self, fields={}, state=None):
         try:
-            return self.tree.eval(fields)
+            return self.tree.eval(fields, state)
         except CsvExpr.Error as e:
             print('error: in expr: %s' % self.expr,
                     file=sys.stderr)
@@ -1275,53 +1675,147 @@ class CsvExpr:
             sys.exit(3)
 
 
+# SI-prefix formatter
+def si(x):
+    if x == 0:
+        return '0'
+    # figure out prefix and scale
+    p = 3*mt.floor(mt.log(abs(x), 10**3))
+    p = min(18, max(-18, p))
+    # format with 3 digits of precision
+    s = '%.3f' % (abs(x) / (10.0**p))
+    s = s[:3+1]
+    # truncate but only digits that follow the dot
+    if '.' in s:
+        s = s.rstrip('0')
+        s = s.rstrip('.')
+    return '%s%s%s' % ('-' if x < 0 else '', s, SI_PREFIXES[p])
+
+# SI-prefix formatter for powers-of-two
+def si2(x):
+    if x == 0:
+        return '0'
+    # figure out prefix and scale
+    p = 10*mt.floor(mt.log(abs(x), 2**10))
+    p = min(30, max(-30, p))
+    # format with 3 digits of precision
+    s = '%.3f' % (abs(x) / (2.0**p))
+    s = s[:3+1]
+    # truncate but only digits that follow the dot
+    if '.' in s:
+        s = s.rstrip('0')
+        s = s.rstrip('.')
+    return '%s%s%s' % ('-' if x < 0 else '', s, SI2_PREFIXES[p])
+
 # parse %-escaped strings
 #
 # attrs can override __getitem__ for lazy attr generation
-def punescape(s, attrs=None):
+def punescape(s, attrs=None, start=None, end=None, submatch=None):
     pattern = re.compile(
-        '%[%n]'
-            '|' '%x..'
-            '|' '%u....'
-            '|' '%U........'
-            '|' '%\((?P<field>[^)]*)\)'
-                '(?P<format>[+\- #0-9\.]*[sdboxXfFeEgG])')
-    def unescape(m):
-        if m.group()[1] == '%': return '%'
-        elif m.group()[1] == 'n': return '\n'
-        elif m.group()[1] == 'x': return chr(int(m.group()[2:], 16))
-        elif m.group()[1] == 'u': return chr(int(m.group()[2:], 16))
-        elif m.group()[1] == 'U': return chr(int(m.group()[2:], 16))
-        elif m.group()[1] == '(':
-            if attrs is not None:
-                try:
-                    v = attrs[m.group('field')]
-                except KeyError:
-                    return m.group()
-            else:
-                return m.group()
-            f = m.group('format')
-            if f[-1] in 'dboxX':
-                if isinstance(v, str):
-                    v = dat(v, 0)
-                v = int(v)
-            elif f[-1] in 'fFeEgG':
-                if isinstance(v, str):
-                    v = dat(v, 0)
-                v = float(v)
-            else:
-                f = ('<' if '-' in f else '>') + f.replace('-', '')
-                v = str(v)
-            # note we need Python's new format syntax for binary
-            return ('{:%s}' % f).format(v)
-        else: assert False
+        '%' '(?P<rep>[0-9]*)' '(?P<pun>'
+            '[%ns]'
+                '|' 'x..'
+                '|' 'u....'
+                '|' 'U........'
+                '|' '\((?P<field>[^)]*)\)'
+                    '(?P<format>[<^>+\- #0-9\.]*[siIdboxXfFeEgG])'
+                '|' '\{'
+                '|' '\}'
+                    '(?P<subformat>[<^>+\- #0-9\.]*[siIdboxXfFeEgG])' ')')
 
-    return re.sub(pattern, unescape, s)
+    def format(f, v):
+        if f[-1] in 'dboxX':
+            if isinstance(v, str):
+                v = dat(v, 0)
+            v = int(v)
+        elif f[-1] in 'iIfFeEgG':
+            if isinstance(v, str):
+                v = dat(v, 0)
+            v = float(v)
+            if f[-1] in 'iI':
+                v = (si if 'i' in f[-1] else si2)(v)
+                f = f.replace('i', 's').replace('I', 's')
+                if '+' in f and not v.startswith('-'):
+                    v = '+'+v
+                f = f.replace('+', '')
+        else:
+            v = str(v)
+
+        if '-' in f:
+            f = '<' + f.replace('-', '')
+        elif not any(d in f for d in '<^>'):
+            f = '>' + f
+        # note we need Python's new format syntax for binary
+        return ('{:%s}' % f).format(v)
+
+    s_ = []
+    i = start or 0
+    while i < (end if end is not None else len(s)):
+        m = pattern.match(s, i)
+        if m:
+            m_ = m.group('pun')[0]
+            i_ = m.end()
+            if m_ == '%':   v_ = '%'
+            elif m_ == 'n': v_ = '\n'
+            elif m_ == 's': v_ = ' '
+            elif m_ == 'x': v_ = chr(int(m.group('pun')[1:], 16))
+            elif m_ == 'u': v_ = chr(int(m.group('pun')[1:], 16))
+            elif m_ == 'U': v_ = chr(int(m.group('pun')[1:], 16))
+            elif m_ == '(':
+                if attrs is not None:
+                    try:
+                        v = attrs[m.group('field')]
+                    except KeyError:
+                        s_.append(m.group())
+                        i = i_
+                        continue
+                else:
+                    s_.append(m.group())
+                    i = i_
+                    continue
+                v_ = format(m.group('format'), v)
+            elif m_ == '{':
+                m__ = []
+                v = punescape(s, attrs, m.end(), None, m__)
+                if m__:
+                    v_ = format(m__[0].group('subformat'), v)
+                    i_ = m__[0].end()
+                else:
+                    v_ = str(v)
+                    i_ = end if end is not None else len(s)
+            elif m_ == '}':
+                if submatch is not None:
+                    submatch.append(m)
+                break
+            else:
+                s_.append(m.group())
+                i = i_
+                continue
+
+            if m.group('rep'):
+                v_ = int(m.group('rep'), 10) * v_
+            s_.append(v_)
+            i = i_
+        else:
+            s_.append(s[i])
+            i += 1
+
+    return ''.join(s_)
+
+class PunescapeGetattr:
+    def __init__(self, r):
+        self.r = r
+    def __getitem__(self, k):
+        try:
+            return getattr(self.r, k)
+        except AttributeError:
+            raise KeyError(k)
 
 def punescape_help():
     print('mods:')
     print('  %-21s %s' % ('%%', 'A literal % character'))
     print('  %-21s %s' % ('%n', 'A newline'))
+    print('  %-21s %s' % ('%s', 'A space'))
     print('  %-21s %s' % (
             '%xaa', 'A character with the hex value aa'))
     print('  %-21s %s' % (
@@ -1331,9 +1825,19 @@ def punescape_help():
     print('  %-21s %s' % (
             '%(field)s', 'An existing field formatted as a string'))
     print('  %-21s %s' % (
+            '%(field)i', 'An field formatted with a base-10 SI prefix'))
+    print('  %-21s %s' % (
+            '%(field)I', 'An field formatted with a base-2 SI prefix'))
+    print('  %-21s %s' % (
             '%(field)[dboxX]', 'An existing field formatted as an integer'))
     print('  %-21s %s' % (
             '%(field)[fFeEgG]', 'An existing field formatted as a float'))
+    print('  %-21s %s' % (
+            '%{', 'Start a substring'))
+    print('  %-21s %s' % (
+            '%}s', 'End and format a subtring'))
+    print('  %-21s %s' % (
+            '%aaa[mod]', 'Repeat this mod aaa times'))
 
 
 # open with '-' for stdin/stdout
@@ -1351,7 +1855,19 @@ def collect_csv(csv_paths, *,
         depth=1,
         children=None,
         notes=None,
+        prefix=None,
         **_):
+    # useful function for stripping the optional prefix
+    #
+    # what, it's not like any of the other scripts avoided prefix
+    # conflicts, trying to avoid conflicts until after expr eval
+    # quickly became unmaintainable
+    def stripprefix(k):
+        if prefix is not None and k.startswith(prefix):
+            return k[len(prefix):]
+        else:
+            return k
+
     # collect both results and fields from CSV files
     fields = co.OrderedDict()
     results = []
@@ -1365,16 +1881,17 @@ def collect_csv(csv_paths, *,
                 if not is_json:
                     reader = csv.DictReader(f, restval='')
                     # collect fields
-                    fields.update((k, True) for k in reader.fieldnames or [])
+                    fields.update((stripprefix(k), True)
+                            for k in reader.fieldnames or [])
                     for r in reader:
+                        # strip prefix early
+                        if prefix is not None:
+                            r = {stripprefix(k): v for k, v in r.items()}
                         # strip and drop empty fields
                         r_ = {k: v.strip()
                                 for k, v in r.items()
-                                if k not in {'notes'}
+                                if k != notes
                                     and v.strip()}
-                        # special handling for notes field
-                        if notes is not None and notes in r:
-                            r_[notes] = set(r[notes].split(','))
                         results.append(r_)
 
                 # read json?
@@ -1383,6 +1900,9 @@ def collect_csv(csv_paths, *,
                     def unjsonify(results, depth_):
                         results_ = []
                         for r in results:
+                            # strip prefix early
+                            if prefix is not None:
+                                r = {stripprefix(k): v for k, v in r.items()}
                             # collect fields
                             fields.update((k, True) for k in r.keys())
                             # convert to strings, we'll reparse these later
@@ -1392,7 +1912,8 @@ def collect_csv(csv_paths, *,
                             # everything came from a csv
                             r_ = {k: str(v).strip()
                                     for k, v in r.items()
-                                    if k not in {'children', 'notes'}
+                                    if k != notes
+                                        and k != children
                                         and str(v).strip()}
                             # special handling for children field
                             if (children is not None
@@ -1422,15 +1943,11 @@ def compile(fields_, results,
         mods=[],
         exprs=[],
         sort=None,
+        z=None,
         children=None,
         hot=None,
         notes=None,
-        prefix=None,
         **_):
-    # default to no prefix
-    if prefix is None:
-        prefix = ''
-
     by = by.copy()
     fields = fields.copy()
 
@@ -1438,7 +1955,7 @@ def compile(fields_, results,
     for k, reverse in it.chain(sort or [], hot or []):
         # this defaults to typechecking sort/hot fields, which is
         # probably safer, if you really want to sort by strings you
-        # can use --by + --label to create hidden by fields
+        # can use -B/--hidden-by to create hidden by fields
         if k and k not in by and k not in fields:
             fields.append(k)
     # make sure all expr targets are in fields so they get typechecked
@@ -1458,19 +1975,16 @@ def compile(fields_, results,
     types__ = {}
     for k in fields__:
         # check if dependency is in original fields
-        #
-        # it's tempting to also allow enumerate fields here, but this
-        # currently doesn't work when hotifying
-        if prefix+k not in fields_:
+        if k not in fields_:
             print("error: no field %r?" % k,
                     file=sys.stderr)
             sys.exit(2)
 
-        for t in [CsvInt, CsvFloat, CsvFrac]:
+        for t in [CsvInt, CsvFloat, CsvFrac, CsvFfrac]:
             for r in results:
-                if prefix+k in r and r[prefix+k].strip():
+                if k in r and r[k].strip():
                     try:
-                        t(r[prefix+k])
+                        t(r[k])
                     except ValueError:
                         break
             else:
@@ -1488,31 +2002,35 @@ def compile(fields_, results,
         types___[k] = expr.type(types__)
 
     # foldcheck field exprs
-    folds___ = {k: (CsvSum, t) for k, v in types__.items()}
+    folds___ = {k: CsvSum for k, v in types__.items()}
     for k, expr in exprs.items():
         folds___[k] = expr.fold(types__)
-    folds___ = {k: (f(), t) for k, (f, t) in folds___.items()}
+    # instantiate folds and resolve fold types
+    folds___ = {k: f() for k, f in folds___.items()}
+    folds___ = {k: (f, f.type(types___[k])) for k, f in folds___.items()}
 
     # create result class
-    def __new__(cls, **r):
+    def __new__(cls, _state=None, **r):
         r_ = r.copy()
-        # evaluate types, strip prefix
+        # evaluate types
         for k, t in types__.items():
-            r_[k] = t(r[prefix+k]) if prefix+k in r else t()
+            r_[k] = t(r[k]) if k in r else t()
 
         r__ = r_.copy()
-        # evaluate exprs
-        for k, expr in exprs.items():
-            r__[k] = expr.eval(r_)
         # evaluate mods
         for k, m in mods.items():
             r__[k] = punescape(m, r_)
+        # evaluate exprs
+        for k, expr in exprs.items():
+            r__[k] = expr.eval(r_, _state)
 
         # return result
         return cls.__mro__[1].__new__(cls, **(
                 {k: r__.get(k, '') for k in by}
                     | {k: ([r__[k]], 1) if k in r__ else ([], 0)
                         for k in fields}
+                    | ({z: r[z] if z in r else 0}
+                        if z is not None else {})
                     | ({children: r[children] if children in r else []}
                         if children is not None else {})
                     | ({notes: r[notes] if notes in r else set()}
@@ -1529,14 +2047,18 @@ def compile(fields_, results,
 
         # lazily fold results
         return self.__class__.__mro__[1].__new__(self.__class__, **(
-                {k: getattr(self, k) for k in by}
+                {k: object.__getattribute__(self, k) for k in by}
                     | {k: extend(
                             object.__getattribute__(self, k),
                             object.__getattribute__(other, k))
                         for k in fields}
-                    | ({children: self.children + other.children}
+                    | ({z: object.__getattribute__(self, z)}
+                        if z is not None else {})
+                    | ({children: object.__getattribute__(self, children)
+                            + object.__getattribute__(other, children)}
                         if children is not None else {})
-                    | ({notes: self.notes | other.notes}
+                    | ({notes: object.__getattribute__(self, notes)
+                            | object.__getattribute__(other, notes)}
                         if notes is not None else {})))
 
     def __getattribute__(self, k):
@@ -1562,22 +2084,28 @@ def compile(fields_, results,
                 __new__=__new__,
                 __add__=__add__,
                 __getattribute__=__getattribute__,
+                _fields_ = fields_,
+                _types_ = types__,
                 _by=by,
                 _fields=fields,
                 _sort=fields,
                 _types={k: t for k, (_, t) in folds___.items()},
+                _folds={k: f for k, (f, _) in folds___.items()},
                 _mods=mods,
                 _exprs=exprs,
+                **{'_z': z} if z is not None else {},
                 **{'_children': children} if children is not None else {},
                 **{'_notes': notes} if notes is not None else {}))
 
 def homogenize(Result, results, *,
-        enumerates=None,
         defines=[],
+        undefines=[],
         depth=1,
+        depth_=0,
         **_):
-    # this just converts all (possibly recursive) results to our
-    # result type
+    # running result state
+    state = {}
+    # convert all (possibly recursive) results to our result type
     results_ = []
     for r in results:
         # filter by matching defines
@@ -1590,25 +2118,28 @@ def homogenize(Result, results, *,
                     for v in vs)
                 for k, vs in defines):
             continue
+        if any(any(fnmatch.fnmatchcase(str(r.get(k, '')), v)
+                    for v in vs)
+                for k, vs in undefines):
+            continue
 
         # append a result
-        results_.append(Result(**(
-                r
-                    # enumerate?
-                    | ({e: len(results_) for e in enumerates}
-                        if enumerates is not None
-                        else {})
+        results_.append(Result(
+                **(r
+                    # keep track of depth?
+                    | ({Result._z: depth_} if hasattr(Result, '_z') else {})
                     # recurse?
                     | ({Result._children: homogenize(
                             Result, r[Result._children],
                             # only filter defines at the top level!
-                            enumerates=enumerates,
-                            depth=depth-1)}
+                            depth=depth-1,
+                            depth_=depth_+1)}
                         if hasattr(Result, '_children')
                             and Result._children in r
                             and r[Result._children] is not None
                             and depth > 1
-                        else {}))))
+                        else {})),
+                _state=state))
     return results_
 
 
@@ -1629,6 +2160,7 @@ class Rev(co.namedtuple('Rev', 'a')):
 def fold(Result, results, *,
         by=None,
         defines=[],
+        undefines=[],
         sort=None,
         depth=1,
         **_):
@@ -1640,20 +2172,27 @@ def fold(Result, results, *,
     if by is None:
         by = Result._by
 
-    for k in it.chain(by or [], (k for k, _ in defines)):
+    for k in it.chain(by or [],
+            (k for k, _ in defines),
+            (k for k, _ in undefines)):
         if k not in Result._by and k not in Result._fields:
             print("error: could not find field %r?" % k,
                     file=sys.stderr)
             sys.exit(-1)
 
     # filter by matching defines
-    if defines:
+    if defines or undefines:
         results_ = []
         for r in results:
-            if all(any(fnmatch.fnmatchcase(str(getattr(r, k, '')), v)
+            if not all(any(fnmatch.fnmatchcase(str(getattr(r, k, '')), v)
                         for v in vs)
                     for k, vs in defines):
-                results_.append(r)
+                continue
+            if any(any(fnmatch.fnmatchcase(str(getattr(r, k, '')), v)
+                        for v in vs)
+                    for k, vs in undefines):
+                continue
+            results_.append(r)
         results = results_
 
     # organize results into conflicts
@@ -1697,14 +2236,14 @@ def fold(Result, results, *,
     return folded
 
 def hotify(Result, results, *,
-        enumerates=None,
         depth=1,
         hot=None,
         **_):
-    # note! hotifying risks confusion if you don't enumerate/have a
-    # z field, since it will allow folding across recursive boundaries
+    # note! hotifying risks confusion if you don't have a z field, since
+    # it will allow folding across recursive boundaries
 
     # hotify only makes sense for recursive results
+    assert hasattr(Result, '_z')
     assert hasattr(Result, '_children')
 
     results_ = []
@@ -1726,12 +2265,8 @@ def hotify(Result, results, *,
                                 for k_ in ([k] if k else Result._sort)))
                         for k, reverse in it.chain(hot, [(None, False)])))
 
-            hot_.append(r._replace(**(
-                    # enumerate?
-                    ({e: len(hot_) for e in enumerates}
-                            if enumerates is not None
-                            else {})
-                        | {Result._children: []})))
+            # flatten, dropping children
+            hot_.append(r._replace(**{Result._children: []}))
 
             # recurse?
             if depth_ > 1:
@@ -1746,21 +2281,28 @@ def hotify(Result, results, *,
 def table(Result, results, diff_results=None, *,
         by=None,
         fields=None,
+        hidden=None,
         sort=None,
-        labels=None,
         depth=1,
         hot=None,
-        percent=False,
+        small_diff=False,
+        percent_diff=False,
         all=False,
         compare=None,
+        hlabel=None,
+        tlabel=None,
         no_header=False,
         small_header=False,
         no_total=False,
-        small_table=False,
+        small_total=False,
         summary=False,
         **_):
     import builtins
     all_, all = all, builtins.all
+
+    # summary implies small_header
+    if summary:
+        small_header = True
 
     if by is None:
         by = Result._by
@@ -1769,32 +2311,20 @@ def table(Result, results, diff_results=None, *,
     types = Result._types
 
     # organize by name
-    table = {
-            ','.join(str(getattr(r, k)
-                        if getattr(r, k) is not None
-                        else '')
-                    for k in by): r
-                for r in results}
-    diff_table = {
-            ','.join(str(getattr(r, k)
-                        if getattr(r, k) is not None
-                        else '')
-                    for k in by): r
-                for r in diff_results or []}
-
-    # lost results? this only happens if we didn't fold by the same
-    # by field, which is an error and risks confusing results
-    assert len(table) == len(results)
-    if diff_results is not None:
-        assert len(diff_table) == len(diff_results)
+    def table_name(r):
+        return ','.join(str(getattr(r, k)
+                    if getattr(r, k) is not None
+                    else '')
+                for k in by)
+    table = {table_name(r): r for r in results}
+    diff_table = {table_name(r): r for r in diff_results or []}
 
     # find compare entry if there is one
     if compare:
         compare_ = min(
             (n for n in table.keys()
                 if all(fnmatch.fnmatchcase(k, c)
-                    for k, c in it.zip_longest(n.split(','), compare,
-                        fillvalue=''))),
+                    for k, c in zip(n.split(','), compare))),
             default=compare)
         compare_r = table.get(compare_)
 
@@ -1804,23 +2334,30 @@ def table(Result, results, diff_results=None, *,
     # header
     if not no_header:
         header = ['%s%s' % (
-                    ','.join(labels if labels is not None else by),
+                    ','.join((hlabel('',k) if hlabel is not None else k)
+                        for k in by if hidden is None or k not in hidden),
                     ' (%d added, %d removed)' % (
                             sum(1 for n in table if n not in diff_table),
                             sum(1 for n in diff_table if n not in table))
-                        if diff_results is not None and not percent else '')
-                if not small_header and not small_table and not summary
-                    else '']
-        if diff_results is None or percent:
+                        if diff_results is not None
+                            and not percent_diff
+                            and not small_diff
+                            else '')
+                if not small_header else '']
+        if diff_results is None or percent_diff:
             for k in fields:
-                header.append(k)
+                header.append(hlabel('',k) if hlabel is not None else k)
+        elif small_diff:
+            for k in fields:
+                header.append((hlabel('o',k) if hlabel is not None else 'o'+k))
+                header.append((hlabel('n',k) if hlabel is not None else 'n'+k))
         else:
             for k in fields:
-                header.append('o'+k)
+                header.append((hlabel('o',k) if hlabel is not None else 'o'+k))
             for k in fields:
-                header.append('n'+k)
+                header.append((hlabel('n',k) if hlabel is not None else 'n'+k))
             for k in fields:
-                header.append('d'+k)
+                header.append((hlabel('d',k) if hlabel is not None else 'd'+k))
         lines.append(header)
 
     # delete these to try to catch typos below, we need to rebuild
@@ -1829,9 +2366,9 @@ def table(Result, results, diff_results=None, *,
     del diff_table
 
     # entry helper
-    def table_entry(name, r, diff_r=None):
+    def table_entry(n, r, diff_r=None):
         # prepend name
-        entry = [name]
+        entry = [n]
 
         # normal entry?
         if ((compare is None or r == compare_r)
@@ -1855,8 +2392,8 @@ def table(Result, results, diff_results=None, *,
                                 types[k].ratio(
                                     getattr(r, k, None),
                                     getattr(compare_r, k, None)))))
-        # percent entry?
-        elif percent:
+        # percent diff entry?
+        elif percent_diff:
             for k in fields:
                 entry.append(
                         (getattr(r, k).table()
@@ -1865,6 +2402,23 @@ def table(Result, results, diff_results=None, *,
                             (lambda t: ['+∞%'] if t == +mt.inf
                                     else ['-∞%'] if t == -mt.inf
                                     else ['%+.1f%%' % (100*t)])(
+                                types[k].ratio(
+                                    getattr(r, k, None),
+                                    getattr(diff_r, k, None)))))
+        # small diff entry?
+        elif small_diff:
+            for k in fields:
+                entry.append(getattr(diff_r, k).table()
+                        if getattr(diff_r, k, None) is not None
+                        else types[k].none)
+                entry.append(
+                        (getattr(r, k).table()
+                                if getattr(r, k, None) is not None
+                                else types[k].none,
+                            (lambda t: ['+∞%'] if t == +mt.inf
+                                    else ['-∞%'] if t == -mt.inf
+                                    else ['%+.1f%%' % (100*t)] if t
+                                    else [])(
                                 types[k].ratio(
                                     getattr(r, k, None),
                                     getattr(diff_r, k, None)))))
@@ -1906,30 +2460,26 @@ def table(Result, results, diff_results=None, *,
             depth_,
             prefixes=('', '', '', '')):
         # build the children table at each layer
-        table_ = {
-                ','.join(str(getattr(r, k)
-                            if getattr(r, k) is not None
-                            else '')
-                        for k in by): r
-                    for r in results_}
-        diff_table_ = {
-                ','.join(str(getattr(r, k)
-                            if getattr(r, k) is not None
-                            else '')
-                        for k in by): r
-                    for r in diff_results_ or []}
-        names_ = [n
-                for n in table_.keys() | diff_table_.keys()
+        table_ = {table_name(r): r for r in results_}
+        diff_table_ = {table_name(r): r for r in diff_results_ or []}
+        # this gets a bit tricky, we want to merge both result and diff
+        # result names, while preserving duplicates in the result list
+        results__ = [(n, r)
+                for n, r in it.chain(
+                    ((table_name(r), r) for r in results_),
+                    ((table_name(r), None)
+                        for r in diff_results_ or []
+                        if table_name(r) not in table_))
                 if diff_results is None
                     or all_
                     or any(
                         types[k].ratio(
-                                getattr(table_.get(n), k, None),
+                                getattr(r, k, None),
                                 getattr(diff_table_.get(n), k, None))
                             for k in fields)]
 
         # sort again, now with diff info, note that python's sort is stable
-        names_.sort(key=lambda n: (
+        results__.sort(key=lambda nr: (lambda n, r: (
                 # sort by explicit sort fields
                 next(
                     tuple((Rev
@@ -1940,79 +2490,84 @@ def table(Result, results, diff_results=None, *,
                                         else ()
                                     for k_ in ([k] if k else Result._sort)))
                             for k, reverse in (sort or []))
-                        for r_ in [table_.get(n), diff_table_.get(n)]
+                        for r_ in [r, diff_table_.get(n)]
                         if r_ is not None),
                 # sort by ratio if diffing
                 Rev(tuple(types[k].ratio(
-                            getattr(table_.get(n), k, None),
+                            getattr(r, k, None),
                             getattr(diff_table_.get(n), k, None))
                         for k in fields))
                     if diff_results is not None
                     else (),
                 # move compare entry to the top, note this can be
                 # overridden by explicitly sorting by fields
-                (table_.get(n) != compare_r,
+                (r != compare_r,
                         # sort by ratio if comparing
                         Rev(tuple(
                             types[k].ratio(
-                                    getattr(table_.get(n), k, None),
+                                    getattr(r, k, None),
                                     getattr(compare_r, k, None))
                                 for k in fields)))
                     if compare
                     else (),
                 # sort by result
-                (table_[n],) if n in table_ else (),
+                (r,) if r is not None else (),
                 # and finally by name (diffs may be missing results)
-                n))
+                n))(*nr))
 
-        for i, name in enumerate(names_):
+        for i, (n, r) in enumerate(results__):
             # find comparable results
-            r = table_.get(name)
-            diff_r = diff_table_.get(name)
+            diff_r = diff_table_.get(n)
 
-            # figure out a good label
-            if labels is not None:
-                label = next(
+            # figure out a good name
+            if hidden is not None:
+                name = next(
                         ','.join(str(getattr(r_, k)
                                     if getattr(r_, k) is not None
                                     else '')
-                                for k in labels)
+                                for k in by if k not in hidden)
                             for r_ in [r, diff_r]
                             if r_ is not None)
             else:
-                label = name
+                name = n
 
             # build line
-            line = table_entry(label, r, diff_r)
+            line = table_entry(name, r, diff_r)
 
             # add prefixes
             line = [x if isinstance(x, tuple) else (x, []) for x in line]
-            line[0] = (prefixes[0+(i==len(names_)-1)] + line[0][0], line[0][1])
+            line[0] = (
+                    prefixes[0+(i==len(results__)-1)] + line[0][0],
+                    line[0][1])
             lines.append(line)
 
             # recurse?
-            if name in table_ and depth_ > 1:
+            if r is not None and depth_ > 1:
                 table_recurse(
                         getattr(r, Result._children),
                         getattr(diff_r, Result._children, None),
                         depth_-1,
-                        (prefixes[2+(i==len(names_)-1)] + "|-> ",
-                         prefixes[2+(i==len(names_)-1)] + "'-> ",
-                         prefixes[2+(i==len(names_)-1)] + "|   ",
-                         prefixes[2+(i==len(names_)-1)] + "    "))
+                        (prefixes[2+(i==len(results__)-1)] + "|-> ",
+                         prefixes[2+(i==len(results__)-1)] + "'-> ",
+                         prefixes[2+(i==len(results__)-1)] + "|   ",
+                         prefixes[2+(i==len(results__)-1)] + "    "))
 
     # build entries
     if not summary:
         table_recurse(results, diff_results, depth)
 
     # total
-    if not no_total and not (small_table and not summary):
-        r = next(iter(fold(Result, results, by=[])), None)
+    if not no_total:
+        r = next(iter(fold(Result, results, by=[])), Result())
         if diff_results is None:
             diff_r = None
         else:
-            diff_r = next(iter(fold(Result, diff_results, by=[])), None)
-        lines.append(table_entry('TOTAL', r, diff_r))
+            diff_r = next(iter(fold(Result, diff_results, by=[])), Result())
+        lines.append(table_entry(
+                '' if small_total
+                    else tlabel(r) if tlabel is not None
+                    else 'TOTAL',
+                r, diff_r))
 
     # homogenize
     lines = [[x if isinstance(x, tuple) else (x, []) for x in line]
@@ -2025,8 +2580,10 @@ def table(Result, results, diff_results=None, *,
     for line in lines:
         for i, x in enumerate(line):
             widths[i] = max(widths[i], ((len(x[0])+1+4-1)//4)*4-1)
-            if i != len(line)-1:
+            if x[1] and i != len(line)-1:
                 nwidths[i] = max(nwidths[i], 1+sum(2+len(n) for n in x[1]))
+    if not any(line[0][0] for line in lines):
+        widths[0] = 0
 
     # print our table
     for line in lines:
@@ -2044,7 +2601,7 @@ def read_csv(path, Result, *,
     # prefix? this only applies to field fields
     if prefix is None:
         if hasattr(Result, '_prefix'):
-            prefix = '%s_' % Result._prefix
+            prefix = Result._prefix
         else:
             prefix = ''
 
@@ -2122,7 +2679,7 @@ def write_csv(path, Result, results, *,
     # prefix? this only applies to field fields
     if prefix is None:
         if hasattr(Result, '_prefix'):
-            prefix = '%s_' % Result._prefix
+            prefix = Result._prefix
         else:
             prefix = ''
 
@@ -2181,15 +2738,251 @@ def write_csv(path, Result, results, *,
                     separators=(',', ':'))
 
 
+# some list rules
+def list_fields(csv_paths, **args):
+    # find results
+    if not args.get('use', None):
+        # not enough info?
+        if not csv_paths:
+            print("error: no *.csv files?",
+                    file=sys.stderr)
+            sys.exit(1)
+
+        # collect info
+        fields_, results = collect_csv(csv_paths,
+                **args)
+    else:
+        # use is just an alias but takes priority
+        fields_, results = collect_csv([args['use']],
+                **args)
+
+    # find best type for fields, note this matches compile behavior
+    types_ = {}
+    for k in fields_:
+        try:
+            for t in [CsvInt, CsvFloat, CsvFrac, CsvFfrac]:
+                for r in results:
+                    if k in r and r[k].strip():
+                        try:
+                            t(r[k])
+                        except ValueError:
+                            break
+                else:
+                    types_[k] = t
+                    break
+        except AttributeError:
+            pass
+
+    # find best name for types
+    types__ = []
+    for k in fields_:
+        if k in types_:
+            t = types_[k].__name__
+            if t.startswith('Csv'):
+                t = t[len('Csv'):]
+            types__.append(t.lower())
+        else:
+            types__.append('?')
+
+    # show the first couple values for each field
+    limit = 36
+    examples__ = []
+    for k in fields_:
+        x = co.OrderedDict()
+        for r in results:
+            if len(x) >= limit:
+                break
+            if k in r and r[k].strip():
+                x[r[k].strip()] = True
+        x = ','.join(x.keys())
+        if len(x) > limit:
+            x = x[:limit] + '...'
+        examples__.append(x)
+
+    # find widths
+    w = [0, 0]
+    for k, t in zip(fields_, types__):
+        w[0] = max(w[0], len(k))
+        w[1] = max(w[1], len(t))
+
+    for k, t, x in zip(fields_, types__, examples__):
+        print('%-*s  %-*s  # %s' % (
+                w[0], k,
+                w[1], t,
+                x))
+
+def list_eval(fields_, results, Result, **args):
+    # find best type for fields, note this matches compile behavior
+    types_ = {}
+    for k in fields_:
+        try:
+            for t in [CsvInt, CsvFloat, CsvFrac, CsvFfrac]:
+                for r in results:
+                    if k in r and r[k].strip():
+                        try:
+                            t(r[k])
+                        except ValueError:
+                            break
+                else:
+                    types_[k] = t
+                    break
+        except AttributeError:
+            pass
+
+    # find best name for types
+    types__ = []
+    for k in fields_:
+        if k in types_:
+            t = types_[k].__name__
+            if t.startswith('Csv'):
+                t = t[len('Csv'):]
+            types__.append(t.lower())
+        else:
+            types__.append('?')
+
+    # find best name for types
+    types__ = []
+    for k in fields_:
+        if k in types_:
+            t = types_[k].__name__
+            if t.startswith('Csv'):
+                t = t[len('Csv'):]
+            types__.append(t.lower())
+        else:
+            types__.append('?')
+
+    # figure out output fields
+    fields = list(co.OrderedDict.fromkeys(it.chain(
+            Result._by,
+            Result._fields,
+            (Result._z,) if hasattr(Result, '_z') else (),
+            (Result._children,) if hasattr(Result, '_children') else (),
+            (Result._notes,) if hasattr(Result, '_notes') else ())).keys())
+
+    # figure out deps
+    deps = []
+    for k in fields:
+        deps_ = set()
+        if k in Result._exprs:
+            deps_.update(Result._exprs[k].fields())
+        elif k in Result._mods:
+            # bit of a hack, but we don't usually know mod deps
+            # until eval time
+            deps_.update(re.findall('(?<!%)%\(([^)]*)\)', Result._mods[k]))
+        else:
+            # by default, dep is the field itself
+            deps_ = {k}
+        # ignore non-existant deps
+        deps_ = {d for d in deps_ if d in fields_}
+        deps.append(deps_)
+
+    # find best name for types
+    types = []
+    for k in fields:
+        # special cases for z/children/notes
+        if hasattr(Result, '_z') and k == Result._z:
+            types.append('z')
+        elif hasattr(Result, '_children') and k == Result._children:
+            types.append('children')
+        elif hasattr(Result, '_notes') and k == Result._notes:
+            types.append('notes')
+        # figure out name
+        elif k in Result._types:
+            t = Result._types[k].__name__
+            if t.startswith('Csv'):
+                t = t[len('Csv'):]
+            types.append(t.lower())
+        else:
+            types.append('?')
+
+    # find best name for folds
+    folds = []
+    for k in fields:
+        # special cases for children/notes
+        if hasattr(Result, '_z') and k == Result._z:
+            folds.append('z')
+        elif hasattr(Result, '_children') and k == Result._children:
+            folds.append('children')
+        elif hasattr(Result, '_notes') and k == Result._notes:
+            folds.append('notes')
+        # figure out name
+        elif k in Result._folds:
+            t = Result._folds[k].__class__.__name__
+            if t.startswith('Csv'):
+                t = t[len('Csv'):]
+            folds.append(t.lower())
+        else:
+            folds.append('?')
+
+    # build dep grid
+    dwidth = 2 + sum(1 for d in deps if d)
+    dheight = max(len(fields_), len(fields))
+    dgrid = [' ' for _ in range(dwidth*dheight)]
+
+    for i, (k, d) in enumerate((k, d) for k, d in zip(fields, deps) if d):
+        # find starting ys
+        a = []
+        for y, k_ in enumerate(fields_):
+            if k_ in d:
+                a.append(y)
+        # find ending y
+        b = i
+        for y, k_ in enumerate(fields):
+            if k_ == k:
+                b = y
+        # draw start lines
+        for y in a:
+            for x in range(0, 1+i):
+                dgrid[y*dwidth + x] = '-'
+        # draw end lines
+        for x in range(1+i+1, dwidth):
+            dgrid[b*dwidth + x] = '>' if x == dwidth-1 else '-'
+        # draw connections
+        min_ = min(min(a), b)
+        max_ = max(max(a), b)
+        for y in range(min_, max_+1):
+            dgrid[y*dwidth + 1+i] = (
+                    '-' if min_ == max_
+                        else '+' if y in a and y == b
+                        else '.' if y == min_
+                        else '\'' if y == max_
+                        else '+' if y in a or y == b
+                        else '|')
+
+    # find widths
+    w = [0, 0, 0, 0]
+    for k_, t_, k, t in it.zip_longest(
+            fields_, types__, fields, types):
+        w[0] = max(w[0], len(k_ or ''))
+        w[1] = max(w[1], len(t_ or ''))
+        w[2] = max(w[2], len(k or ''))
+        w[3] = max(w[3], len(t or ''))
+
+    for i, (k_, t_, k, t, f) in enumerate(
+            it.zip_longest(
+                fields_, types__, fields, types, folds)):
+        print('%-*s  %-*s  %s  %-*s  %-*s  %s' % (
+                w[0], k_ or '',
+                w[1], t_ or '',
+                ''.join(dgrid[i*dwidth:i*dwidth+dwidth]),
+                w[2], k or '',
+                w[3], t or '',
+                f or ''))
+
+
+# entry point
 def main(csv_paths, *,
         by=None,
         fields=None,
         defines=[],
+        undefines=[],
         sort=None,
         depth=None,
         children=None,
         hot=None,
         notes=None,
+        hlabels=None,
+        tlabel=None,
         **args):
     # show mod help text?
     if args.get('help_mods'):
@@ -2197,6 +2990,9 @@ def main(csv_paths, *,
     # show expr help text?
     if args.get('help_exprs'):
         return CsvExpr.help()
+    # list fields?
+    if args.get('list_fields'):
+        return list_fields(csv_paths, **args)
 
     if ((by is None or all(hidden for (k, v), hidden in by))
             and (fields is None or all(hidden for (k, v), hidden in fields))):
@@ -2204,12 +3000,17 @@ def main(csv_paths, *,
                 file=sys.stderr)
         sys.exit(-1)
 
+    z = None
     if children is not None:
         if len(children) > 1:
             print("error: multiple --children fields currently not supported",
                     file=sys.stderr)
             sys.exit(-1)
         children = children[0]
+        if len(children) > 1:
+            z, children = children
+        else:
+            children, = children
 
     if notes is not None:
         if len(notes) > 1:
@@ -2219,8 +3020,11 @@ def main(csv_paths, *,
         notes = notes[0]
 
     # recursive results imply --children
-    if (depth is not None or hot is not None) and children is None:
-        children = 'children'
+    if depth is not None or hot is not None:
+        if z is None:
+            z = 'z'
+        if children is None:
+            children = 'children'
 
     # figure out depth
     if depth is None:
@@ -2242,7 +3046,6 @@ def main(csv_paths, *,
                 children=children,
                 notes=notes,
                 **args)
-
     else:
         # use is just an alias but takes priority
         fields_, results = collect_csv([args['use']],
@@ -2251,40 +3054,40 @@ def main(csv_paths, *,
                 notes=notes,
                 **args)
 
-    # separate out enumerates/mods/exprs
+    # separate out mods/exprs
     #
-    # enumerate enumerates: -ia
     # by supports mods: -ba=%(b)s
     # fields/sort/etc supports exprs: -fa=b+c
     #
-    enumerates = [k
-            for (k, v), hidden in (by or [])
-                if v == enumerate]
     mods = [(k, v)
             for k, v in it.chain(
-                ((k, v) for (k, v), hidden in (by or [])
-                    if v != enumerate))
+                ((k, v) for (k, v), hidden in (by or [])))
             if v is not None]
     exprs = [(k, v)
             for k, v in it.chain(
-                ((k, v) for (k, v), hidden in (fields or [])),
+                # expr-less fields at least imply typechecking
+                ((k, v) if v is not None else (k, CsvExpr(k))
+                    for (k, v), hidden in (fields or [])),
                 ((k, v) for (k, v), reverse in (sort or [])),
                 ((k, v) for (k, v), reverse in (hot or [])))
             if v is not None]
 
-    # figure out labels/by/fields
-    labels__ = None
+    # figure out by/hidden/fields
     by__ = []
+    hidden__ = None
     fields__ = []
-    if by is not None and any(not hidden for (k, v), hidden in by):
-        labels__ = [k for (k, v), hidden in by if not hidden]
     if by is not None:
         by__ = [k for (k, v), hidden in by]
+        hidden__ = {k for (k, v), hidden in by if hidden}
     if fields is not None:
         fields__ = [k for (k, v), hidden in fields
                 if not hidden
                     or args.get('output')
                     or args.get('output_json')]
+
+    # insert zed
+    if z is not None:
+        by__.insert(0, z)
 
     # if by not specified, guess it's anything not in fields/defines/exprs/etc
     if by is None or all(hidden for (k, v), hidden in by):
@@ -2292,9 +3095,11 @@ def main(csv_paths, *,
                 if not any(k == k_ for (k_, _), _ in (by or []))
                     and not any(k == k_ for (k_, _), _ in (fields or []))
                     and not any(k == k_ for k_, _ in defines)
+                    and not any(k == k_ for k_, _ in undefines)
                     and not any(k == k_ for (k_, _), _ in (sort or []))
-                    and k != children
                     and not any(k == k_ for (k_, _), _ in (hot or []))
+                    and k != z
+                    and k != children
                     and k != notes
                     and not any(k == k_
                         for _, expr in exprs
@@ -2306,15 +3111,17 @@ def main(csv_paths, *,
                 if not any(k == k_ for (k_, _), _ in (by or []))
                     and not any(k == k_ for (k_, _), _ in (fields or []))
                     and not any(k == k_ for k_, _ in defines)
+                    and not any(k == k_ for k_, _ in undefines)
                     and not any(k == k_ for (k_, _), _ in (sort or []))
-                    and k != children
                     and not any(k == k_ for (k_, _), _ in (hot or []))
+                    and k != z
+                    and k != children
                     and k != notes
                     and not any(k == k_
                         for _, expr in exprs
                         for k_ in expr.fields()))
-    labels = labels__
     by = by__
+    hidden = hidden__
     fields = fields__
 
     # filter exprs from sort/hot
@@ -2332,26 +3139,30 @@ def main(csv_paths, *,
             mods=mods,
             exprs=exprs,
             sort=sort,
+            z=z,
             children=children,
             hot=hot,
-            notes=notes,
-            **args)
+            notes=notes)
+
+    # list eval?
+    if args.get('list_eval'):
+        return list_eval(fields_, results, Result, **args)
 
     # homogenize
     results = homogenize(Result, results,
-            enumerates=enumerates,
             defines=defines,
+            undefines=undefines,
             depth=depth)
 
     # fold
     results = fold(Result, results,
             by=by,
+            sort=sort,
             depth=depth)
 
     # hotify?
     if hot:
         results = hotify(Result, results,
-                enumerates=enumerates,
                 depth=depth,
                 hot=hot)
 
@@ -2375,8 +3186,8 @@ def main(csv_paths, *,
 
         # homogenize
         diff_results = homogenize(Result, diff_results,
-                enumerates=enumerates,
                 defines=defines,
+                undefines=undefines,
                 depth=depth)
 
         # fold
@@ -2387,7 +3198,6 @@ def main(csv_paths, *,
         # hotify?
         if hot:
             diff_results = hotify(Result, diff_results,
-                    enumerates=enumerates,
                     depth=depth,
                     hot=hot)
 
@@ -2410,9 +3220,17 @@ def main(csv_paths, *,
         table(Result, results, diff_results,
                 by=by,
                 fields=fields,
+                hidden=hidden,
                 sort=sort,
-                labels=labels,
                 depth=depth,
+                hlabel=(lambda hlabels_: (lambda p,k:
+                            punescape(hlabels_[p+k]) if p+k in hlabels_
+                                else p+punescape(hlabels_[k]) if k in hlabels_
+                                else p+k)
+                        )(dict(hlabels))
+                    if hlabels else None,
+                tlabel=(lambda r: punescape(tlabel, PunescapeGetattr(r)))
+                    if tlabel else None,
                 **args)
 
 
@@ -2435,6 +3253,14 @@ if __name__ == "__main__":
             action='store_true',
             help="Show what field exprs are available.")
     parser.add_argument(
+            '-l', '--list-fields',
+            action='store_true',
+            help="List fields and inferred types before processing.")
+    parser.add_argument(
+            '-L', '--list-eval',
+            action='store_true',
+            help="List computed fields and expression dependencies.")
+    parser.add_argument(
             '-q', '--quiet',
             action='store_true',
             help="Don't show anything, useful when checking for errors.")
@@ -2452,40 +3278,54 @@ if __name__ == "__main__":
             '-d', '--diff',
             help="Specify CSV/JSON file to diff against.")
     parser.add_argument(
-            '-p', '--percent',
+            '--small-diff',
             action='store_true',
-            help="Only show percentage change, not a full diff.")
+            help="Don't show diff delta.")
+    # need a special Action here because this % causes problems
+    class StoreTruePercentDiff(argparse._StoreTrueAction):
+        def format_usage(self):
+            return '-%%'
     parser.add_argument(
-            '-c', '--compare',
-            type=lambda x: tuple(v.strip() for v in x.split(',')),
-            help="Compare results to the row matching this by pattern.")
+            '-%', '--percent-diff',
+            action=StoreTruePercentDiff,
+            help="Only show percentage change, not a full diff.")
     parser.add_argument(
             '-a', '--all',
             action='store_true',
             help="Show all, not just the ones that changed.")
+    parser.add_argument(
+            '-C', '--compare',
+            type=lambda x: tuple(v.strip() for v in x.split(',')),
+            help="Compare results to the row matching this by pattern.")
+    class AppendEnumerate(argparse.Action):
+        def __call__(self, parser, namespace, value, option):
+            if namespace.by is None:
+                namespace.by = []
+            if namespace.fields is None:
+                namespace.fields = []
+            namespace.by.append(((value, None), option in {
+                    '-I', '--hidden-enumerate'}))
+            namespace.fields.append(((value, CsvExpr('enumerate()')), True))
+    parser.add_argument(
+            '-i', '--enumerate',
+            action=AppendEnumerate,
+            nargs='?',
+            const='i',
+            help="Enumerate results with this field, equivalent to "
+                " -bi -Fi=enumerate(). This will prevent result folding.")
+    parser.add_argument(
+            '-I', '--hidden-enumerate',
+            action=AppendEnumerate,
+            nargs='?',
+            const='i',
+            help="Like -i/--enumerate, but hidden from the table renderer, "
+                "and doesn't affect -b/--by defaults.")
     class AppendBy(argparse.Action):
         def __call__(self, parser, namespace, value, option):
             if namespace.by is None:
                 namespace.by = []
             namespace.by.append((value, option in {
-                    '-B', '--hidden-by',
-                    '-I', '--hidden-enumerate'}))
-    parser.add_argument(
-            '-i', '--enumerate',
-            action=AppendBy,
-            nargs='?',
-            type=lambda x: (x, enumerate),
-            const=('i', enumerate),
-            help="Enumerate results with this field. This will prevent "
-                "result folding.")
-    parser.add_argument(
-            '-I', '--hidden-enumerate',
-            action=AppendBy,
-            nargs='?',
-            type=lambda x: (x, enumerate),
-            const=('i', enumerate),
-            help="Like -i/--enumerate, but hidden from the table renderer, "
-                "and doesn't affect -b/--by defaults.")
+                    '-B', '--hidden-by'}))
     parser.add_argument(
             '-b', '--by',
             action=AppendBy,
@@ -2530,10 +3370,28 @@ if __name__ == "__main__":
             type=lambda x: (
                 lambda k, v=None: (
                     k.strip(),
-                    v.strip() if v is not None else None)
+                    CsvExpr(v) if v is not None else None)
                 )(*x.split('=', 1)),
             help="Like -f/--field, but hidden from the table renderer, "
                 "and doesn't affect -f/--field defaults.")
+    class AppendQuery(argparse.Action):
+        def __call__(self, parser, namespace, value, option):
+            if namespace.fields is None:
+                namespace.fields = []
+            namespace.fields.append((value, False))
+            namespace.summary = True
+            namespace.no_header = True
+            namespace.small_total = True
+    parser.add_argument(
+            '-Q', '--query',
+            action=AppendQuery,
+            type=lambda x: (
+                lambda k, v=None: (
+                    k.strip(),
+                    CsvExpr(v) if v is not None else None)
+                )(*x.split('=', 1)),
+            help="Like -f/--field, but also implies --total. Useful for "
+                "scripting.")
     parser.add_argument(
             '-D', '--define',
             dest='defines',
@@ -2544,6 +3402,17 @@ if __name__ == "__main__":
                     {v.strip() for v in vs.split(',')})
                 )(*x.split('=', 1)),
             help="Only include results where this field is this value. May "
+                "include comma-separated options and globs.")
+    parser.add_argument(
+            '-U', '--undefine',
+            dest='undefines',
+            action='append',
+            type=lambda x: (
+                lambda k, vs: (
+                    k.strip(),
+                    {v.strip() for v in vs.split(',')})
+                )(*x.split('=', 1)),
+            help="Don't include results where this field is this value. May "
                 "include comma-separated options and globs.")
     class AppendSort(argparse.Action):
         def __call__(self, parser, namespace, value, option):
@@ -2584,10 +3453,12 @@ if __name__ == "__main__":
     parser.add_argument(
             '-Z', '--children',
             nargs='?',
-            const='children',
+            const=('z', 'children'),
             action='append',
-            help="Field to use for recursive results. This expects a list "
-                "and really only works with JSON input.")
+            type=lambda x: tuple(v.strip() for v in x.split(',')),
+            help="Fields to use for recursive results, either the children "
+                "field or depth,children fields. This really only works with "
+                "JSON input. Defaults to 'z' and 'children'.")
     class AppendHot(argparse.Action):
         def __call__(self, parser, namespace, value, option):
             if namespace.hot is None:
@@ -2622,7 +3493,21 @@ if __name__ == "__main__":
             nargs='?',
             const='notes',
             action='append',
-            help="Field to use for notes.")
+            help="Field to use for notes. Defaults to 'notes'.")
+    parser.add_argument(
+            '-H', '--hlabel',
+            dest='hlabels',
+            action='append',
+            type=lambda x: (
+                lambda k, v: (
+                    k.strip(),
+                    v.strip())
+                )(*x.split('=', 1)),
+            help="Change the default header label for a given field. "
+                "Accepts %% modifiers.")
+    parser.add_argument(
+            '--tlabel',
+            help="Change the default TOTAL label. Accepts %% modifiers.")
     parser.add_argument(
             '--no-header',
             action='store_true',
@@ -2636,13 +3521,31 @@ if __name__ == "__main__":
             action='store_true',
             help="Don't show the total.")
     parser.add_argument(
-            '-Q', '--small-table',
+            '--small-total',
             action='store_true',
+            help="Don't show TOTAL name.")
+    class StoreSmallTable(argparse._StoreTrueAction):
+        def __call__(self, parser, namespace, value, option):
+            namespace.small_header = True
+            namespace.no_total = True
+    parser.add_argument(
+            '--small-table',
+            action=StoreSmallTable,
             help="Equivalent to --small-header + --no-total.")
     parser.add_argument(
             '-Y', '--summary',
             action='store_true',
             help="Only show the total.")
+    class StoreTotal(argparse._StoreTrueAction):
+        def __call__(self, parser, namespace, value, option):
+            namespace.summary = True
+            namespace.no_header = True
+            namespace.small_total = True
+    parser.add_argument(
+            '--total',
+            action=StoreTotal,
+            help="Equivalent to --summary + --no-header + --small-total. "
+                "Useful for scripting.")
     parser.add_argument(
             '--prefix',
             help="Prefix to use for fields in CSV/JSON output.")

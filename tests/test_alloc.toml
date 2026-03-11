@@ -7,7 +7,13 @@
 # since you can usually ignore allocator issues temporarily by making the test
 # device really big
 #
-after = ['test_mtree', 'test_dirs', 'test_files']
+after = ['test_mtree', 'test_gbmap', 'test_dirs', 'test_files']
+
+# Test both with and without the gbmap if available
+defines.GBMAP = [false, true]
+if = 'LFS3_IFYES_GBMAP(GBMAP, true, !GBMAP)'
+defines.FORMAT_BLOCK_COUNT = '(GBMAP) ? 3 : 2'
+
 
 # test that we can alloc
 [cases.test_alloc_alloc]
@@ -17,16 +23,20 @@ defines.COUNT = [
     'BLOCK_COUNT/2',
     'BLOCK_COUNT/4',
     '5',
-    '2',
+    'FORMAT_BLOCK_COUNT',
 ]
 defines.ERASE = [false, true]
+if = 'COUNT >= FORMAT_BLOCK_COUNT'
 in = 'lfs3.c'
 code = '''
     // test various block counts
-    struct lfs3_config cfg = *CFG;
+    struct lfs3_cfg cfg = *CFG;
     cfg.block_count = COUNT;
     lfs3_t lfs3;
-    lfs3_format(&lfs3, LFS3_F_RDWR, &cfg) => 0;
+    lfs3_format(&lfs3,
+            LFS3_F_RDWR
+                | ((GBMAP) ? LFS3_IFDEF_GBMAP(LFS3_F_GBMAP, -1) : 0),
+            &cfg) => 0;
     lfs3_mount(&lfs3, LFS3_M_RDWR, &cfg) => 0;
 
     // start allocating
@@ -46,9 +56,11 @@ code = '''
     }
 
     // excluding our mroot, we should have allocated exactly
-    // block_count-2 blocks
+    // block_count-2 blocks (this gets more complicated with a gbmap)
     printf("alloced %d/%d blocks\n", alloced, (lfs3_block_t)COUNT);
+    #ifndef LFS3_GBMAP
     assert(alloced == COUNT-2);
+    #endif
 
     lfs3_unmount(&lfs3) => 0;
 '''
@@ -61,16 +73,20 @@ defines.COUNT = [
     'BLOCK_COUNT/2',
     'BLOCK_COUNT/4',
     '5',
-    '2',
+    'FORMAT_BLOCK_COUNT',
 ]
 defines.ERASE = [false, true]
+if = 'COUNT >= FORMAT_BLOCK_COUNT'
 in = 'lfs3.c'
 code = '''
     // test various block counts
-    struct lfs3_config cfg = *CFG;
+    struct lfs3_cfg cfg = *CFG;
     cfg.block_count = COUNT;
     lfs3_t lfs3;
-    lfs3_format(&lfs3, LFS3_F_RDWR, &cfg) => 0;
+    lfs3_format(&lfs3,
+            LFS3_F_RDWR
+                | ((GBMAP) ? LFS3_IFDEF_GBMAP(LFS3_F_GBMAP, -1) : 0),
+            &cfg) => 0;
     lfs3_mount(&lfs3, LFS3_M_RDWR, &cfg) => 0;
 
     // start allocating
@@ -90,9 +106,11 @@ code = '''
     }
 
     // excluding our mroot, we should have allocated exactly
-    // block_count-2 blocks
+    // block_count-2 blocks (this gets more complicated with a gbmap)
     printf("alloced %d/%d blocks\n", alloced, (lfs3_block_t)COUNT);
+    #ifndef LFS3_GBMAP
     assert(alloced == COUNT-2);
+    #endif
 
     // ack again, effectively releasing all the previously alloced blocks
     lfs3_alloc_ckpoint(&lfs3);
@@ -111,9 +129,11 @@ code = '''
     }
 
     // excluding our mroot, we should have allocated exactly
-    // block_count-2 blocks
+    // block_count-2 blocks (this gets more complicated with a gbmap)
     printf("alloced %d/%d blocks\n", alloced, (lfs3_block_t)COUNT);
+    #ifndef LFS3_GBMAP
     assert(alloced == COUNT-2);
+    #endif
 
     lfs3_unmount(&lfs3) => 0;
 '''
@@ -127,7 +147,10 @@ defines.REMOUNT = [false, true]
 in = 'lfs3.c'
 code = '''
     lfs3_t lfs3;
-    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_format(&lfs3,
+            LFS3_F_RDWR
+                | ((GBMAP) ? LFS3_IFDEF_GBMAP(LFS3_F_GBMAP, -1) : 0),
+            CFG) => 0;
     lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
 
     // create this many directories
@@ -180,36 +203,36 @@ code = '''
     uint8_t *seen = malloc((BLOCK_COUNT+7)/8);
     memset(seen, 0, (BLOCK_COUNT+7)/8);
 
-    lfs3_traversal_t t;
-    lfs3_traversal_init(&t,
+    lfs3_mtrv_t mtrv;
+    lfs3_mtrv_init(&mtrv,
             LFS3_T_RDONLY
                 | ((CKMETA) ? LFS3_T_CKMETA : 0));
     for (lfs3_block_t i = 0;; i++) {
         // a bit hacky, but this catches infinite loops
         assert(i < 2*BLOCK_COUNT);
 
-        lfs3_tag_t tag;
+        lfs3_stag_t tag;
         lfs3_bptr_t bptr;
-        int err = lfs3_mtree_traverse(&lfs3, &t,
-                &tag, &bptr);
-        assert(!err || err == LFS3_ERR_NOENT);
-        if (err == LFS3_ERR_NOENT) {
+        tag = lfs3_mtree_traverse(&lfs3, &mtrv,
+                &bptr);
+        assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+        if (tag == LFS3_ERR_NOENT) {
             break;
         }
 
         if (tag == LFS3_TAG_MDIR) {
-            lfs3_mdir_t *mdir = (lfs3_mdir_t*)bptr.data.u.buffer;
+            lfs3_mdir_t *mdir = (lfs3_mdir_t*)bptr.d.u.buffer;
             printf("traversal: 0x%x mdir 0x{%x,%x}\n",
                     tag,
-                    mdir->rbyd.blocks[0],
-                    mdir->rbyd.blocks[1]);
+                    mdir->r.blocks[0],
+                    mdir->r.blocks[1]);
 
             // keep track of seen blocks
-            seen[mdir->rbyd.blocks[1] / 8] |= 1 << (mdir->rbyd.blocks[1] % 8);
-            seen[mdir->rbyd.blocks[0] / 8] |= 1 << (mdir->rbyd.blocks[0] % 8);
+            seen[mdir->r.blocks[1] / 8] |= 1 << (mdir->r.blocks[1] % 8);
+            seen[mdir->r.blocks[0] / 8] |= 1 << (mdir->r.blocks[0] % 8);
 
         } else if (tag == LFS3_TAG_BRANCH) {
-            lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.data.u.buffer;
+            lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.d.u.buffer;
             printf("traversal: 0x%x btree 0x%x.%x\n",
                     tag,
                     rbyd->blocks[0], rbyd->trunk);
@@ -281,8 +304,8 @@ code = '''
 defines.N = [1, 2, 4, 8, 16, 32, 64]
 defines.SIZE = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -294,7 +317,10 @@ in = 'lfs3.c'
 if = '(SIZE*N)/BLOCK_SIZE <= 32'
 code = '''
     lfs3_t lfs3;
-    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_format(&lfs3,
+            LFS3_F_RDWR
+                | ((GBMAP) ? LFS3_IFDEF_GBMAP(LFS3_F_GBMAP, -1) : 0),
+            CFG) => 0;
     lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
 
     // create this many files
@@ -351,36 +377,36 @@ code = '''
     uint8_t *seen = malloc((BLOCK_COUNT+7)/8);
     memset(seen, 0, (BLOCK_COUNT+7)/8);
 
-    lfs3_traversal_t t;
-    lfs3_traversal_init(&t,
+    lfs3_mtrv_t mtrv;
+    lfs3_mtrv_init(&mtrv,
             LFS3_T_RDONLY
                 | ((CKMETA) ? LFS3_T_CKMETA : 0));
     for (lfs3_block_t i = 0;; i++) {
         // a bit hacky, but this catches infinite loops
         assert(i < 2*BLOCK_COUNT);
 
-        lfs3_tag_t tag;
+        lfs3_stag_t tag;
         lfs3_bptr_t bptr;
-        int err = lfs3_mtree_traverse(&lfs3, &t,
-                &tag, &bptr);
-        assert(!err || err == LFS3_ERR_NOENT);
-        if (err == LFS3_ERR_NOENT) {
+        tag = lfs3_mtree_traverse(&lfs3, &mtrv,
+                &bptr);
+        assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+        if (tag == LFS3_ERR_NOENT) {
             break;
         }
 
         if (tag == LFS3_TAG_MDIR) {
-            lfs3_mdir_t *mdir = (lfs3_mdir_t*)bptr.data.u.buffer;
+            lfs3_mdir_t *mdir = (lfs3_mdir_t*)bptr.d.u.buffer;
             printf("traversal: 0x%x mdir 0x{%x,%x}\n",
                     tag,
-                    mdir->rbyd.blocks[0],
-                    mdir->rbyd.blocks[1]);
+                    mdir->r.blocks[0],
+                    mdir->r.blocks[1]);
 
             // keep track of seen blocks
-            seen[mdir->rbyd.blocks[1] / 8] |= 1 << (mdir->rbyd.blocks[1] % 8);
-            seen[mdir->rbyd.blocks[0] / 8] |= 1 << (mdir->rbyd.blocks[0] % 8);
+            seen[mdir->r.blocks[1] / 8] |= 1 << (mdir->r.blocks[1] % 8);
+            seen[mdir->r.blocks[0] / 8] |= 1 << (mdir->r.blocks[0] % 8);
 
         } else if (tag == LFS3_TAG_BRANCH) {
-            lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.data.u.buffer;
+            lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.d.u.buffer;
             printf("traversal: 0x%x btree 0x%x.%x\n",
                     tag,
                     rbyd->blocks[0], rbyd->trunk);
@@ -391,11 +417,11 @@ code = '''
         } else if (tag == LFS3_TAG_BLOCK) {
             printf("traversal: 0x%x block 0x%x\n",
                     tag,
-                    bptr.data.u.disk.block);
+                    bptr.d.u.disk.block);
 
             // keep track of seen blocks
-            seen[bptr.data.u.disk.block / 8]
-                    |= 1 << (bptr.data.u.disk.block % 8);
+            seen[bptr.d.u.disk.block / 8]
+                    |= 1 << (bptr.d.u.disk.block % 8);
 
         } else {
             // this shouldn't happen
@@ -457,8 +483,8 @@ code = '''
 defines.N = [1, 2, 4, 8, 16, 32, 64]
 defines.SIZE = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -469,7 +495,10 @@ in = 'lfs3.c'
 if = '(SIZE*N)/BLOCK_SIZE <= 32'
 code = '''
     lfs3_t lfs3;
-    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_format(&lfs3,
+            LFS3_F_RDWR
+                | ((GBMAP) ? LFS3_IFDEF_GBMAP(LFS3_F_GBMAP, -1) : 0),
+            CFG) => 0;
     lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
 
     // create this many files
@@ -508,38 +537,38 @@ code = '''
     uint8_t *seen = malloc((BLOCK_COUNT+7)/8);
     memset(seen, 0, (BLOCK_COUNT+7)/8);
 
-    lfs3_traversal_t t;
-    lfs3_traversal_init(&t,
+    lfs3_mtrv_t mtrv;
+    lfs3_mtrv_init(&mtrv,
             LFS3_T_RDONLY
                 | ((CKMETA) ? LFS3_T_CKMETA : 0));
     for (lfs3_block_t i = 0;; i++) {
         // a bit hacky, but this catches infinite loops
         assert(i < 2*BLOCK_COUNT);
 
-        lfs3_tag_t tag;
+        lfs3_stag_t tag;
         lfs3_bptr_t bptr;
-        int err = lfs3_mtree_traverse(&lfs3, &t,
-                &tag, &bptr);
-        assert(!err || err == LFS3_ERR_NOENT);
-        if (err == LFS3_ERR_NOENT) {
+        tag = lfs3_mtree_traverse(&lfs3, &mtrv,
+                &bptr);
+        assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+        if (tag == LFS3_ERR_NOENT) {
             break;
         }
 
         if (tag == LFS3_TAG_MDIR) {
-            lfs3_mdir_t *mdir = (lfs3_mdir_t*)bptr.data.u.buffer;
+            lfs3_mdir_t *mdir = (lfs3_mdir_t*)bptr.d.u.buffer;
             printf("traversal: 0x%x mdir 0x{%x,%x}\n",
                     tag,
-                    mdir->rbyd.blocks[0],
-                    mdir->rbyd.blocks[1]);
+                    mdir->r.blocks[0],
+                    mdir->r.blocks[1]);
 
             // keep track of seen blocks
-            seen[mdir->rbyd.blocks[1] / 8]
-                    |= 1 << (mdir->rbyd.blocks[1] % 8);
-            seen[mdir->rbyd.blocks[0] / 8]
-                    |= 1 << (mdir->rbyd.blocks[0] % 8);
+            seen[mdir->r.blocks[1] / 8]
+                    |= 1 << (mdir->r.blocks[1] % 8);
+            seen[mdir->r.blocks[0] / 8]
+                    |= 1 << (mdir->r.blocks[0] % 8);
 
         } else if (tag == LFS3_TAG_BRANCH) {
-            lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.data.u.buffer;
+            lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.d.u.buffer;
             printf("traversal: 0x%x btree 0x%x.%x\n",
                     tag,
                     rbyd->blocks[0], rbyd->trunk);
@@ -551,11 +580,11 @@ code = '''
         } else if (tag == LFS3_TAG_BLOCK) {
             printf("traversal: 0x%x block 0x%x\n",
                     tag,
-                    bptr.data.u.disk.block);
+                    bptr.d.u.disk.block);
 
             // keep track of seen blocks
-            seen[bptr.data.u.disk.block / 8]
-                    |= 1 << (bptr.data.u.disk.block % 8);
+            seen[bptr.d.u.disk.block / 8]
+                    |= 1 << (bptr.d.u.disk.block % 8);
 
         } else {
             // this shouldn't happen
@@ -632,10 +661,105 @@ code = '''
 '''
 
 
-# TODO more nospc tests (opened files? other?)
 
-# nospc tests mostly test that things still work when block allocation
-# wraparound occurs
+# test that alloc can wrap around the disk
+[cases.test_alloc_wraparound_files]
+defines.COUNT = [
+    'BLOCK_COUNT',
+    'BLOCK_COUNT-1',
+    'BLOCK_COUNT/2',
+    'BLOCK_COUNT/4',
+    '5',
+    'FORMAT_BLOCK_COUNT',
+]
+defines.SIZE = [
+    'BLOCK_SIZE',
+    '2*BLOCK_SIZE',
+    '8*BLOCK_SIZE',
+]
+defines.N = ['5', 'BLOCK_COUNT/2']
+defines.WRAPAROUND = 3
+if = [
+    'COUNT >= FORMAT_BLOCK_COUNT',
+    'COUNT >= 2*N*SIZE/BLOCK_SIZE',
+]
+code = '''
+    // test various block counts
+    struct lfs3_cfg cfg = *CFG;
+    cfg.block_count = COUNT;
+    lfs3_t lfs3;
+    lfs3_format(&lfs3,
+            LFS3_F_RDWR
+                | ((GBMAP) ? LFS3_IFDEF_GBMAP(LFS3_F_GBMAP, -1) : 0),
+            &cfg) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, &cfg) => 0;
+
+    // create n files repeatedly until we're sure we've wrapped around
+    // a few times
+    uint32_t prng = 42;
+    uint32_t prng_ = prng;
+    for (lfs3_size_t i = 0;
+            i < (WRAPAROUND*COUNT)
+                / (N*(SIZE/BLOCK_SIZE));
+            i++) {
+        prng = prng_;
+        for (lfs3_size_t n = 0; n < N; n++) {
+            char name[256];
+            sprintf(name, "file%08d", n);
+
+            uint8_t wbuf[SIZE];
+            for (lfs3_size_t j = 0; j < SIZE; j++) {
+                wbuf[j] = 'a' + (TEST_PRNG(&prng_) % 26);
+            }
+
+            lfs3_file_t file;
+            lfs3_file_open(&lfs3, &file, name,
+                    LFS3_O_WRONLY | LFS3_O_CREAT | LFS3_O_TRUNC) => 0;
+            lfs3_file_write(&lfs3, &file, wbuf, SIZE) => SIZE;
+            lfs3_file_close(&lfs3, &file) => 0;
+        }
+    }
+
+    for (int remount = 0; remount < 2; remount++) {
+        // remount?
+        if (remount) {
+            lfs3_unmount(&lfs3) => 0;
+            lfs3_mount(&lfs3, LFS3_M_RDWR, &cfg) => 0;
+        }
+
+        // check that our file writes worked
+        prng_ = prng;
+        for (lfs3_size_t i = 0; i < N; i++) {
+            // check with stat
+            char name[256];
+            sprintf(name, "file%08d", i);
+            struct lfs3_info info;
+            lfs3_stat(&lfs3, name, &info) => 0;
+            assert(strcmp(info.name, name) == 0);
+            assert(info.type == LFS3_TYPE_REG);
+            assert(info.size == SIZE);
+
+            // try reading the file, note we reset prng above
+            uint8_t wbuf[SIZE];
+            for (lfs3_size_t j = 0; j < SIZE; j++) {
+                wbuf[j] = 'a' + (TEST_PRNG(&prng_) % 26);
+            }
+
+            lfs3_file_t file;
+            uint8_t rbuf[SIZE];
+            lfs3_file_open(&lfs3, &file, name, LFS3_O_RDONLY) => 0;
+            lfs3_file_read(&lfs3, &file, rbuf, SIZE) => SIZE;
+            assert(memcmp(rbuf, wbuf, SIZE) == 0);
+            lfs3_file_close(&lfs3, &file) => 0;
+        }
+    }
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+
+
+# test that alloc works up until nospc
 [cases.test_alloc_nospc_dirs]
 defines.COUNT = [
     'BLOCK_COUNT',
@@ -643,14 +767,18 @@ defines.COUNT = [
     'BLOCK_COUNT/2',
     'BLOCK_COUNT/4',
     '5',
-    '2',
+    'FORMAT_BLOCK_COUNT',
 ]
+if = 'COUNT >= FORMAT_BLOCK_COUNT'
 code = '''
     // test various block counts
-    struct lfs3_config cfg = *CFG;
+    struct lfs3_cfg cfg = *CFG;
     cfg.block_count = COUNT;
     lfs3_t lfs3;
-    lfs3_format(&lfs3, LFS3_F_RDWR, &cfg) => 0;
+    lfs3_format(&lfs3,
+            LFS3_F_RDWR
+                | ((GBMAP) ? LFS3_IFDEF_GBMAP(LFS3_F_GBMAP, -1) : 0),
+            &cfg) => 0;
     lfs3_mount(&lfs3, LFS3_M_RDWR, &cfg) => 0;
 
     // create directories until we run out of space
@@ -716,23 +844,27 @@ defines.COUNT = [
     'BLOCK_COUNT/2',
     'BLOCK_COUNT/4',
     '5',
-    '2',
+    'FORMAT_BLOCK_COUNT',
 ]
 defines.SIZE = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
     '8*BLOCK_SIZE',
 ]
+if = 'COUNT >= FORMAT_BLOCK_COUNT'
 code = '''
     // test various block counts
-    struct lfs3_config cfg = *CFG;
+    struct lfs3_cfg cfg = *CFG;
     cfg.block_count = COUNT;
     lfs3_t lfs3;
-    lfs3_format(&lfs3, LFS3_F_RDWR, &cfg) => 0;
+    lfs3_format(&lfs3,
+            LFS3_F_RDWR
+                | ((GBMAP) ? LFS3_IFDEF_GBMAP(LFS3_F_GBMAP, -1) : 0),
+            &cfg) => 0;
     lfs3_mount(&lfs3, LFS3_M_RDWR, &cfg) => 0;
 
     // create files until we run out of space

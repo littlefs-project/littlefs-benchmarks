@@ -19,8 +19,8 @@ defines.PROG_SIZE = [1, 16]
 [cases.test_fwrite_simple]
 defines.SIZE = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -106,7 +106,7 @@ code = '''
 defines.N = [0, 1, 2, 3, 4]
 defines.SIZE = 'N*FRAGMENT_SIZE'
 # force a btree node
-defines.INLINE_SIZE = 0
+defines.SHRUB_SIZE = 0
 defines.CRYSTAL_THRESH = -1
 defines.SYNC = [false, true]
 in = 'lfs3.c'
@@ -183,45 +183,52 @@ code = '''
         lfs3_size_t fragments = 0;
 
         lfs3_file_open(&lfs3, &file, "hello", LFS3_O_RDONLY) => 0;
-        lfs3_btraversal_t bt;
-        lfs3_btraversal_init(&bt);
+        lfs3_btrv_t btrv;
+        lfs3_btrv_init(&btrv);
         for (lfs3_block_t i = 0;; i++) {
             // a bit hacky, but this catches infinite loops
             assert(i < 2*BLOCK_COUNT);
 
-            lfs3_bid_t bid;
-            lfs3_tag_t tag;
-            lfs3_bptr_t bptr;
-            int err = lfs3_file_traverse(&lfs3, &file, &bt,
-                    &bid, &tag, &bptr);
-            assert(!err || err == LFS3_ERR_NOENT);
-            if (err == LFS3_ERR_NOENT) {
+            lfs3_stag_t tag;
+            lfs3_sbid_t bid;
+            lfs3_bid_t weight;
+            lfs3_data_t data;
+            tag = lfs3_bshrub_traverse(&lfs3, &file.b, &btrv,
+                    &bid, &weight, &data);
+            assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+            if (tag == LFS3_ERR_NOENT) {
                 break;
             }
 
             if (tag == LFS3_TAG_BRANCH) {
-                lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.data.u.buffer;
-                printf("traversal: %d 0x%x btree 0x%x.%x\n",
+                lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)data.u.buffer;
+                printf("traversal: %d 0x%x w%d btree 0x%x.%x\n",
                         bid,
                         tag,
+                        weight,
                         rbyd->blocks[0], rbyd->trunk);
 
             } else if (tag == LFS3_TAG_DATA) {
-                printf("traversal: %d 0x%x data %d\n",
+                printf("traversal: %d 0x%x w%d data %d\n",
                         bid,
                         tag,
-                        lfs3_data_size(bptr.data));
+                        weight,
+                        lfs3_data_size(&data));
 
                 // keep track of how many fragments we've seen
                 fragments += 1;
 
             } else if (tag == LFS3_TAG_BLOCK) {
-                printf("traversal: %d 0x%x block 0x%x.%x %d\n",
+                lfs3_bptr_t bptr;
+                lfs3_data_readbptr(&lfs3, &data,
+                        &bptr) => 0;
+                printf("traversal: %d 0x%x w%d block 0x%x.%x %d\n",
                         bid,
                         tag,
-                        bptr.data.u.disk.block,
-                        bptr.data.u.disk.off,
-                        lfs3_data_size(bptr.data));
+                        weight,
+                        lfs3_bptr_block(&bptr),
+                        lfs3_bptr_off(&bptr),
+                        lfs3_bptr_size(&bptr));
 
                 // we disabled block crystallization so this shouldn't
                 // happen
@@ -229,9 +236,10 @@ code = '''
 
             } else {
                 // well this shouldn't happen
-                printf("traversal: %d 0x%x\n",
+                printf("traversal: %d 0x%x w%d\n",
                         bid,
-                        tag);
+                        tag,
+                        weight);
                 assert(false);
             }
         }
@@ -323,55 +331,63 @@ code = '''
         lfs3_block_t blocks = 0;
 
         lfs3_file_open(&lfs3, &file, "hello", LFS3_O_RDONLY) => 0;
-        lfs3_btraversal_t bt;
-        lfs3_btraversal_init(&bt);
+        lfs3_btrv_t btrv;
+        lfs3_btrv_init(&btrv);
         for (lfs3_block_t i = 0;; i++) {
             // a bit hacky, but this catches infinite loops
             assert(i < 2*BLOCK_COUNT);
 
-            lfs3_bid_t bid;
-            lfs3_tag_t tag;
-            lfs3_bptr_t bptr;
-            int err = lfs3_file_traverse(&lfs3, &file, &bt,
-                    &bid, &tag, &bptr);
-            assert(!err || err == LFS3_ERR_NOENT);
-            if (err == LFS3_ERR_NOENT) {
+            lfs3_stag_t tag;
+            lfs3_sbid_t bid;
+            lfs3_bid_t weight;
+            lfs3_data_t data;
+            tag = lfs3_bshrub_traverse(&lfs3, &file.b, &btrv,
+                    &bid, &weight, &data);
+            assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+            if (tag == LFS3_ERR_NOENT) {
                 break;
             }
 
             if (tag == LFS3_TAG_BRANCH) {
-                lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.data.u.buffer;
-                printf("traversal: %d 0x%x btree 0x%x.%x\n",
+                lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)data.u.buffer;
+                printf("traversal: %d 0x%x w%d btree 0x%x.%x\n",
                         bid,
                         tag,
+                        weight,
                         rbyd->blocks[0], rbyd->trunk);
 
             } else if (tag == LFS3_TAG_DATA) {
-                printf("traversal: %d 0x%x data %d\n",
+                printf("traversal: %d 0x%x w%d data %d\n",
                         bid,
                         tag,
-                        lfs3_data_size(bptr.data));
+                        weight,
+                        lfs3_data_size(&data));
 
                 // if block crystallization is working we shouldn't be
                 // left with any inlined data fragments
                 assert(false);
 
             } else if (tag == LFS3_TAG_BLOCK) {
-                printf("traversal: %d 0x%x block 0x%x.%x %d\n",
+                lfs3_bptr_t bptr;
+                lfs3_data_readbptr(&lfs3, &data,
+                        &bptr) => 0;
+                printf("traversal: %d 0x%x w%d block 0x%x.%x %d\n",
                         bid,
                         tag,
-                        bptr.data.u.disk.block,
-                        bptr.data.u.disk.off,
-                        lfs3_data_size(bptr.data));
+                        weight,
+                        lfs3_bptr_block(&bptr),
+                        lfs3_bptr_off(&bptr),
+                        lfs3_bptr_size(&bptr));
 
                 // keep track of how many data blocks we've seen
                 blocks += 1;
 
             } else {
                 // well this shouldn't happen
-                printf("traversal: %d 0x%x\n",
+                printf("traversal: %d 0x%x w%d\n",
                         bid,
-                        tag);
+                        tag,
+                        weight);
                 assert(false);
             }
         }
@@ -388,8 +404,8 @@ code = '''
 [cases.test_fwrite_incr]
 defines.SIZE = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -490,7 +506,7 @@ defines.N = [0, 1, 2, 3, 4]
 defines.SIZE = 'N*FRAGMENT_SIZE'
 defines.CHUNK = [32, 8, 1]
 # force a btree node
-defines.INLINE_SIZE = 0
+defines.SHRUB_SIZE = 0
 defines.CRYSTAL_THRESH = -1
 defines.SYNC = [false, true]
 defines.REMOUNT = [false, true]
@@ -581,45 +597,52 @@ code = '''
         lfs3_size_t fragments = 0;
 
         lfs3_file_open(&lfs3, &file, "hello", LFS3_O_RDONLY) => 0;
-        lfs3_btraversal_t bt;
-        lfs3_btraversal_init(&bt);
+        lfs3_btrv_t btrv;
+        lfs3_btrv_init(&btrv);
         for (lfs3_block_t i = 0;; i++) {
             // a bit hacky, but this catches infinite loops
             assert(i < 2*BLOCK_COUNT);
 
-            lfs3_bid_t bid;
-            lfs3_tag_t tag;
-            lfs3_bptr_t bptr;
-            int err = lfs3_file_traverse(&lfs3, &file, &bt,
-                    &bid, &tag, &bptr);
-            assert(!err || err == LFS3_ERR_NOENT);
-            if (err == LFS3_ERR_NOENT) {
+            lfs3_stag_t tag;
+            lfs3_sbid_t bid;
+            lfs3_bid_t weight;
+            lfs3_data_t data;
+            tag = lfs3_bshrub_traverse(&lfs3, &file.b, &btrv,
+                    &bid, &weight, &data);
+            assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+            if (tag == LFS3_ERR_NOENT) {
                 break;
             }
 
             if (tag == LFS3_TAG_BRANCH) {
-                lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.data.u.buffer;
-                printf("traversal: %d 0x%x btree 0x%x.%x\n",
+                lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)data.u.buffer;
+                printf("traversal: %d 0x%x w%d btree 0x%x.%x\n",
                         bid,
                         tag,
+                        weight,
                         rbyd->blocks[0], rbyd->trunk);
 
             } else if (tag == LFS3_TAG_DATA) {
-                printf("traversal: %d 0x%x data %d\n",
+                printf("traversal: %d 0x%x w%d data %d\n",
                         bid,
                         tag,
-                        lfs3_data_size(bptr.data));
+                        weight,
+                        lfs3_data_size(&data));
 
                 // keep track of how many fragments we've seen
                 fragments += 1;
 
             } else if (tag == LFS3_TAG_BLOCK) {
-                printf("traversal: %d 0x%x block 0x%x.%x %d\n",
+                lfs3_bptr_t bptr;
+                lfs3_data_readbptr(&lfs3, &data,
+                        &bptr) => 0;
+                printf("traversal: %d 0x%x w%d block 0x%x.%x %d\n",
                         bid,
                         tag,
-                        bptr.data.u.disk.block,
-                        bptr.data.u.disk.off,
-                        lfs3_data_size(bptr.data));
+                        weight,
+                        lfs3_bptr_block(&bptr),
+                        lfs3_bptr_off(&bptr),
+                        lfs3_bptr_size(&bptr));
 
                 // we disabled block crystallization so this shouldn't
                 // happen
@@ -627,9 +650,10 @@ code = '''
 
             } else {
                 // well this shouldn't happen
-                printf("traversal: %d 0x%x\n",
+                printf("traversal: %d 0x%x w%d\n",
                         bid,
-                        tag);
+                        tag,
+                        weight);
                 assert(false);
             }
         }
@@ -736,55 +760,63 @@ code = '''
         lfs3_block_t blocks = 0;
 
         lfs3_file_open(&lfs3, &file, "hello", LFS3_O_RDONLY) => 0;
-        lfs3_btraversal_t bt;
-        lfs3_btraversal_init(&bt);
+        lfs3_btrv_t btrv;
+        lfs3_btrv_init(&btrv);
         for (lfs3_block_t i = 0;; i++) {
             // a bit hacky, but this catches infinite loops
             assert(i < 2*BLOCK_COUNT);
 
-            lfs3_bid_t bid;
-            lfs3_tag_t tag;
-            lfs3_bptr_t bptr;
-            int err = lfs3_file_traverse(&lfs3, &file, &bt,
-                    &bid, &tag, &bptr);
-            assert(!err || err == LFS3_ERR_NOENT);
-            if (err == LFS3_ERR_NOENT) {
+            lfs3_stag_t tag;
+            lfs3_sbid_t bid;
+            lfs3_bid_t weight;
+            lfs3_data_t data;
+            tag = lfs3_bshrub_traverse(&lfs3, &file.b, &btrv,
+                    &bid, &weight, &data);
+            assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+            if (tag == LFS3_ERR_NOENT) {
                 break;
             }
 
             if (tag == LFS3_TAG_BRANCH) {
-                lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.data.u.buffer;
-                printf("traversal: %d 0x%x btree 0x%x.%x\n",
+                lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)data.u.buffer;
+                printf("traversal: %d 0x%x w%d btree 0x%x.%x\n",
                         bid,
                         tag,
+                        weight,
                         rbyd->blocks[0], rbyd->trunk);
 
             } else if (tag == LFS3_TAG_DATA) {
-                printf("traversal: %d 0x%x data %d\n",
+                printf("traversal: %d 0x%x w%d data %d\n",
                         bid,
                         tag,
-                        lfs3_data_size(bptr.data));
+                        weight,
+                        lfs3_data_size(&data));
 
                 // if block crystallization is working we shouldn't be
                 // left with any inlined data fragments
                 assert(false);
 
             } else if (tag == LFS3_TAG_BLOCK) {
-                printf("traversal: %d 0x%x block 0x%x.%x %d\n",
+                lfs3_bptr_t bptr;
+                lfs3_data_readbptr(&lfs3, &data,
+                        &bptr) => 0;
+                printf("traversal: %d 0x%x w%d block 0x%x.%x %d\n",
                         bid,
                         tag,
-                        bptr.data.u.disk.block,
-                        bptr.data.u.disk.off,
-                        lfs3_data_size(bptr.data));
+                        weight,
+                        lfs3_bptr_block(&bptr),
+                        lfs3_bptr_off(&bptr),
+                        lfs3_bptr_size(&bptr));
 
                 // keep track of how many data blocks we've seen
                 blocks += 1;
 
             } else {
                 // well this shouldn't happen
-                printf("traversal: %d 0x%x\n",
+                printf("traversal: %d 0x%x w%d\n",
                         bid,
-                        tag);
+                        tag,
+                        weight);
                 assert(false);
             }
         }
@@ -802,8 +834,8 @@ code = '''
 # write strategies
 [cases.test_fwrite_overwrite]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -984,8 +1016,8 @@ code = '''
 # similar to overwrite files, but without underlying data
 [cases.test_fwrite_holes]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -1166,12 +1198,509 @@ code = '''
     lfs3_unmount(&lfs3) => 0;
 '''
 
+# test some annoying corner cases with overwriting file caches/leaves
+[cases.test_fwrite_clip_cache]
+defines.SIZE = '4*BLOCK_SIZE'
+# MASK&0x1 => clip before
+# MASK&0x2 => clip after
+defines.MASK = [0, 1, 2, 3]
+defines.CLIP = [
+    # large enough to bypass the cache
+    'BLOCK_SIZE',
+    # large enough to bypass the cache, but not steal the file leaf!
+    'FCACHE_SIZE + 1',
+]
+if = [
+    # this just saves testing time
+    'SIZE <= 4*1024*FRAGMENT_SIZE',
+]
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+
+    // create a file
+    lfs3_file_t file;
+    lfs3_file_open(&lfs3, &file, "hello",
+            LFS3_O_RDWR | LFS3_O_CREAT | LFS3_O_EXCL) => 0;
+    uint8_t wbuf[SIZE];
+    uint32_t prng = 42;
+    for (lfs3_size_t i = 0; i < SIZE; i++) {
+        wbuf[i] = 'a' + (TEST_PRNG(&prng) % 26);
+    }
+    lfs3_file_write(&lfs3, &file, wbuf, SIZE) => SIZE;
+
+    // simulate our file in ram
+    uint8_t sim[SIZE];
+    memcpy(sim, wbuf, SIZE);
+
+    // write a bit to fill the cache
+    lfs3_off_t off = BLOCK_SIZE;
+    lfs3_off_t size = FCACHE_SIZE/2;
+    lfs3_file_seek(&lfs3, &file, off, LFS3_SEEK_SET) => off;
+    for (lfs3_size_t i = 0; i < size; i++) {
+        wbuf[i] = 'a' + (TEST_PRNG(&prng) % 26);
+    }
+    lfs3_file_write(&lfs3, &file, wbuf, size) => size;
+
+    memcpy(sim + off, wbuf, size);
+
+    // cache filled?
+    assert(file.cache.pos == BLOCK_SIZE);
+    assert(file.cache.size ==  FCACHE_SIZE/2);
+
+    // write a bit before, clipping our cache
+    if (MASK & 0x1) {
+        lfs3_off_t off = BLOCK_SIZE - CLIP + 1;
+        lfs3_off_t size = CLIP;
+        lfs3_file_seek(&lfs3, &file, off, LFS3_SEEK_SET) => off;
+        for (lfs3_size_t i = 0; i < size; i++) {
+            wbuf[i] = 'a' + (TEST_PRNG(&prng) % 26);
+        }
+        lfs3_file_write(&lfs3, &file, wbuf, size) => size;
+
+        memcpy(sim + off, wbuf, size);
+    }
+
+    // write a bit after, clipping our cache
+    if (MASK & 0x2) {
+        lfs3_off_t off = BLOCK_SIZE + (FCACHE_SIZE/2) - 1;
+        lfs3_off_t size = CLIP;
+        lfs3_file_seek(&lfs3, &file, off, LFS3_SEEK_SET) => off;
+        for (lfs3_size_t i = 0; i < size; i++) {
+            wbuf[i] = 'a' + (TEST_PRNG(&prng) % 26);
+        }
+        lfs3_file_write(&lfs3, &file, wbuf, size) => size;
+
+        memcpy(sim + off, wbuf, size);
+    }
+
+    // before we close! try reading our file
+    //
+    // this has the highest chance of reading something wrong
+    uint8_t rbuf[2*SIZE];
+    memset(rbuf, 0xaa, 2*SIZE);
+
+    // first try reading _in_ our cache (which may have been discarded)
+    off = BLOCK_SIZE + 1;
+    size = FCACHE_SIZE/2 - 2;
+    lfs3_file_seek(&lfs3, &file, off, LFS3_SEEK_SET) => off;
+    lfs3_file_read(&lfs3, &file, rbuf, size) => size;
+    // does our file match our simulation?
+    assert(memcmp(rbuf, sim + off, size) == 0);
+
+    // then try reading the full cache (which may have been discarded)
+    off = BLOCK_SIZE;
+    size = FCACHE_SIZE/2;
+    lfs3_file_seek(&lfs3, &file, off, LFS3_SEEK_SET) => off;
+    lfs3_file_read(&lfs3, &file, rbuf, size) => size;
+    // does our file match our simulation?
+    assert(memcmp(rbuf, sim + off, size) == 0);
+
+    // then try reading the full file
+    lfs3_file_seek(&lfs3, &file, 0, LFS3_SEEK_SET) => 0;
+    lfs3_file_read(&lfs3, &file, rbuf, 2*SIZE) => SIZE;
+    // does our file match our simulation?
+    assert(memcmp(rbuf, sim, SIZE) == 0);
+
+    lfs3_file_close(&lfs3, &file) => 0;
+
+    // try reading after closing
+    for (int remount = 0; remount < 2; remount++) {
+        // remount?
+        if (remount) {
+            lfs3_unmount(&lfs3) => 0;
+            lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+        }
+
+        // check our file with stat
+        struct lfs3_info info;
+        lfs3_stat(&lfs3, "hello", &info) => 0;
+        assert(strcmp(info.name, "hello") == 0);
+        assert(info.type == LFS3_TYPE_REG);
+        assert(info.size == SIZE);
+
+        // and with dir read
+        lfs3_dir_t dir;
+        lfs3_dir_open(&lfs3, &dir, "/") => 0;
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, ".") == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, "..") == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, "hello") == 0);
+        assert(info.type == LFS3_TYPE_REG);
+        assert(info.size == SIZE);
+        lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+        lfs3_dir_close(&lfs3, &dir) => 0;
+
+        // try reading our file
+        lfs3_file_open(&lfs3, &file, "hello", LFS3_O_RDONLY) => 0;
+        // is size correct?
+        lfs3_file_size(&lfs3, &file) => SIZE;
+        // try reading
+        uint8_t rbuf[2*SIZE];
+        memset(rbuf, 0xaa, 2*SIZE);
+        lfs3_file_read(&lfs3, &file, rbuf, 2*SIZE) => SIZE;
+        // does our file match our simulation?
+        assert(memcmp(rbuf, sim, SIZE) == 0);
+        lfs3_file_close(&lfs3, &file) => 0;
+    }
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_fwrite_clip_leaf]
+defines.SIZE = '4*BLOCK_SIZE'
+# MASK&0x1 => clip before
+# MASK&0x2 => clip after
+defines.MASK = [0, 1, 2, 3]
+defines.CLIP = [
+    # large enough to bypass the cache
+    'BLOCK_SIZE',
+    # large enough to bypass the cache, but not steal the file leaf!
+    'FCACHE_SIZE + 1',
+]
+if = [
+    # this just saves testing time
+    'SIZE <= 4*1024*FRAGMENT_SIZE',
+]
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+
+    // create a file
+    lfs3_file_t file;
+    lfs3_file_open(&lfs3, &file, "hello",
+            LFS3_O_RDWR | LFS3_O_CREAT | LFS3_O_EXCL) => 0;
+    uint8_t wbuf[SIZE];
+    uint32_t prng = 42;
+    for (lfs3_size_t i = 0; i < SIZE; i++) {
+        wbuf[i] = 'a' + (TEST_PRNG(&prng) % 26);
+    }
+    lfs3_file_write(&lfs3, &file, wbuf, SIZE) => SIZE;
+
+    // simulate our file in ram
+    uint8_t sim[SIZE];
+    memcpy(sim, wbuf, SIZE);
+
+    // write a bit to crystallize a leaf
+    lfs3_off_t off = BLOCK_SIZE;
+    lfs3_off_t size = BLOCK_SIZE/2;
+    lfs3_file_seek(&lfs3, &file, off, LFS3_SEEK_SET) => off;
+    for (lfs3_size_t i = 0; i < size; i++) {
+        wbuf[i] = 'a' + (TEST_PRNG(&prng) % 26);
+    }
+    lfs3_file_write(&lfs3, &file, wbuf, size) => size;
+
+    memcpy(sim + off, wbuf, size);
+
+    // do we have a tracked leaf now?
+    assert(file.leaf.pos == BLOCK_SIZE);
+    assert(lfs3_bptr_size(&file.leaf.bptr) == BLOCK_SIZE/2);
+    assert(file.leaf.weight == BLOCK_SIZE/2);
+
+    // write a bit before, clipping our leaf
+    if (MASK & 0x1) {
+        lfs3_off_t off = BLOCK_SIZE - CLIP + 1;
+        lfs3_off_t size = CLIP;
+        lfs3_file_seek(&lfs3, &file, off, LFS3_SEEK_SET) => off;
+        for (lfs3_size_t i = 0; i < size; i++) {
+            wbuf[i] = 'a' + (TEST_PRNG(&prng) % 26);
+        }
+        lfs3_file_write(&lfs3, &file, wbuf, size) => size;
+
+        memcpy(sim + off, wbuf, size);
+    }
+
+    // write a bit after, clipping our leaf
+    if (MASK & 0x2) {
+        lfs3_off_t off = BLOCK_SIZE + (BLOCK_SIZE/2) - 1;
+        lfs3_off_t size = CLIP;
+        lfs3_file_seek(&lfs3, &file, off, LFS3_SEEK_SET) => off;
+        for (lfs3_size_t i = 0; i < size; i++) {
+            wbuf[i] = 'a' + (TEST_PRNG(&prng) % 26);
+        }
+        lfs3_file_write(&lfs3, &file, wbuf, size) => size;
+
+        memcpy(sim + off, wbuf, size);
+    }
+
+    // before we close! try reading our file
+    //
+    // this has the highest chance of reading something wrong
+    uint8_t rbuf[2*SIZE];
+    memset(rbuf, 0xaa, 2*SIZE);
+
+    // first try reading _in_ our leaf (which may have been discarded)
+    off = BLOCK_SIZE + 1;
+    size = BLOCK_SIZE/2 - 2;
+    lfs3_file_seek(&lfs3, &file, off, LFS3_SEEK_SET) => off;
+    lfs3_file_read(&lfs3, &file, rbuf, size) => size;
+    // does our file match our simulation?
+    assert(memcmp(rbuf, sim + off, size) == 0);
+
+    // then try reading the full leaf (which may have been discarded)
+    off = BLOCK_SIZE;
+    size = BLOCK_SIZE/2;
+    lfs3_file_seek(&lfs3, &file, off, LFS3_SEEK_SET) => off;
+    lfs3_file_read(&lfs3, &file, rbuf, size) => size;
+    // does our file match our simulation?
+    assert(memcmp(rbuf, sim + off, size) == 0);
+
+    // then try reading the full file
+    lfs3_file_seek(&lfs3, &file, 0, LFS3_SEEK_SET) => 0;
+    lfs3_file_read(&lfs3, &file, rbuf, 2*SIZE) => SIZE;
+    // does our file match our simulation?
+    assert(memcmp(rbuf, sim, SIZE) == 0);
+
+    lfs3_file_close(&lfs3, &file) => 0;
+
+    // try reading after closing
+    for (int remount = 0; remount < 2; remount++) {
+        // remount?
+        if (remount) {
+            lfs3_unmount(&lfs3) => 0;
+            lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+        }
+
+        // check our file with stat
+        struct lfs3_info info;
+        lfs3_stat(&lfs3, "hello", &info) => 0;
+        assert(strcmp(info.name, "hello") == 0);
+        assert(info.type == LFS3_TYPE_REG);
+        assert(info.size == SIZE);
+
+        // and with dir read
+        lfs3_dir_t dir;
+        lfs3_dir_open(&lfs3, &dir, "/") => 0;
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, ".") == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, "..") == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, "hello") == 0);
+        assert(info.type == LFS3_TYPE_REG);
+        assert(info.size == SIZE);
+        lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+        lfs3_dir_close(&lfs3, &dir) => 0;
+
+        // try reading our file
+        lfs3_file_open(&lfs3, &file, "hello", LFS3_O_RDONLY) => 0;
+        // is size correct?
+        lfs3_file_size(&lfs3, &file) => SIZE;
+        // try reading
+        uint8_t rbuf[2*SIZE];
+        memset(rbuf, 0xaa, 2*SIZE);
+        lfs3_file_read(&lfs3, &file, rbuf, 2*SIZE) => SIZE;
+        // does our file match our simulation?
+        assert(memcmp(rbuf, sim, SIZE) == 0);
+        lfs3_file_close(&lfs3, &file) => 0;
+    }
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
+[cases.test_fwrite_clip_hole]
+defines.SIZE = '4*BLOCK_SIZE'
+# MASK&0x1 => clip before
+# MASK&0x2 => clip after
+defines.MASK = [0, 1, 2, 3]
+defines.CLIP = [
+    # large enough to bypass the cache
+    'BLOCK_SIZE',
+    # large enough to bypass the cache, but not steal the file leaf!
+    'FCACHE_SIZE + 1',
+]
+if = [
+    # this just saves testing time
+    'SIZE <= 4*1024*FRAGMENT_SIZE',
+]
+in = 'lfs3.c'
+code = '''
+    lfs3_t lfs3;
+    lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+
+    // create a _sparse_ file
+    lfs3_file_t file;
+    lfs3_file_open(&lfs3, &file, "hello",
+            LFS3_O_RDWR | LFS3_O_CREAT | LFS3_O_EXCL) => 0;
+
+    // simulate our file in ram
+    uint8_t sim[SIZE];
+    memset(sim, 0, SIZE);
+
+    // write some data, but only to the head and tail, we want a nice
+    // big hole in the middle
+    uint8_t wbuf[SIZE];
+    uint32_t prng = 42;
+    for (lfs3_size_t i = 0; i < BLOCK_SIZE; i++) {
+        wbuf[i] = 'a' + (TEST_PRNG(&prng) % 26);
+    }
+    lfs3_file_write(&lfs3, &file, wbuf, BLOCK_SIZE) => BLOCK_SIZE;
+
+    memcpy(sim, wbuf, BLOCK_SIZE);
+
+    lfs3_file_seek(&lfs3, &file, 3*BLOCK_SIZE, LFS3_SEEK_SET)
+            => 3*BLOCK_SIZE;
+    for (lfs3_size_t i = 0; i < BLOCK_SIZE; i++) {
+        wbuf[i] = 'a' + (TEST_PRNG(&prng) % 26);
+    }
+    lfs3_file_write(&lfs3, &file, wbuf, BLOCK_SIZE) => BLOCK_SIZE;
+
+    memcpy(sim + 3*BLOCK_SIZE, wbuf, BLOCK_SIZE);
+
+    // write a bit to crystallize a leaf
+    lfs3_off_t off = BLOCK_SIZE;
+    lfs3_off_t size = BLOCK_SIZE/2;
+    lfs3_file_seek(&lfs3, &file, off, LFS3_SEEK_SET) => off;
+    for (lfs3_size_t i = 0; i < size; i++) {
+        wbuf[i] = 'a' + (TEST_PRNG(&prng) % 26);
+    }
+    lfs3_file_write(&lfs3, &file, wbuf, size) => size;
+
+    memcpy(sim + off, wbuf, size);
+
+    // read a full block somewhere else to force our leaf into the bshrub
+    lfs3_file_seek(&lfs3, &file, 0, LFS3_SEEK_SET) => 0;
+    uint8_t rbuf[2*SIZE];
+    lfs3_file_read(&lfs3, &file, rbuf, BLOCK_SIZE/2) => BLOCK_SIZE/2;
+    assert(memcmp(rbuf, sim, BLOCK_SIZE/2) == 0);
+
+    // and then read our leaf again, note we can't just call
+    // lfs3_file_flush because it wouldn't fetch the hole information
+    lfs3_file_seek(&lfs3, &file, BLOCK_SIZE, LFS3_SEEK_SET) => BLOCK_SIZE;
+    lfs3_file_read(&lfs3, &file, rbuf, BLOCK_SIZE/2) => BLOCK_SIZE/2;
+    assert(memcmp(rbuf, sim + BLOCK_SIZE, BLOCK_SIZE/2) == 0);
+
+    // do we have a tracked leaf now?
+    assert(file.leaf.pos == BLOCK_SIZE);
+    assert(lfs3_bptr_size(&file.leaf.bptr) == BLOCK_SIZE/2);
+    // note the big hole in our leaf!
+    assert(file.leaf.weight == 2*BLOCK_SIZE);
+
+    // write a bit before, clipping our leaf
+    if (MASK & 0x1) {
+        lfs3_off_t off = BLOCK_SIZE - CLIP + 1;
+        lfs3_off_t size = CLIP;
+        lfs3_file_seek(&lfs3, &file, off, LFS3_SEEK_SET) => off;
+        for (lfs3_size_t i = 0; i < size; i++) {
+            wbuf[i] = 'a' + (TEST_PRNG(&prng) % 26);
+        }
+        lfs3_file_write(&lfs3, &file, wbuf, size) => size;
+
+        memcpy(sim + off, wbuf, size);
+    }
+
+    // write a bit after, clipping our leaf
+    if (MASK & 0x2) {
+        lfs3_off_t off = BLOCK_SIZE + (2*BLOCK_SIZE) - 1;
+        lfs3_off_t size = CLIP;
+        lfs3_file_seek(&lfs3, &file, off, LFS3_SEEK_SET) => off;
+        for (lfs3_size_t i = 0; i < size; i++) {
+            wbuf[i] = 'a' + (TEST_PRNG(&prng) % 26);
+        }
+        lfs3_file_write(&lfs3, &file, wbuf, size) => size;
+
+        memcpy(sim + off, wbuf, size);
+    }
+
+    // before we close! try reading our file
+    //
+    // this has the highest chance of reading something wrong
+    memset(rbuf, 0xaa, 2*SIZE);
+
+    // first try reading _in_ our leaf (which may have been discarded)
+    off = BLOCK_SIZE + 1;
+    size = 2*BLOCK_SIZE - 2;
+    lfs3_file_seek(&lfs3, &file, off, LFS3_SEEK_SET) => off;
+    lfs3_file_read(&lfs3, &file, rbuf, size) => size;
+    // does our file match our simulation?
+    assert(memcmp(rbuf, sim + off, size) == 0);
+
+    // then try reading the full leaf (which may have been discarded)
+    off = BLOCK_SIZE;
+    size = 2*BLOCK_SIZE;
+    lfs3_file_seek(&lfs3, &file, off, LFS3_SEEK_SET) => off;
+    lfs3_file_read(&lfs3, &file, rbuf, size) => size;
+    // does our file match our simulation?
+    assert(memcmp(rbuf, sim + off, size) == 0);
+
+    // then try reading the full file
+    lfs3_file_seek(&lfs3, &file, 0, LFS3_SEEK_SET) => 0;
+    lfs3_file_read(&lfs3, &file, rbuf, 2*SIZE) => SIZE;
+    // does our file match our simulation?
+    assert(memcmp(rbuf, sim, SIZE) == 0);
+
+    lfs3_file_close(&lfs3, &file) => 0;
+
+    // try reading after closing
+    for (int remount = 0; remount < 2; remount++) {
+        // remount?
+        if (remount) {
+            lfs3_unmount(&lfs3) => 0;
+            lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+        }
+
+        // check our file with stat
+        struct lfs3_info info;
+        lfs3_stat(&lfs3, "hello", &info) => 0;
+        assert(strcmp(info.name, "hello") == 0);
+        assert(info.type == LFS3_TYPE_REG);
+        assert(info.size == SIZE);
+
+        // and with dir read
+        lfs3_dir_t dir;
+        lfs3_dir_open(&lfs3, &dir, "/") => 0;
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, ".") == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, "..") == 0);
+        assert(info.type == LFS3_TYPE_DIR);
+        assert(info.size == 0);
+        lfs3_dir_read(&lfs3, &dir, &info) => 0;
+        assert(strcmp(info.name, "hello") == 0);
+        assert(info.type == LFS3_TYPE_REG);
+        assert(info.size == SIZE);
+        lfs3_dir_read(&lfs3, &dir, &info) => LFS3_ERR_NOENT;
+        lfs3_dir_close(&lfs3, &dir) => 0;
+
+        // try reading our file
+        lfs3_file_open(&lfs3, &file, "hello", LFS3_O_RDONLY) => 0;
+        // is size correct?
+        lfs3_file_size(&lfs3, &file) => SIZE;
+        // try reading
+        uint8_t rbuf[2*SIZE];
+        memset(rbuf, 0xaa, 2*SIZE);
+        lfs3_file_read(&lfs3, &file, rbuf, 2*SIZE) => SIZE;
+        // does our file match our simulation?
+        assert(memcmp(rbuf, sim, SIZE) == 0);
+        lfs3_file_close(&lfs3, &file) => 0;
+    }
+
+    lfs3_unmount(&lfs3) => 0;
+'''
+
 # simple truncate test
 [cases.test_fwrite_truncate]
 defines.FROM = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -1179,8 +1708,8 @@ defines.FROM = [
 ]
 defines.TO = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -1285,8 +1814,8 @@ code = '''
 [cases.test_fwrite_truncate_truncate]
 defines.FROM = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -1294,8 +1823,8 @@ defines.FROM = [
 ]
 defines.AND = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -1303,8 +1832,8 @@ defines.AND = [
 ]
 defines.TO = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -1428,8 +1957,8 @@ code = '''
 [cases.test_fwrite_fruncate]
 defines.FROM = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -1437,8 +1966,8 @@ defines.FROM = [
 ]
 defines.TO = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -1547,8 +2076,8 @@ code = '''
 [cases.test_fwrite_fruncate_fruncate]
 defines.FROM = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -1556,8 +2085,8 @@ defines.FROM = [
 ]
 defines.AND = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -1565,8 +2094,8 @@ defines.AND = [
 ]
 defines.TO = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -1971,12 +2500,12 @@ code = '''
     lfs3_unmount(&lfs3) => 0;
 '''
 
-# test that carving below fragment_thresh breaks blocks into fragments
+# test that carving to fragment_size breaks blocks into fragments
 [cases.test_fwrite_truncate_litmus_fragment]
 defines.N = [1, 2, 8]
 defines.SIZE = 'N*BLOCK_SIZE'
-# 1 vs multiple fragments are implemented slightly differently
-defines.FRAGMENTS = [1, 2, 3]
+# currently we only support fragmenting blocks <= 1 fragment
+defines.FRAGMENTS = [1]
 defines.TSIZE = 'FRAGMENTS*FRAGMENT_SIZE'
 defines.SYNC = [false, true]
 in = 'lfs3.c'
@@ -2056,54 +2585,62 @@ code = '''
         lfs3_size_t fragments = 0;
 
         lfs3_file_open(&lfs3, &file, "hello", LFS3_O_RDONLY) => 0;
-        lfs3_btraversal_t bt;
-        lfs3_btraversal_init(&bt);
+        lfs3_btrv_t btrv;
+        lfs3_btrv_init(&btrv);
         for (lfs3_block_t i = 0;; i++) {
             // a bit hacky, but this catches infinite loops
             assert(i < 2*BLOCK_COUNT);
 
-            lfs3_bid_t bid;
-            lfs3_tag_t tag;
-            lfs3_bptr_t bptr;
-            int err = lfs3_file_traverse(&lfs3, &file, &bt,
-                    &bid, &tag, &bptr);
-            assert(!err || err == LFS3_ERR_NOENT);
-            if (err == LFS3_ERR_NOENT) {
+            lfs3_stag_t tag;
+            lfs3_sbid_t bid;
+            lfs3_bid_t weight;
+            lfs3_data_t data;
+            tag = lfs3_bshrub_traverse(&lfs3, &file.b, &btrv,
+                    &bid, &weight, &data);
+            assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+            if (tag == LFS3_ERR_NOENT) {
                 break;
             }
 
             if (tag == LFS3_TAG_BRANCH) {
-                lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.data.u.buffer;
-                printf("traversal: %d 0x%x btree 0x%x.%x\n",
+                lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)data.u.buffer;
+                printf("traversal: %d 0x%x w%d btree 0x%x.%x\n",
                         bid,
                         tag,
+                        weight,
                         rbyd->blocks[0], rbyd->trunk);
 
             } else if (tag == LFS3_TAG_DATA) {
-                printf("traversal: %d 0x%x data %d\n",
+                printf("traversal: %d 0x%x w%d data %d\n",
                         bid,
                         tag,
-                        lfs3_data_size(bptr.data));
+                        weight,
+                        lfs3_data_size(&data));
 
                 // keep track of how many fragments we've seen
                 fragments += 1;
 
             } else if (tag == LFS3_TAG_BLOCK) {
-                printf("traversal: %d 0x%x block 0x%x.%x %d\n",
+                lfs3_bptr_t bptr;
+                lfs3_data_readbptr(&lfs3, &data,
+                        &bptr) => 0;
+                printf("traversal: %d 0x%x w%d block 0x%x.%x %d\n",
                         bid,
                         tag,
-                        bptr.data.u.disk.block,
-                        bptr.data.u.disk.off,
-                        lfs3_data_size(bptr.data));
+                        weight,
+                        lfs3_bptr_block(&bptr),
+                        lfs3_bptr_off(&bptr),
+                        lfs3_bptr_size(&bptr));
 
                 // all blocks should have been fragmented
                 assert(false);
 
             } else {
                 // well this shouldn't happen
-                printf("traversal: %d 0x%x\n",
+                printf("traversal: %d 0x%x w%d\n",
                         bid,
-                        tag);
+                        tag,
+                        weight);
                 assert(false);
             }
         }
@@ -2119,8 +2656,8 @@ code = '''
 [cases.test_fwrite_fruncate_litmus_fragment]
 defines.N = [1, 2, 8]
 defines.SIZE = 'N*BLOCK_SIZE'
-# 1 vs multiple fragments are implemented slightly differently
-defines.FRAGMENTS = [1, 2, 3]
+# currently we only support fragmenting blocks <= 1 fragment
+defines.FRAGMENTS = [1]
 defines.TSIZE = 'FRAGMENTS*FRAGMENT_SIZE'
 defines.SYNC = [false, true]
 in = 'lfs3.c'
@@ -2200,54 +2737,62 @@ code = '''
         lfs3_size_t fragments = 0;
 
         lfs3_file_open(&lfs3, &file, "hello", LFS3_O_RDONLY) => 0;
-        lfs3_btraversal_t bt;
-        lfs3_btraversal_init(&bt);
+        lfs3_btrv_t btrv;
+        lfs3_btrv_init(&btrv);
         for (lfs3_block_t i = 0;; i++) {
             // a bit hacky, but this catches infinite loops
             assert(i < 2*BLOCK_COUNT);
 
-            lfs3_bid_t bid;
-            lfs3_tag_t tag;
-            lfs3_bptr_t bptr;
-            int err = lfs3_file_traverse(&lfs3, &file, &bt,
-                    &bid, &tag, &bptr);
-            assert(!err || err == LFS3_ERR_NOENT);
-            if (err == LFS3_ERR_NOENT) {
+            lfs3_stag_t tag;
+            lfs3_sbid_t bid;
+            lfs3_bid_t weight;
+            lfs3_data_t data;
+            tag = lfs3_bshrub_traverse(&lfs3, &file.b, &btrv,
+                    &bid, &weight, &data);
+            assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+            if (tag == LFS3_ERR_NOENT) {
                 break;
             }
 
             if (tag == LFS3_TAG_BRANCH) {
-                lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.data.u.buffer;
-                printf("traversal: %d 0x%x btree 0x%x.%x\n",
+                lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)data.u.buffer;
+                printf("traversal: %d 0x%x w%d btree 0x%x.%x\n",
                         bid,
                         tag,
+                        weight,
                         rbyd->blocks[0], rbyd->trunk);
 
             } else if (tag == LFS3_TAG_DATA) {
-                printf("traversal: %d 0x%x data %d\n",
+                printf("traversal: %d 0x%x w%d data %d\n",
                         bid,
                         tag,
-                        lfs3_data_size(bptr.data));
+                        weight,
+                        lfs3_data_size(&data));
 
                 // keep track of how many fragments we've seen
                 fragments += 1;
 
             } else if (tag == LFS3_TAG_BLOCK) {
-                printf("traversal: %d 0x%x block 0x%x.%x %d\n",
+                lfs3_bptr_t bptr;
+                lfs3_data_readbptr(&lfs3, &data,
+                        &bptr) => 0;
+                printf("traversal: %d 0x%x w%d block 0x%x.%x %d\n",
                         bid,
                         tag,
-                        bptr.data.u.disk.block,
-                        bptr.data.u.disk.off,
-                        lfs3_data_size(bptr.data));
+                        weight,
+                        lfs3_bptr_block(&bptr),
+                        lfs3_bptr_off(&bptr),
+                        lfs3_bptr_size(&bptr));
 
                 // all blocks should have been fragmented
                 assert(false);
 
             } else {
                 // well this shouldn't happen
-                printf("traversal: %d 0x%x\n",
+                printf("traversal: %d 0x%x w%d\n",
                         bid,
-                        tag);
+                        tag,
+                        weight);
                 assert(false);
             }
         }
@@ -2263,8 +2808,8 @@ code = '''
 # writing any data structure backwards always reveals issues
 [cases.test_fwrite_reversed]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -2396,7 +2941,7 @@ defines.N = [0, 1, 2, 3, 4]
 defines.SIZE = 'N*FRAGMENT_SIZE'
 defines.CHUNK = [32, 8, 1]
 # force a btree node
-defines.INLINE_SIZE = 0
+defines.SHRUB_SIZE = 0
 defines.CRYSTAL_THRESH = -1
 defines.SYNC = [false, true]
 defines.REMOUNT = [false, true]
@@ -2491,45 +3036,52 @@ code = '''
         lfs3_size_t fragments = 0;
 
         lfs3_file_open(&lfs3, &file, "hello", LFS3_O_RDONLY) => 0;
-        lfs3_btraversal_t bt;
-        lfs3_btraversal_init(&bt);
+        lfs3_btrv_t btrv;
+        lfs3_btrv_init(&btrv);
         for (lfs3_block_t i = 0;; i++) {
             // a bit hacky, but this catches infinite loops
             assert(i < 2*BLOCK_COUNT);
 
-            lfs3_bid_t bid;
-            lfs3_tag_t tag;
-            lfs3_bptr_t bptr;
-            int err = lfs3_file_traverse(&lfs3, &file, &bt,
-                    &bid, &tag, &bptr);
-            assert(!err || err == LFS3_ERR_NOENT);
-            if (err == LFS3_ERR_NOENT) {
+            lfs3_stag_t tag;
+            lfs3_sbid_t bid;
+            lfs3_bid_t weight;
+            lfs3_data_t data;
+            tag = lfs3_bshrub_traverse(&lfs3, &file.b, &btrv,
+                    &bid, &weight, &data);
+            assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+            if (tag == LFS3_ERR_NOENT) {
                 break;
             }
 
             if (tag == LFS3_TAG_BRANCH) {
-                lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.data.u.buffer;
-                printf("traversal: %d 0x%x btree 0x%x.%x\n",
+                lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)data.u.buffer;
+                printf("traversal: %d 0x%x w%d btree 0x%x.%x\n",
                         bid,
                         tag,
+                        weight,
                         rbyd->blocks[0], rbyd->trunk);
 
             } else if (tag == LFS3_TAG_DATA) {
-                printf("traversal: %d 0x%x data %d\n",
+                printf("traversal: %d 0x%x w%d data %d\n",
                         bid,
                         tag,
-                        lfs3_data_size(bptr.data));
+                        weight,
+                        lfs3_data_size(&data));
 
                 // keep track of how many fragments we've seen
                 fragments += 1;
 
             } else if (tag == LFS3_TAG_BLOCK) {
-                printf("traversal: %d 0x%x block 0x%x.%x %d\n",
+                lfs3_bptr_t bptr;
+                lfs3_data_readbptr(&lfs3, &data,
+                        &bptr) => 0;
+                printf("traversal: %d 0x%x w%d block 0x%x.%x %d\n",
                         bid,
                         tag,
-                        bptr.data.u.disk.block,
-                        bptr.data.u.disk.off,
-                        lfs3_data_size(bptr.data));
+                        weight,
+                        lfs3_bptr_block(&bptr),
+                        lfs3_bptr_off(&bptr),
+                        lfs3_bptr_size(&bptr));
 
                 // we disabled block crystallization so this shouldn't
                 // happen
@@ -2537,9 +3089,10 @@ code = '''
 
             } else {
                 // well this shouldn't happen
-                printf("traversal: %d 0x%x\n",
+                printf("traversal: %d 0x%x w%d\n",
                         bid,
-                        tag);
+                        tag,
+                        weight);
                 assert(false);
             }
         }
@@ -2650,55 +3203,63 @@ code = '''
         lfs3_block_t blocks = 0;
 
         lfs3_file_open(&lfs3, &file, "hello", LFS3_O_RDONLY) => 0;
-        lfs3_btraversal_t bt;
-        lfs3_btraversal_init(&bt);
+        lfs3_btrv_t btrv;
+        lfs3_btrv_init(&btrv);
         for (lfs3_block_t i = 0;; i++) {
             // a bit hacky, but this catches infinite loops
             assert(i < 2*BLOCK_COUNT);
 
-            lfs3_bid_t bid;
-            lfs3_tag_t tag;
-            lfs3_bptr_t bptr;
-            int err = lfs3_file_traverse(&lfs3, &file, &bt,
-                    &bid, &tag, &bptr);
-            assert(!err || err == LFS3_ERR_NOENT);
-            if (err == LFS3_ERR_NOENT) {
+            lfs3_stag_t tag;
+            lfs3_sbid_t bid;
+            lfs3_bid_t weight;
+            lfs3_data_t data;
+            tag = lfs3_bshrub_traverse(&lfs3, &file.b, &btrv,
+                    &bid, &weight, &data);
+            assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+            if (tag == LFS3_ERR_NOENT) {
                 break;
             }
 
             if (tag == LFS3_TAG_BRANCH) {
-                lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.data.u.buffer;
-                printf("traversal: %d 0x%x btree 0x%x.%x\n",
+                lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)data.u.buffer;
+                printf("traversal: %d 0x%x w%d btree 0x%x.%x\n",
                         bid,
                         tag,
+                        weight,
                         rbyd->blocks[0], rbyd->trunk);
 
             } else if (tag == LFS3_TAG_DATA) {
-                printf("traversal: %d 0x%x data %d\n",
+                printf("traversal: %d 0x%x w%d data %d\n",
                         bid,
                         tag,
-                        lfs3_data_size(bptr.data));
+                        weight,
+                        lfs3_data_size(&data));
 
                 // if block crystallization is working we shouldn't be
                 // left with any inlined data fragments
                 assert(false);
 
             } else if (tag == LFS3_TAG_BLOCK) {
-                printf("traversal: %d 0x%x block 0x%x.%x %d\n",
+                lfs3_bptr_t bptr;
+                lfs3_data_readbptr(&lfs3, &data,
+                        &bptr) => 0;
+                printf("traversal: %d 0x%x w%d block 0x%x.%x %d\n",
                         bid,
                         tag,
-                        bptr.data.u.disk.block,
-                        bptr.data.u.disk.off,
-                        lfs3_data_size(bptr.data));
+                        weight,
+                        lfs3_bptr_block(&bptr),
+                        lfs3_bptr_off(&bptr),
+                        lfs3_bptr_size(&bptr));
 
                 // keep track of how many data blocks we've seen
                 blocks += 1;
 
             } else {
                 // well this shouldn't happen
-                printf("traversal: %d 0x%x\n",
+                printf("traversal: %d 0x%x w%d\n",
                         bid,
-                        tag);
+                        tag,
+                        weight);
                 assert(false);
             }
         }
@@ -2714,8 +3275,8 @@ code = '''
 # with lfs3_file_fruncate, we can write to a file in true reversed order
 [cases.test_fwrite_freversed]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -2836,7 +3397,7 @@ defines.N = [0, 1, 2, 3, 4]
 defines.SIZE = 'N*FRAGMENT_SIZE'
 defines.CHUNK = [32, 8, 1]
 # force a btree node
-defines.INLINE_SIZE = 0
+defines.SHRUB_SIZE = 0
 defines.CRYSTAL_THRESH = -1
 defines.SYNC = [false, true]
 defines.REMOUNT = [false, true]
@@ -2935,45 +3496,52 @@ code = '''
         lfs3_size_t fragments = 0;
 
         lfs3_file_open(&lfs3, &file, "hello", LFS3_O_RDONLY) => 0;
-        lfs3_btraversal_t bt;
-        lfs3_btraversal_init(&bt);
+        lfs3_btrv_t btrv;
+        lfs3_btrv_init(&btrv);
         for (lfs3_block_t i = 0;; i++) {
             // a bit hacky, but this catches infinite loops
             assert(i < 2*BLOCK_COUNT);
 
-            lfs3_bid_t bid;
-            lfs3_tag_t tag;
-            lfs3_bptr_t bptr;
-            int err = lfs3_file_traverse(&lfs3, &file, &bt,
-                    &bid, &tag, &bptr);
-            assert(!err || err == LFS3_ERR_NOENT);
-            if (err == LFS3_ERR_NOENT) {
+            lfs3_stag_t tag;
+            lfs3_sbid_t bid;
+            lfs3_bid_t weight;
+            lfs3_data_t data;
+            tag = lfs3_bshrub_traverse(&lfs3, &file.b, &btrv,
+                    &bid, &weight, &data);
+            assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+            if (tag == LFS3_ERR_NOENT) {
                 break;
             }
 
             if (tag == LFS3_TAG_BRANCH) {
-                lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.data.u.buffer;
-                printf("traversal: %d 0x%x btree 0x%x.%x\n",
+                lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)data.u.buffer;
+                printf("traversal: %d 0x%x w%d btree 0x%x.%x\n",
                         bid,
                         tag,
+                        weight,
                         rbyd->blocks[0], rbyd->trunk);
 
             } else if (tag == LFS3_TAG_DATA) {
-                printf("traversal: %d 0x%x data %d\n",
+                printf("traversal: %d 0x%x w%d data %d\n",
                         bid,
                         tag,
-                        lfs3_data_size(bptr.data));
+                        weight,
+                        lfs3_data_size(&data));
 
                 // keep track of how many fragments we've seen
                 fragments += 1;
 
             } else if (tag == LFS3_TAG_BLOCK) {
-                printf("traversal: %d 0x%x block 0x%x.%x %d\n",
+                lfs3_bptr_t bptr;
+                lfs3_data_readbptr(&lfs3, &data,
+                        &bptr) => 0;
+                printf("traversal: %d 0x%x w%d block 0x%x.%x %d\n",
                         bid,
                         tag,
-                        bptr.data.u.disk.block,
-                        bptr.data.u.disk.off,
-                        lfs3_data_size(bptr.data));
+                        weight,
+                        lfs3_bptr_block(&bptr),
+                        lfs3_bptr_off(&bptr),
+                        lfs3_bptr_size(&bptr));
 
                 // we disabled block crystallization so this shouldn't
                 // happen
@@ -2981,9 +3549,10 @@ code = '''
 
             } else {
                 // well this shouldn't happen
-                printf("traversal: %d 0x%x\n",
+                printf("traversal: %d 0x%x w%d\n",
                         bid,
-                        tag);
+                        tag,
+                        weight);
                 assert(false);
             }
         }
@@ -3098,55 +3667,63 @@ code = '''
         lfs3_block_t blocks = 0;
 
         lfs3_file_open(&lfs3, &file, "hello", LFS3_O_RDONLY) => 0;
-        lfs3_btraversal_t bt;
-        lfs3_btraversal_init(&bt);
+        lfs3_btrv_t btrv;
+        lfs3_btrv_init(&btrv);
         for (lfs3_block_t i = 0;; i++) {
             // a bit hacky, but this catches infinite loops
             assert(i < 2*BLOCK_COUNT);
 
-            lfs3_bid_t bid;
-            lfs3_tag_t tag;
-            lfs3_bptr_t bptr;
-            int err = lfs3_file_traverse(&lfs3, &file, &bt,
-                    &bid, &tag, &bptr);
-            assert(!err || err == LFS3_ERR_NOENT);
-            if (err == LFS3_ERR_NOENT) {
+            lfs3_stag_t tag;
+            lfs3_sbid_t bid;
+            lfs3_bid_t weight;
+            lfs3_data_t data;
+            tag = lfs3_bshrub_traverse(&lfs3, &file.b, &btrv,
+                    &bid, &weight, &data);
+            assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+            if (tag == LFS3_ERR_NOENT) {
                 break;
             }
 
             if (tag == LFS3_TAG_BRANCH) {
-                lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)bptr.data.u.buffer;
-                printf("traversal: %d 0x%x btree 0x%x.%x\n",
+                lfs3_rbyd_t *rbyd = (lfs3_rbyd_t*)data.u.buffer;
+                printf("traversal: %d 0x%x w%d btree 0x%x.%x\n",
                         bid,
                         tag,
+                        weight,
                         rbyd->blocks[0], rbyd->trunk);
 
             } else if (tag == LFS3_TAG_DATA) {
-                printf("traversal: %d 0x%x data %d\n",
+                printf("traversal: %d 0x%x w%d data %d\n",
                         bid,
                         tag,
-                        lfs3_data_size(bptr.data));
+                        weight,
+                        lfs3_data_size(&data));
 
                 // if block crystallization is working we shouldn't be
                 // left with any inlined data fragments
                 assert(false);
 
             } else if (tag == LFS3_TAG_BLOCK) {
-                printf("traversal: %d 0x%x block 0x%x.%x %d\n",
+                lfs3_bptr_t bptr;
+                lfs3_data_readbptr(&lfs3, &data,
+                        &bptr) => 0;
+                printf("traversal: %d 0x%x w%d block 0x%x.%x %d\n",
                         bid,
                         tag,
-                        bptr.data.u.disk.block,
-                        bptr.data.u.disk.off,
-                        lfs3_data_size(bptr.data));
+                        weight,
+                        lfs3_bptr_block(&bptr),
+                        lfs3_bptr_off(&bptr),
+                        lfs3_bptr_size(&bptr));
 
                 // keep track of how many data blocks we've seen
                 blocks += 1;
 
             } else {
                 // well this shouldn't happen
-                printf("traversal: %d 0x%x\n",
+                printf("traversal: %d 0x%x w%d\n",
                         bid,
-                        tag);
+                        tag,
+                        weight);
                 assert(false);
             }
         }
@@ -3163,8 +3740,8 @@ code = '''
 # trigger compaction
 [cases.test_fwrite_overwrite_compaction]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -3354,8 +3931,8 @@ code = '''
 
 [cases.test_fwrite_hole_compaction]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -3550,8 +4127,8 @@ code = '''
 [cases.test_fwrite_fuzz_aligned]
 defines.N = 20
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -3693,8 +4270,8 @@ code = '''
 [cases.test_fwrite_fuzz_unaligned]
 defines.N = 20
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -3843,8 +4420,8 @@ code = '''
 defines.N = 20
 defines.WHENCE = ['LFS3_SEEK_SET', 'LFS3_SEEK_CUR', 'LFS3_SEEK_END']
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -3922,8 +4499,8 @@ code = '''
 defines.N = 10
 defines.WHENCE = ['LFS3_SEEK_SET', 'LFS3_SEEK_CUR', 'LFS3_SEEK_END']
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -4069,8 +4646,8 @@ code = '''
 defines.N = 10
 defines.WHENCE = ['LFS3_SEEK_SET', 'LFS3_SEEK_CUR', 'LFS3_SEEK_END']
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -4241,8 +4818,8 @@ code = '''
 [cases.test_fwrite_seek_negative]
 defines.WHENCE = ['LFS3_SEEK_SET', 'LFS3_SEEK_CUR', 'LFS3_SEEK_END']
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -4349,8 +4926,8 @@ code = '''
 # test that write overflow errors
 [cases.test_fwrite_fbig]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -4457,8 +5034,8 @@ code = '''
 # test that truncate overflow errors
 [cases.test_fwrite_truncate_fbig]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -4558,8 +5135,8 @@ code = '''
 # test that fruncate overflow errors
 [cases.test_fwrite_fruncate_fbig]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -4661,8 +5238,8 @@ code = '''
 [cases.test_fwrite_rwtf_fuzz]
 defines.N = 20
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -4908,25 +5485,26 @@ code = '''
     lfs3_file_open(&lfs3, &file, "hello", LFS3_O_WRONLY) => 0;
     lfs3_off_t pos = 0;
     while (true) {
-        lfs3_tag_t tag;
+        lfs3_stag_t tag;
         lfs3_bid_t weight;
         lfs3_data_t data;
-        int err = lfs3_bshrub_lookupnext(&lfs3, &file.b, pos,
-                &pos, &tag, &weight, &data);
-        assert(!err || err == LFS3_ERR_NOENT);
-        if (err == LFS3_ERR_NOENT) {
+        tag = lfs3_bshrub_lookupnext(&lfs3, &file.b, pos,
+                &pos, &weight, &data);
+        assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+        if (tag == LFS3_ERR_NOENT) {
             break;
         }
 
         printf("pos = %d, %d\n", pos, weight);
         lfs3_bshrub_commit(&lfs3, &file.b, pos, LFS3_RATTRS(
-                LFS3_RATTR_DATA(
-                    LFS3_TAG_GROW | tag, -(weight/2),
-                    &data))) => 0;
+                LFS3_RATTR(3, LFS3_tag_GROW | tag, -2, LFS3_FROM_CAT, 1),
+                LFS3_RATTR_WEIGHT(-(weight/2)),
+                LFS3_RATTR_ARG(&data),
+                LFS3_RATTR_NULL)) => 0;
 
         pos = pos - (weight/2) + 1;
     }
-    file.b.o.flags |= LFS3_o_UNSYNC;
+    file.b.h.flags |= LFS3_o_UNSYNC;
     lfs3_file_close(&lfs3, &file) => 0;
 
     for (int remount = 0; remount < 2; remount++) {
@@ -5018,25 +5596,26 @@ code = '''
     lfs3_file_open(&lfs3, &file, "hello", LFS3_O_WRONLY) => 0;
     lfs3_off_t pos = 0;
     while (true) {
-        lfs3_tag_t tag;
+        lfs3_stag_t tag;
         lfs3_bid_t weight;
         lfs3_data_t data;
-        int err = lfs3_bshrub_lookupnext(&lfs3, &file.b, pos,
-                &pos, &tag, &weight, &data);
-        assert(!err || err == LFS3_ERR_NOENT);
-        if (err == LFS3_ERR_NOENT) {
+        tag = lfs3_bshrub_lookupnext(&lfs3, &file.b, pos,
+                &pos, &weight, &data);
+        assert(tag >= 0 || tag == LFS3_ERR_NOENT);
+        if (tag == LFS3_ERR_NOENT) {
             break;
         }
 
         printf("pos = %d, %d\n", pos, weight);
         lfs3_bshrub_commit(&lfs3, &file.b, pos, LFS3_RATTRS(
-                LFS3_RATTR_DATA(
-                    LFS3_TAG_GROW | tag, -(weight/2),
-                    &data))) => 0;
+                LFS3_RATTR(3, LFS3_tag_GROW | tag, -2, LFS3_FROM_CAT, 1),
+                LFS3_RATTR_WEIGHT(-(weight/2)),
+                LFS3_RATTR_ARG(&data),
+                LFS3_RATTR_NULL)) => 0;
 
         pos = pos - (weight/2) + 1;
     }
-    file.b.o.flags |= LFS3_o_UNSYNC;
+    file.b.h.flags |= LFS3_o_UNSYNC;
     lfs3_file_close(&lfs3, &file) => 0;
 
     for (int remount = 0; remount < 2; remount++) {

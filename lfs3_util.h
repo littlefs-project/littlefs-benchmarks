@@ -8,16 +8,17 @@
 #ifndef LFS3_UTIL_H
 #define LFS3_UTIL_H
 
+#define LFS3_STRINGIFY_(x) #x
+#define LFS3_STRINGIFY(x) LFS3_STRINGIFY_(x)
+
 // Users can override lfs3_util.h with their own configuration by defining
-// LFS3_CONFIG as a header file to include (-DLFS_CONFIG=lfs3_config.h).
+// LFS3_CFG as a header file to include (-DLFS3_CFG=my_cfg.h).
 //
-// If LFS3_CONFIG is used, none of the default utils will be emitted and must be
+// If LFS3_CFG is used, none of the default utils will be emitted and must be
 // provided by the config file. To start, I would suggest copying lfs3_util.h
 // and modifying as needed.
-#ifdef LFS3_CONFIG
-#define LFS3_STRINGIZE(x) LFS3_STRINGIZE2(x)
-#define LFS3_STRINGIZE2(x) #x
-#include LFS3_STRINGIZE(LFS3_CONFIG)
+#ifdef LFS3_CFG
+#include LFS3_STRINGIFY(LFS3_CFG)
 #else
 
 
@@ -26,8 +27,8 @@
 
 // LFS3_BIGGEST enables all opt-in features
 #ifdef LFS3_BIGGEST
-#ifndef LFS3_REVDBG
-#define LFS3_REVDBG
+#ifndef LFS3_REVPERTURB
+#define LFS3_REVPERTURB
 #endif
 #ifndef LFS3_REVNOISE
 #define LFS3_REVNOISE
@@ -41,11 +42,20 @@
 #ifndef LFS3_CKMETAPARITY
 #define LFS3_CKMETAPARITY
 #endif
-#ifndef LFS3_CKDATACKSUMREADS
-#define LFS3_CKDATACKSUMREADS
+#ifndef LFS3_CKDATACKSUMS
+#define LFS3_CKDATACKSUMS
 #endif
 #ifndef LFS3_GC
 #define LFS3_GC
+#endif
+#ifndef LFS3_GBMAP
+#define LFS3_GBMAP
+#endif
+#ifndef LFS3_PREERASE
+#define LFS3_PREERASE
+#endif
+#ifndef LFS3_BLEAFCACHE
+#define LFS3_BLEAFCACHE
 #endif
 #endif
 
@@ -53,14 +63,8 @@
 #ifdef LFS3_YES_RDONLY
 #define LFS3_RDONLY
 #endif
-#ifdef LFS3_YES_KVONLY
-#define LFS3_KVONLY
-#endif
-#ifdef LFS3_YES_2BONLY
-#define LFS3_2BONLY
-#endif
-#ifdef LFS3_YES_REVDBG
-#define LFS3_REVDBG
+#ifdef LFS3_YES_REVPERTURB
+#define LFS3_REVPERTURB
 #endif
 #ifdef LFS3_YES_REVNOISE
 #define LFS3_REVNOISE
@@ -74,11 +78,17 @@
 #ifdef LFS3_YES_CKMETAPARITY
 #define LFS3_CKMETAPARITY
 #endif
-#ifdef LFS3_YES_CKDATACKSUMREADS
-#define LFS3_CKDATACKSUMREADS
+#ifdef LFS3_YES_CKDATACKSUMS
+#define LFS3_CKDATACKSUMS
 #endif
 #ifdef LFS3_YES_GC
 #define LFS3_GC
+#endif
+#ifdef LFS3_YES_GBMAP
+#define LFS3_GBMAP
+#endif
+#ifdef LFS3_YES_BLEAFCACHE
+#define LFS3_BLEAFCACHE
 #endif
 
 // LFS3_NO_LOG disables all logging macros
@@ -97,6 +107,12 @@
 #endif
 #endif
 
+// some define dependencies
+#if defined(LFS3_PREERASE) \
+        && (!defined(LFS3_GBMAP) || !defined(LFS3_REVPERTURB))
+#error "LFS3_PREERASE requires LFS3_GBMAP and LFS3_REVPERTURB"
+#endif
+
 
 // System includes
 #include <stdint.h>
@@ -112,11 +128,11 @@
 #ifndef LFS3_NO_ASSERT
 #include <assert.h>
 #endif
-#if !defined(LFS3_NO_DEBUG) || \
-        !defined(LFS3_NO_INFO) || \
-        !defined(LFS3_NO_WARN) || \
-        !defined(LFS3_NO_ERROR) || \
-        defined(LFS3_YES_TRACE)
+#if !defined(LFS3_NO_DEBUG) \
+        || !defined(LFS3_NO_INFO) \
+        || !defined(LFS3_NO_WARN) \
+        || !defined(LFS3_NO_ERROR) \
+        || defined(LFS3_YES_TRACE)
 #include <stdio.h>
 #endif
 
@@ -203,22 +219,18 @@
 #define LFS3_IFDEF_RDONLY(a, b) (b)
 #endif
 
-#ifdef LFS3_KVONLY
-#define LFS3_IFDEF_KVONLY(a, b) (a)
+#ifdef LFS3_REVPERTURB
+#define LFS3_IFDEF_REVPERTURB(a, b) (a)
 #else
-#define LFS3_IFDEF_KVONLY(a, b) (b)
+#define LFS3_IFDEF_REVPERTURB(a, b) (b)
 #endif
 
-#ifdef LFS3_2BONLY
-#define LFS3_IFDEF_2BONLY(a, b) (a)
+#if defined(LFS3_REVPERTURB) && defined(LFS3_YES_REVPERTURB)
+#define LFS3_IFYES_REVPERTURB(a, b, c) (a)
+#elif defined(LFS3_REVPERTURB)
+#define LFS3_IFYES_REVPERTURB(a, b, c) (b)
 #else
-#define LFS3_IFDEF_2BONLY(a, b) (b)
-#endif
-
-#ifdef LFS3_REVDBG
-#define LFS3_IFDEF_REVDBG(a, b) (a)
-#else
-#define LFS3_IFDEF_REVDBG(a, b) (b)
+#define LFS3_IFYES_REVPERTURB(a, b, c) (c)
 #endif
 
 #ifdef LFS3_REVNOISE
@@ -227,10 +239,26 @@
 #define LFS3_IFDEF_REVNOISE(a, b) (b)
 #endif
 
+#if defined(LFS3_REVNOISE) && defined(LFS3_YES_REVNOISE)
+#define LFS3_IFYES_REVNOISE(a, b, c) (a)
+#elif defined(LFS3_REVNOISE)
+#define LFS3_IFYES_REVNOISE(a, b, c) (b)
+#else
+#define LFS3_IFYES_REVNOISE(a, b, c) (c)
+#endif
+
 #ifdef LFS3_CKPROGS
 #define LFS3_IFDEF_CKPROGS(a, b) (a)
 #else
 #define LFS3_IFDEF_CKPROGS(a, b) (b)
+#endif
+
+#if defined(LFS3_CKPROGS) && defined(LFS3_YES_CKPROGS)
+#define LFS3_IFYES_CKPROGS(a, b, c) (a)
+#elif defined(LFS3_CKPROGS)
+#define LFS3_IFYES_CKPROGS(a, b, c) (b)
+#else
+#define LFS3_IFYES_CKPROGS(a, b, c) (c)
 #endif
 
 #ifdef LFS3_CKFETCHES
@@ -239,22 +267,72 @@
 #define LFS3_IFDEF_CKFETCHES(a, b) (b)
 #endif
 
+#if defined(LFS3_CKFETCHES) && defined(LFS3_YES_CKFETCHES)
+#define LFS3_IFYES_CKFETCHES(a, b, c) (a)
+#elif defined(LFS3_CKFETCHES)
+#define LFS3_IFYES_CKFETCHES(a, b, c) (b)
+#else
+#define LFS3_IFYES_CKFETCHES(a, b, c) (c)
+#endif
+
 #ifdef LFS3_CKMETAPARITY
 #define LFS3_IFDEF_CKMETAPARITY(a, b) (a)
 #else
 #define LFS3_IFDEF_CKMETAPARITY(a, b) (b)
 #endif
 
-#ifdef LFS3_CKDATACKSUMREADS
-#define LFS3_IFDEF_CKDATACKSUMREADS(a, b) (a)
+#if defined(LFS3_CKMETAPARITY) && defined(LFS3_YES_CKMETAPARITY)
+#define LFS3_IFYES_CKMETAPARITY(a, b, c) (a)
+#elif defined(LFS3_CKMETAPARITY)
+#define LFS3_IFYES_CKMETAPARITY(a, b, c) (b)
 #else
-#define LFS3_IFDEF_CKDATACKSUMREADS(a, b) (b)
+#define LFS3_IFYES_CKMETAPARITY(a, b, c) (c)
+#endif
+
+#ifdef LFS3_CKDATACKSUMS
+#define LFS3_IFDEF_CKDATACKSUMS(a, b) (a)
+#else
+#define LFS3_IFDEF_CKDATACKSUMS(a, b) (b)
+#endif
+
+#if defined(LFS3_CKDATACKSUMS) && defined(LFS3_YES_CKDATACKSUMS)
+#define LFS3_IFYES_CKDATACKSUMS(a, b, c) (a)
+#elif defined(LFS3_CKDATACKSUMS)
+#define LFS3_IFYES_CKDATACKSUMS(a, b, c) (b)
+#else
+#define LFS3_IFYES_CKDATACKSUMS(a, b, c) (c)
 #endif
 
 #ifdef LFS3_GC
 #define LFS3_IFDEF_GC(a, b) (a)
 #else
 #define LFS3_IFDEF_GC(a, b) (b)
+#endif
+
+#ifdef LFS3_GBMAP
+#define LFS3_IFDEF_GBMAP(a, b) (a)
+#else
+#define LFS3_IFDEF_GBMAP(a, b) (b)
+#endif
+
+#if defined(LFS3_GBMAP) && defined(LFS3_YES_GBMAP)
+#define LFS3_IFYES_GBMAP(a, b, c) (a)
+#elif defined(LFS3_GBMAP)
+#define LFS3_IFYES_GBMAP(a, b, c) (b)
+#else
+#define LFS3_IFYES_GBMAP(a, b, c) (c)
+#endif
+
+#ifdef LFS3_PREERASE
+#define LFS3_IFDEF_PREERASE(a, b) (a)
+#else
+#define LFS3_IFDEF_PREERASE(a, b) (b)
+#endif
+
+#ifdef LFS3_BLEAFCACHE
+#define LFS3_IFDEF_BLEAFCACHE(a, b) (a)
+#else
+#define LFS3_IFDEF_BLEAFCACHE(a, b) (b)
 #endif
 
 
@@ -285,8 +363,8 @@
 //
 
 // Compile time min/max
-#define LFS3_MIN(a, b) ((a < b) ? a : b)
-#define LFS3_MAX(a, b) ((a > b) ? a : b)
+#define LFS3_MIN(a, b) (((a) < (b)) ? (a) : (b))
+#define LFS3_MAX(a, b) (((a) > (b)) ? (a) : (b))
 
 // Min/max functions for unsigned 32-bit numbers
 static inline uint32_t lfs3_min(uint32_t a, uint32_t b) {
@@ -306,7 +384,7 @@ static inline int32_t lfs3_smax(int32_t a, int32_t b) {
 }
 
 // Absolute value of signed numbers
-static inline int32_t lfs3_abs(int32_t a) {
+static inline uint32_t lfs3_abs(int32_t a) {
     return (a < 0) ? -a : a;
 }
 

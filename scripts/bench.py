@@ -37,9 +37,10 @@ except ModuleNotFoundError:
 
 
 RUNNER_PATH = ['./runners/bench_runner']
-HEADER_PATH = 'runners/bench_runner.h'
+HEADER_PATHS = ['./runners/bench_runner.h']
 
 GDB_PATH = ['gdb']
+GDB_SCRIPTS = ['./scripts/dbg.gdb.py']
 VALGRIND_PATH = ['valgrind']
 PERF_SCRIPT = ['./scripts/perf.py']
 
@@ -81,32 +82,48 @@ class BenchCase:
         self.path = config.pop('path')
         self.suite = config.pop('suite')
         self.lineno = config.pop('lineno', None)
-        self.if_ = config.pop('if', [])
-        if not isinstance(self.if_, list):
+        self.if_ = config.pop('if', None)
+        if self.if_ is None:
+            self.if_ = []
+        elif not isinstance(self.if_, list):
             self.if_ = [self.if_]
-        self.ifdef = config.pop('ifdef', [])
-        if not isinstance(self.ifdef, list):
+        self.ifdef = config.pop('ifdef', None)
+        if self.ifdef is None:
+            self.ifdef = []
+        elif not isinstance(self.ifdef, list):
             self.ifdef = [self.ifdef]
-        self.ifndef = config.pop('ifndef', [])
-        if not isinstance(self.ifndef, list):
+        self.ifndef = config.pop('ifndef', None)
+        if self.ifndef is None:
+            self.ifndef = []
+        elif not isinstance(self.ifndef, list):
             self.ifndef = [self.ifndef]
         self.code = config.pop('code')
         self.code_lineno = config.pop('code_lineno', None)
         self.in_ = config.pop('in',
                 config.pop('suite_in', None))
 
-        self.internal = bool(self.in_)
+        self.internal = config.pop('internal',
+                config.pop('suite_internal', None))
+        if self.internal is None:
+            self.internal = False
+        self.litmus = config.pop('litmus',
+                config.pop('suite_litmus', None))
+        if self.litmus is None:
+            self.litmus = False
 
-        # figure out defines and build possible permutations
-        self.defines = set()
-        self.permutations = []
+        # in implies internal
+        self.internal |= bool(self.in_)
 
         # defines can be a dict or a list or dicts
-        suite_defines = config.pop('suite_defines', {})
-        if not isinstance(suite_defines, list):
+        suite_defines = config.pop('suite_defines', None)
+        if suite_defines is None:
+            suite_defines = [{}]
+        elif not isinstance(suite_defines, list):
             suite_defines = [suite_defines]
-        defines = config.pop('defines', {})
-        if not isinstance(defines, list):
+        defines = config.pop('defines', None)
+        if defines is None:
+            defines = [{}]
+        elif not isinstance(defines, list):
             defines = [defines]
 
         def csplit(v):
@@ -148,14 +165,23 @@ class BenchCase:
             else:
                 return [v]
 
-        # build possible permutations
+        # figure out defines and build possible permutations
+        defines__ = set()
+        permutations__ = []
         for suite_defines_ in suite_defines:
-            self.defines |= suite_defines_.keys()
+            defines__ |= suite_defines_.keys()
             for defines_ in defines:
-                self.defines |= defines_.keys()
-                self.permutations.append({
-                        k: parse_define(v)
-                            for k, v in (suite_defines_ | defines_).items()})
+                defines__ |= defines_.keys()
+                permutations__.append({k: parse_define(v)
+                        for k, v in (suite_defines_ | defines_).items()})
+        self.defines = defines__
+        self.permutations = permutations__
+
+        # we have the source code, so try to guess what probes are in
+        # use, note this is only informative
+        self.probes = list(co.OrderedDict.fromkeys(re.findall(
+                'BENCH_(?:STOP|F?RESULT)\( *"((?:\\.|[^"])*)"',
+                self.code)).keys())
 
         for k in config.keys():
             print('%swarning:%s in %s, found unused key %r' % (
@@ -168,10 +194,26 @@ class BenchCase:
     def __repr__(self):
         return '<BenchCase %s>' % self.name
 
+    # sort by suite, lineno, and name
+    def __eq__(self, other):
+        return ((self.suite, self.lineno, self.name)
+                == (other.suite, other.lineno, other.name))
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
     def __lt__(self, other):
-        # sort by suite, lineno, and name
         return ((self.suite, self.lineno, self.name)
                 < (other.suite, other.lineno, other.name))
+
+    def __gt__(self, other):
+        return self.__class__.__lt__(other, self)
+
+    def __le__(self, other):
+        return not self.__gt__(other)
+
+    def __ge__(self, other):
+        return not self.__lt__(other)
 
     def isin(self, path):
         return (self.in_ is not None
@@ -209,7 +251,9 @@ class BenchSuite:
             # sort in case toml parsing did not retain order
             case_linenos.sort()
 
-            cases = config.pop('cases', {})
+            cases = config.pop('cases', None)
+            if cases is None:
+                cases = {}
             for (lineno, name), (nlineno, _) in it.zip_longest(
                     case_linenos, case_linenos[1:],
                     fillvalue=(float('inf'), None)):
@@ -220,15 +264,21 @@ class BenchSuite:
                 cases[name]['lineno'] = lineno
                 cases[name]['code_lineno'] = code_lineno
 
-            self.if_ = config.pop('if', [])
-            if not isinstance(self.if_, list):
+            self.if_ = config.pop('if', None)
+            if self.if_ is None:
+                self.if_ = []
+            elif not isinstance(self.if_, list):
                 self.if_ = [self.if_]
 
-            self.ifdef = config.pop('ifdef', [])
-            if not isinstance(self.ifdef, list):
+            self.ifdef = config.pop('ifdef', None)
+            if self.ifdef is None:
+                self.ifdef = []
+            elif not isinstance(self.ifdef, list):
                 self.ifdef = [self.ifdef]
-            self.ifndef = config.pop('ifndef', [])
-            if not isinstance(self.ifndef, list):
+            self.ifndef = config.pop('ifndef', None)
+            if self.ifndef is None:
+                self.ifndef = []
+            elif not isinstance(self.ifndef, list):
                 self.ifndef = [self.ifndef]
 
             self.code = config.pop('code', None)
@@ -238,25 +288,38 @@ class BenchSuite:
                     default=None)
             self.in_ = config.pop('in', None)
 
-            self.after = config.pop('after', [])
-            if not isinstance(self.after, list):
+            self.after = config.pop('after', None)
+            if self.after is None:
+                self.after = []
+            elif not isinstance(self.after, list):
                 self.after = [self.after]
 
             # a couple of these we just forward to all cases
-            defines = config.pop('defines', {})
+            defines = config.pop('defines', None)
+            internal = config.pop('internal', None)
+            litmus = config.pop('litmus', None)
 
             self.cases = []
-            for name, case in cases.items():
-                self.cases.append(BenchCase(
-                        config={
-                            'name': name,
-                            'path': path + (':%d' % case['lineno']
-                                if 'lineno' in case else ''),
+            for name, config_ in cases.items():
+                case = BenchCase(
+                        {   'name': name,
+                            'path': path + (':%d' % config_['lineno']
+                                if 'lineno' in config_ else ''),
                             'suite': self.name,
                             'suite_defines': defines,
                             'suite_in': self.in_,
-                            **case},
-                        args=args))
+                            'suite_internal': internal,
+                            'suite_litmus': litmus,
+                            **config_},
+                        args)
+
+                # skipping internal benches?
+                if args.get('no_internal') and case.internal:
+                    continue
+                if args.get('no_litmus') and case.litmus:
+                    continue
+
+                self.cases.append(case)
 
             # sort for consistency
             self.cases.sort()
@@ -267,6 +330,7 @@ class BenchSuite:
 
             # combine other per-case things
             self.internal = any(case.internal for case in self.cases)
+            self.litmus = any(case.litmus for case in self.cases)
 
         for k in config.keys():
             print('%swarning:%s in %s, found unused key %r' % (
@@ -279,11 +343,26 @@ class BenchSuite:
     def __repr__(self):
         return '<BenchSuite %s>' % self.name
 
+    # sort by name
+    #
+    # note we override this with a topological sort during compilation
+    def __eq__(self, other):
+        return self.name == other.name
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
     def __lt__(self, other):
-        # sort by name
-        #
-        # note we override this with a topological sort during compilation
         return self.name < other.name
+
+    def __gt__(self, other):
+        return self.__class__.__lt__(other, self)
+
+    def __le__(self, other):
+        return not self.__gt__(other)
+
+    def __ge__(self, other):
+        return not self.__lt__(other)
 
     def isin(self, path):
         return (self.in_ is not None
@@ -362,17 +441,18 @@ def compile(bench_paths, **args):
     # write generated bench source
     if 'output' in args:
         with openio(args['output'], 'w') as f:
-            _write = f.write
-            def write(s):
-                f.lineno += s.count('\n')
-                _write(s)
-            def writeln(s=''):
-                f.lineno += s.count('\n') + 1
-                _write(s)
-                _write('\n')
+            # some helpful file functions
             f.lineno = 1
-            f.write = write
-            f.writeln = writeln
+            f.write_ = f.write
+            def write(self, s):
+                self.lineno += s.count('\n')
+                self.write_(s)
+            f.write = write.__get__(f)
+            def writeln(self, s=''):
+                self.lineno += s.count('\n') + 1
+                self.write_(s)
+                self.write_('\n')
+            f.writeln = writeln.__get__(f)
 
             f.writeln("// Generated by %s:" % sys.argv[0])
             f.writeln("//")
@@ -381,7 +461,8 @@ def compile(bench_paths, **args):
             f.writeln()
 
             # include bench_runner.h in every generated file
-            f.writeln("#include \"%s\"" % args['include'])
+            for header in (args.get('include') or HEADER_PATHS):
+                f.writeln("#include \"%s\"" % header)
             f.writeln()
 
             # write out generated functions, this can end up in different
@@ -393,9 +474,13 @@ def compile(bench_paths, **args):
                     # write any ifdef prologues
                     if case.ifdef or case.ifndef:
                         for ifdef in case.ifdef:
-                            f.writeln('#ifdef %s' % ifdef)
+                            f.writeln('#if (%s)' % re.sub(
+                                    '[a-zA-Z_0-9]+', 'defined(\g<0>)',
+                                    ifdef))
                         for ifndef in case.ifndef:
-                            f.writeln('#ifndef %s' % ifndef)
+                            f.writeln('#if !(%s)' % re.sub(
+                                    '[a-zA-Z_0-9]+', 'defined(\g<0>)',
+                                    ifndef))
                         f.writeln()
 
                     # create case define functions
@@ -440,7 +525,7 @@ def compile(bench_paths, **args):
                     # create case run function
                     f.writeln('void __bench__%s__run('
                             '__attribute__((unused)) '
-                            'struct lfs3_config *CFG) {' % (
+                            'const struct lfs3_cfg *CFG) {' % (
                                 case.name))
                     f.writeln(4*' '+'// bench case %s' % case.name)
                     if case.code_lineno is not None:
@@ -465,9 +550,13 @@ def compile(bench_paths, **args):
                 # write any ifdef prologues
                 if suite.ifdef or suite.ifndef:
                     for ifdef in suite.ifdef:
-                        f.writeln('#ifdef %s' % ifdef)
+                        f.writeln('#if (%s)' % re.sub(
+                                '[a-zA-Z_0-9]+', 'defined(\g<0>)',
+                                ifdef))
                     for ifndef in suite.ifndef:
-                        f.writeln('#ifndef %s' % ifndef)
+                        f.writeln('#if !(%s)' % re.sub(
+                                '[a-zA-Z_0-9]+', 'defined(\g<0>)',
+                                ifndef))
                     f.writeln()
 
                 # write any suite defines
@@ -503,7 +592,7 @@ def compile(bench_paths, **args):
                                     'void);' % (
                                         case.name))
                         f.writeln('extern void __bench__%s__run('
-                                'struct lfs3_config *CFG);' % (
+                                'const struct lfs3_cfg *CFG);' % (
                                     case.name))
                         f.writeln()
 
@@ -522,12 +611,17 @@ def compile(bench_paths, **args):
                 f.writeln(4*' '+'.path = "%s",' % suite.path)
                 f.writeln(4*' '+'.flags = %s,' % (
                         ' | '.join(filter(None, [
-                                'BENCH_INTERNAL' if suite.internal else None]))
+                                'BENCH_INTERNAL' if suite.internal else None,
+                                'BENCH_LITMUS' if suite.litmus else None]))
                             or 0))
                 for ifdef in suite.ifdef:
-                    f.writeln(4*' '+'#ifdef %s' % ifdef)
+                    f.writeln(4*' '+'#if (%s)' % re.sub(
+                            '[a-zA-Z_0-9]+', 'defined(\g<0>)',
+                            ifdef))
                 for ifndef in suite.ifndef:
-                    f.writeln(4*' '+'#ifndef %s' % ifndef)
+                    f.writeln(4*' '+'#if !(%s)' % re.sub(
+                            '[a-zA-Z_0-9]+', 'defined(\g<0>)',
+                            ifndef))
                 # create suite defines
                 if suite.defines:
                     f.writeln(4*' '+'.defines = (const bench_define_t[]){')
@@ -550,12 +644,18 @@ def compile(bench_paths, **args):
                         f.writeln(12*' '+'.flags = %s,' % (
                                 ' | '.join(filter(None, [
                                         'BENCH_INTERNAL' if case.internal
+                                            else None,
+                                        'BENCH_LITMUS' if case.litmus
                                             else None]))
                                     or 0))
                         for ifdef in it.chain(suite.ifdef, case.ifdef):
-                            f.writeln(12*' '+'#ifdef %s' % ifdef)
+                            f.writeln(12*' '+'#if (%s)' % re.sub(
+                                    '[a-zA-Z_0-9]+', 'defined(\g<0>)',
+                                    ifdef))
                         for ifndef in it.chain(suite.ifndef, case.ifndef):
-                            f.writeln(12*' '+'#ifndef %s' % ifndef)
+                            f.writeln(12*' '+'#if !(%s)' % re.sub(
+                                    '[a-zA-Z_0-9]+', 'defined(\g<0>)',
+                                    ifndef))
                         # create case defines
                         if case.defines:
                             f.writeln(12*' '+'.defines'
@@ -580,6 +680,16 @@ def compile(bench_paths, **args):
                             f.writeln(12*' '+'},')
                             f.writeln(12*' '+'.permutations = %d,' % (
                                     len(case.permutations)))
+                        # list case probes
+                        if case.probes:
+                            f.writeln(12*' '+'.probes'
+                                    ' = (const char*[%d]){' % (
+                                        len(case.probes)))
+                            for p in case.probes:
+                                f.writeln(16*' '+'"%s",' % p)
+                            f.writeln(12*' '+'},')
+                            f.writeln(12*' '+'.probe_count = %d,' % (
+                                    len(case.probes)))
                         if suite.if_ or case.if_:
                             f.writeln(12*' '+'.if_ = __bench__%s__if,' % (
                                     case.name))
@@ -624,9 +734,13 @@ def compile(bench_paths, **args):
                     # any ifdef prologues
                     if suite.ifdef or suite.ifndef:
                         for ifdef in suite.ifdef:
-                            f.writeln('#ifdef %s' % ifdef)
+                            f.writeln('#if (%s)' % re.sub(
+                                    '[a-zA-Z_0-9]+', 'defined(\g<0>)',
+                                    ifdef))
                         for ifndef in suite.ifndef:
-                            f.writeln('#ifndef %s' % ifndef)
+                            f.writeln('#if !(%s)' % re.sub(
+                                    '[a-zA-Z_0-9]+', 'defined(\g<0>)',
+                                    ifndef))
                         f.writeln()
 
                     # any suite code
@@ -694,11 +808,11 @@ def find_runner(runner, id=None, main=True, **args):
     # run under perf?
     if args.get('perf'):
         cmd[:0] = args['perf_script'] + list(filter(None, [
-                '--record',
-                '--perf-freq=%s' % args['perf_freq']
-                    if args.get('perf_freq') else None,
-                '--perf-period=%s' % args['perf_period']
-                    if args.get('perf_period') else None,
+                '-e',
+                '--perf-step=%s' % args['perf_step']
+                    if args.get('perf_step') else None,
+                '--perf-runfreq=%s' % args['perf_runfreq']
+                    if args.get('perf_runfreq') else None,
                 '--perf-events=%s' % args['perf_events']
                     if args.get('perf_events') else None,
                 '--perf-path=%s' % args['perf_path']
@@ -708,8 +822,21 @@ def find_runner(runner, id=None, main=True, **args):
     # other context
     if args.get('define_depth'):
         cmd.append('--define-depth=%s' % args['define_depth'])
-    if args.get('all'):
-        cmd.append('-a')
+    if args.get('probe'):
+        for probe in args['probe']:
+            cmd.append('-S%s' % probe)
+    if args.get('probe_step'):
+        cmd.append('-x%s' % args['probe_step'])
+    if args.get('probe_runfreq'):
+        cmd.append('--probe-runfreq=%s' % args['probe_runfreq'])
+    if args.get('probe_simfreq'):
+        cmd.append('-X%s' % args['probe_simfreq'])
+    if args.get('force'):
+        cmd.append('--force')
+    if args.get('no_internal'):
+        cmd.append('--no-internal')
+    if args.get('no_litmus'):
+        cmd.append('--no-litmus')
 
     # only one thread should write to disk/trace, otherwise the output
     # ends up clobbered and useless
@@ -720,10 +847,10 @@ def find_runner(runner, id=None, main=True, **args):
             cmd.append('-t%s' % args['trace'])
         if args.get('trace_backtrace'):
             cmd.append('--trace-backtrace')
-        if args.get('trace_period'):
-            cmd.append('--trace-period=%s' % args['trace_period'])
-        if args.get('trace_freq'):
-            cmd.append('--trace-freq=%s' % args['trace_freq'])
+        if args.get('trace_step'):
+            cmd.append('--trace-step=%s' % args['trace_step'])
+        if args.get('trace_runfreq'):
+            cmd.append('--trace-runfreq=%s' % args['trace_runfreq'])
         if args.get('read_sleep'):
             cmd.append('--read-sleep=%s' % args['read_sleep'])
         if args.get('prog_sleep'):
@@ -886,7 +1013,12 @@ def find_ids(runner, bench_ids=[], **args):
             expected_suite_perms,
             expected_case_perms,
             _,
-            _) = find_perms(runner, **args)
+            _) = find_perms(
+                runner,
+                # the runner can filter faster than we can, but not if
+                # we have any globs
+                bench_ids if not any('*' in id for id in bench_ids) else [],
+                **args)
 
     # no ids => all ids, before we evaluate globs
     if not bench_ids and args.get('by_cases'):
@@ -958,6 +1090,19 @@ def list_(runner, bench_ids=[], **args):
                                      cmd.append('--list-permutation-defines')
     if args.get('list_implicit_defines'):
                                      cmd.append('--list-implicit-defines')
+    if args.get('list_probes'):
+                                     cmd.append('--list-probes')
+    if args.get('list_suite_probes'):
+                                     cmd.append('--list-suite-probes')
+    if args.get('list_case_probes'):
+                                     cmd.append('--list-case-probes')
+    if args.get('query_define'):     cmd.append('-Q%s' % args['query_define'])
+    if args.get('query_permutation_define'):
+                                     cmd.append('--query-permutation-define=%s'
+                                         % args['query_permutation_define'])
+    if args.get('query_implicit_define'):
+                                     cmd.append('--query-implicit-define=%s'
+                                         % args['query_implicit_define'])
 
     if args.get('verbose'):
         print(' '.join(shlex.quote(c) for c in cmd))
@@ -1009,7 +1154,8 @@ class BenchFailure(Exception):
         self.assert_ = assert_
 
 
-def run_stage(name, runner, bench_ids, stdout_, trace_, output_, **args):
+def run_stage(offset, name, runner, bench_ids,
+        stdout_, trace_, output_, **args):
     # get expected suite/case/perm counts
     (case_suites,
             expected_suite_perms,
@@ -1022,7 +1168,7 @@ def run_stage(name, runner, bench_ids, stdout_, trace_, output_, **args):
     passed_perms = 0
     failed_perms = 0
     readed = 0
-    proged = 0
+    progged = 0
     erased = 0
     failures = []
     killed = False
@@ -1033,11 +1179,17 @@ def run_stage(name, runner, bench_ids, stdout_, trace_, output_, **args):
                 '|' '(?P<path>[^:]+):(?P<lineno>\d+):(?P<op_>assert):'
                     ' *(?P<message>.*)'
                 '|' '(?P<op__>benched)'
-                    ' (?P<m>[^\s]+)'
+                    ' (?P<probe>[^\s]+)'
                     ' (?P<n>\d+)'
-                    '(?: (?P<readed>[\d\.]+))?'
-                    '(?: (?P<proged>[\d\.]+))?'
-                    '(?: (?P<erased>[\d\.]+))?'
+                    '(?:'
+                        '(?:'
+                            ' (?P<reads>[\d\.]+)'
+                            ' (?P<progs>[\d\.]+)'
+                            ' (?P<erases>[\d\.]+)' ')?'
+                        ' (?P<readed>[\d\.]+)'
+                        ' (?P<progged>[\d\.]+)'
+                        ' (?P<erased>[\d\.]+)' ')?'
+                    '(?: (?P<simtime>[\d\.]+))?'
             ')$')
     locals = th.local()
     children = set()
@@ -1047,7 +1199,7 @@ def run_stage(name, runner, bench_ids, stdout_, trace_, output_, **args):
         nonlocal passed_case_perms
         nonlocal passed_perms
         nonlocal readed
-        nonlocal proged
+        nonlocal progged
         nonlocal erased
         nonlocal locals
 
@@ -1068,9 +1220,8 @@ def run_stage(name, runner, bench_ids, stdout_, trace_, output_, **args):
         last_defines = None # fetched on demand
         last_stdout = co.deque(maxlen=args.get('context', 5) + 1)
         last_assert = None
-        creaded = co.defaultdict(lambda: 0)
-        cproged = co.defaultdict(lambda: 0)
-        cerased = co.defaultdict(lambda: 0)
+        last_runtime = time.time()
+        last_probes = {}
         try:
             while True:
                 # parse a line for state changes
@@ -1101,9 +1252,8 @@ def run_stage(name, runner, bench_ids, stdout_, trace_, output_, **args):
                         last_defines = None
                         last_stdout.clear()
                         last_assert = None
-                        creaded.clear()
-                        cproged.clear()
-                        cerased.clear()
+                        last_runtime = time.time()
+                        last_probes.clear()
                     elif op == 'finished':
                         # force a failure
                         if args.get('fail'):
@@ -1115,6 +1265,13 @@ def run_stage(name, runner, bench_ids, stdout_, trace_, output_, **args):
                         passed_suite_perms[suite] += 1
                         passed_case_perms[case] += 1
                         passed_perms += 1
+                        # update totals for summary
+                        readed += sum(readed
+                            for readed, _, _ in last_probes.values())
+                        progged += sum(progged
+                            for _, progged, _ in last_probes.values())
+                        erased += sum(erased
+                            for _, _, erased in last_probes.values())
                     elif op == 'skipped':
                         locals.seen_perms += 1
                     elif op == 'assert':
@@ -1126,7 +1283,7 @@ def run_stage(name, runner, bench_ids, stdout_, trace_, output_, **args):
                         if args.get('keep_going'):
                             proc.kill()
                     elif op == 'benched':
-                        m_ = m.group('m')
+                        probe_ = m.group('probe')
                         n_ = int(m.group('n'))
                         # parse measurements
                         def dat(v):
@@ -1136,13 +1293,13 @@ def run_stage(name, runner, bench_ids, stdout_, trace_, output_, **args):
                                 return float(v)
                             else:
                                 return int(v)
-                        readed_ = dat(m.group('readed'))
-                        proged_ = dat(m.group('proged'))
-                        erased_ = dat(m.group('erased'))
-                        # keep track of cumulative measurements
-                        creaded[m_] += readed_
-                        cproged[m_] += proged_
-                        cerased[m_] += erased_
+                        reads_   = dat(m.group('reads'))
+                        progs_   = dat(m.group('progs'))
+                        erases_  = dat(m.group('erases'))
+                        readed_  = dat(m.group('readed'))
+                        progged_ = dat(m.group('progged'))
+                        erased_  = dat(m.group('erased'))
+                        simtime_ = dat(m.group('simtime'))
                         if output_:
                             # fetch defines if needed, only do this at most
                             # once per perm
@@ -1152,21 +1309,25 @@ def run_stage(name, runner, bench_ids, stdout_, trace_, output_, **args):
                             # write measurements immediately, this allows
                             # analysis of partial results
                             output_.writerow({
+                                    'i': offset
+                                        + locals.start
+                                        + locals.seen_perms*locals.step,
                                     'suite': last_suite,
                                     'case': last_case,
                                     **last_defines,
-                                    'm': m_,
+                                    'probe': probe_,
                                     'n': n_,
+                                    'bench_reads': reads_,
+                                    'bench_progs': progs_,
+                                    'bench_erases': erases_,
                                     'bench_readed': readed_,
-                                    'bench_proged': proged_,
+                                    'bench_progged': progged_,
                                     'bench_erased': erased_,
-                                    'bench_creaded': creaded[m_],
-                                    'bench_cproged': cproged[m_],
-                                    'bench_cerased': cerased[m_]})
-                        # keep track of total for summary
-                        readed += readed_
-                        proged += proged_
-                        erased += erased_
+                                    'bench_simtime': simtime_,
+                                    'bench_runtime': '%.6f' % (
+                                        time.time() - last_runtime)})
+                        # keep track of totals for summary
+                        last_probes[probe_] = (readed_, progged_, erased_)
         except KeyboardInterrupt:
             proc.kill()
             raise BenchFailure(last_id, 0, list(last_stdout))
@@ -1188,14 +1349,16 @@ def run_stage(name, runner, bench_ids, stdout_, trace_, output_, **args):
         nonlocal killed
         nonlocal locals
 
-        start = start or 0
-        step = step or 1
-        while start < total_perms:
+        locals.start = start or 0
+        locals.step = step or 1
+        while locals.start < total_perms:
             runner_ = find_runner(runner, main=main, **args)
             if args.get('isolate') or args.get('valgrind'):
-                runner_.append('-s%s,%s,%s' % (start, start+step, step))
-            elif start != 0 or step != 1:
-                runner_.append('-s%s,,%s' % (start, step))
+                runner_.append('--step=%s,%s,%s' % (
+                        locals.start, locals.start+locals.step, locals.step))
+            elif locals.start != 0 or locals.step != 1:
+                runner_.append('--step=%s,,%s' % (
+                        locals.start, locals.step))
 
             runner_.extend(bench_ids)
 
@@ -1204,7 +1367,7 @@ def run_stage(name, runner, bench_ids, stdout_, trace_, output_, **args):
                 locals.seen_perms = 0
                 run_runner(runner_)
                 assert locals.seen_perms > 0
-                start += locals.seen_perms*step
+                locals.start += locals.seen_perms*locals.step
 
             except BenchFailure as failure:
                 # race condition for multiple failures?
@@ -1221,7 +1384,7 @@ def run_stage(name, runner, bench_ids, stdout_, trace_, output_, **args):
                 if args.get('keep_going') and not killed:
                     # resume after failed bench
                     assert locals.seen_perms > 0
-                    start += locals.seen_perms*step
+                    locals.start += locals.seen_perms*locals.step
                     continue
                 else:
                     # stop other benches
@@ -1298,7 +1461,7 @@ def run_stage(name, runner, bench_ids, stdout_, trace_, output_, **args):
             passed_perms,
             failed_perms,
             readed,
-            proged,
+            progged,
             erased,
             failures,
             killed)
@@ -1339,15 +1502,18 @@ def run(runner, bench_ids=[], **args):
     output = None
     if args.get('output'):
         output = BenchOutput(args['output'],
-                ['suite', 'case'],
+                ['i', 'suite', 'case'],
                 # defines go here
-                ['m', 'n',
+                ['probe',
+                    'n',
+                    'bench_reads',
+                    'bench_progs',
+                    'bench_erases',
                     'bench_readed',
-                    'bench_proged',
+                    'bench_progged',
                     'bench_erased',
-                    'bench_creaded',
-                    'bench_cproged',
-                    'bench_cerased'])
+                    'bench_simtime',
+                    'bench_runtime'])
 
     # measure runtime
     start = time.time()
@@ -1357,7 +1523,7 @@ def run(runner, bench_ids=[], **args):
     passed = 0
     failed = 0
     readed = 0
-    proged = 0
+    progged = 0
     erased = 0
     failures = []
     for by in (bench_ids if bench_ids else [None]):
@@ -1366,10 +1532,11 @@ def run(runner, bench_ids=[], **args):
                 passed_,
                 failed_,
                 readed_,
-                proged_,
+                progged_,
                 erased_,
                 failures_,
                 killed) = run_stage(
+                    expected,
                     by or 'benches',
                     runner,
                     [by] if by is not None else [],
@@ -1379,11 +1546,11 @@ def run(runner, bench_ids=[], **args):
                     **args)
         # collect passes/failures
         expected += expected_
-        passed += passed_
-        failed += failed_
-        readed += readed_
-        proged += proged_
-        erased += erased_
+        passed   += passed_
+        failed   += failed_
+        readed   += readed_
+        progged  += progged_
+        erased   += erased_
         # do not store more failures than we need to, otherwise we
         # quickly explode RAM when a common bug fails a bunch of cases
         failures.extend(failures_[:max(
@@ -1416,7 +1583,7 @@ def run(runner, bench_ids=[], **args):
                 '\x1b[m' if args['color'] else '',
                 ', '.join(filter(None, [
                     '%d readed' % readed,
-                    '%d proged' % proged,
+                    '%d progged' % progged,
                     '%d erased' % erased,
                     'in %.2fs' % (stop-start)]))))
         print()
@@ -1468,12 +1635,16 @@ def run(runner, bench_ids=[], **args):
             or args.get('gdb_main')):
         failure = failures[0]
         cmd = find_runner(runner, failure.id, **args)
+        gdb_path = args['gdb_path']
+        gdb_scripts = (args.get('gdb_script') or GDB_SCRIPTS)
 
         if args.get('gdb_main'):
             # we don't really need the case breakpoint here, but it
             # can be helpful
             path, lineno = find_path(runner, failure.id, **args)
-            cmd[:0] = args['gdb_path'] + [
+            cmd[:0] = [
+                    *gdb_path,
+                    *it.chain.from_iterable(['-x', s] for s in gdb_scripts),
                     '-q',
                     '-ex', 'break main',
                     '-ex', 'break %s:%d' % (path, lineno),
@@ -1481,13 +1652,17 @@ def run(runner, bench_ids=[], **args):
                     '--args']
         elif args.get('gdb_perm'):
             path, lineno = find_path(runner, failure.id, **args)
-            cmd[:0] = args['gdb_path'] + [
+            cmd[:0] = [
+                    *gdb_path,
+                    *it.chain.from_iterable(['-x', s] for s in gdb_scripts),
                     '-q',
                     '-ex', 'break %s:%d' % (path, lineno),
                     '-ex', 'run',
                     '--args']
         else:
-            cmd[:0] = args['gdb_path'] + [
+            cmd[:0] = [
+                    *gdb_path,
+                    *it.chain.from_iterable(['-x', s] for s in gdb_scripts),
                     '-q',
                     '-ex', 'run',
                     '--args']
@@ -1518,7 +1693,13 @@ def main(**args):
             or args.get('list_case_paths')
             or args.get('list_defines')
             or args.get('list_permutation_defines')
-            or args.get('list_implicit_defines')):
+            or args.get('list_implicit_defines')
+            or args.get('list_probes')
+            or args.get('list_suite_probes')
+            or args.get('list_case_probes')
+            or args.get('query_define')
+            or args.get('query_permutation_define')
+            or args.get('query_implicit_define')):
         return list_(**args)
     else:
         return run(**args)
@@ -1527,6 +1708,7 @@ def main(**args):
 if __name__ == "__main__":
     import argparse
     import sys
+    import re
     argparse.ArgumentParser._handle_conflict_ignore = lambda *_: None
     argparse._ArgumentGroup._handle_conflict_ignore = lambda *_: None
     parser = argparse.ArgumentParser(
@@ -1592,6 +1774,27 @@ if __name__ == "__main__":
             action='store_true',
             help="List implicit defines in this bench-runner.")
     bench_parser.add_argument(
+            '--list-probes',
+            action='store_true',
+            help="List estimated probes.")
+    bench_parser.add_argument(
+            '--list-suite-probes',
+            action='store_true',
+            help="List estimated probes for each bench suite.")
+    bench_parser.add_argument(
+            '--list-case-probes',
+            action='store_true',
+            help="List estimated probes for each bench case.")
+    bench_parser.add_argument(
+            '-Q', '--query-define',
+            help="Query a bench define.")
+    bench_parser.add_argument(
+            '--query-permutation-define',
+            help="Query a permutation bench define.")
+    bench_parser.add_argument(
+            '--query-implicit-define',
+            help="Query an implicit bench define.")
+    bench_parser.add_argument(
             '-D', '--define',
             action='append',
             help="Override a bench define.")
@@ -1599,9 +1802,30 @@ if __name__ == "__main__":
             '--define-depth',
             help="How deep to evaluate recursive defines before erroring.")
     bench_parser.add_argument(
-            '-a', '--all',
+            '-S', '--probe',
+            action='append',
+            help="Specify a probe to sample.")
+    bench_parser.add_argument(
+            '-x', '--probe-step',
+            help="Sample probes every n steps.")
+    bench_parser.add_argument(
+            '--probe-runfreq',
+            help="Sample probes at this frequency in hz.")
+    bench_parser.add_argument(
+            '-X', '--probe-simfreq',
+            help="Sample probes at this frequency in simulated hz.")
+    bench_parser.add_argument(
+            '--force',
             action='store_true',
             help="Ignore bench filters.")
+    bench_parser.add_argument(
+            '--no-internal',
+            action='store_true',
+            help="Don't run internal benches.")
+    bench_parser.add_argument(
+            '--no-litmus',
+            action='store_true',
+            help="Don't run litmus benches.")
     bench_parser.add_argument(
             '-d', '--disk',
             help="Direct block device operations to this file.")
@@ -1613,11 +1837,14 @@ if __name__ == "__main__":
             action='store_true',
             help="Include a backtrace with every trace statement.")
     bench_parser.add_argument(
-            '--trace-period',
-            help="Sample trace output at this period in cycles.")
+            '--trace-step',
+            help="Sample trace output every n steps.")
     bench_parser.add_argument(
-            '--trace-freq',
+            '--trace-runfreq',
             help="Sample trace output at this frequency in hz.")
+    bench_parser.add_argument(
+            '--trace-simfreq',
+            help="Sample trace output at this frequency in simulated hz.")
     bench_parser.add_argument(
             '-O', '--stdout',
             help="Direct stdout to this file. Note stderr is already merged "
@@ -1693,7 +1920,12 @@ if __name__ == "__main__":
             help="Path to the gdb executable, may include flags. "
                 "Defaults to %r." % GDB_PATH)
     bench_parser.add_argument(
-            '-e', '--exec',
+            '--gdb-script',
+            action='append',
+            help="Paths to scripts to execute when dropping into gdb. "
+                "Defaults to %r." % GDB_SCRIPTS)
+    bench_parser.add_argument(
+            '--exec',
             type=lambda e: e.split(),
             help="Run under another executable.")
     bench_parser.add_argument(
@@ -1712,13 +1944,13 @@ if __name__ == "__main__":
             help="Run under Linux's perf to sample performance counters, "
                 "writing samples to this file.")
     bench_parser.add_argument(
-            '--perf-freq',
+            '--perf-step',
+            help="perf sampling step. This is passed directly to the perf "
+                "script.")
+    bench_parser.add_argument(
+            '--perf-runfreq',
             help="perf sampling frequency. This is passed directly to the "
                 "perf script.")
-    bench_parser.add_argument(
-            '--perf-period',
-            help="perf sampling period. This is passed directly to the perf "
-                "script.")
     bench_parser.add_argument(
             '--perf-events',
             help="perf events to record. This is passed directly to the perf "
@@ -1745,20 +1977,31 @@ if __name__ == "__main__":
             '-c', '--compile',
             action='store_true',
             help="Compile a bench suite or source file.")
-    comp_parser.add_argument(
-            '-s', '--source',
-            help="Source file to compile, possibly injecting internal benches.")
-    comp_parser.add_argument(
-            '--include',
-            default=HEADER_PATH,
-            help="Inject this header file into every compiled bench file. "
-                "Defaults to %r." % HEADER_PATH)
-    comp_parser.add_argument(
-            '-o', '--output',
-            help="Output file.")
+    if any(re.fullmatch('-[^-]*[hc].*|--help|--compile', a) for a in sys.argv):
+        comp_parser.add_argument(
+                '-o', '--output',
+                help="Output file.")
+        comp_parser.add_argument(
+                '-s', '--source',
+                help="Source file to compile, possibly injecting internal "
+                    "benches.")
+        comp_parser.add_argument(
+                '-i', '--include',
+                action='append',
+                help="Inject these header files into every compiled bench "
+                    "file. Defaults to %r." % HEADER_PATHS)
+        comp_parser.add_argument(
+                '--no-internal',
+                action='store_true',
+                help="Don't build internal benches.")
+        comp_parser.add_argument(
+                '--no-litmus',
+                action='store_true',
+                help="Don't build litmus benches.")
 
     # do the thing
     args = parser.parse_intermixed_args()
+    # bench_paths/bench_ids overlap, so need to do some munging
     args.bench_paths = args.bench_ids
     sys.exit(main(**{k: v
             for k, v in vars(args).items()

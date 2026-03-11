@@ -29,52 +29,6 @@ except ModuleNotFoundError:
     crc32c_lib = None
 
 
-TAG_NULL        = 0x0000    ## 0x0000  v--- ---- ---- ----
-TAG_CONFIG      = 0x0000    ## 0x00tt  v--- ---- -ttt tttt
-TAG_MAGIC       = 0x0031    #  0x003r  v--- ---- --11 --rr
-TAG_VERSION     = 0x0034    #  0x0034  v--- ---- --11 -1--
-TAG_RCOMPAT     = 0x0035    #  0x0035  v--- ---- --11 -1-1
-TAG_WCOMPAT     = 0x0036    #  0x0036  v--- ---- --11 -11-
-TAG_OCOMPAT     = 0x0037    #  0x0037  v--- ---- --11 -111
-TAG_GEOMETRY    = 0x0038    #  0x0038  v--- ---- --11 1---
-TAG_NAMELIMIT   = 0x0039    #  0x0039  v--- ---- --11 1--1
-TAG_FILELIMIT   = 0x003a    #  0x003a  v--- ---- --11 1-1-
-TAG_GDELTA      = 0x0100    ## 0x01tt  v--- ---1 -ttt ttrr
-TAG_GRMDELTA    = 0x0100    #  0x0100  v--- ---1 ---- ----
-TAG_NAME        = 0x0200    ## 0x02tt  v--- --1- -ttt tttt
-TAG_BNAME       = 0x0200    #  0x0200  v--- --1- ---- ----
-TAG_REG         = 0x0201    #  0x0201  v--- --1- ---- ---1
-TAG_DIR         = 0x0202    #  0x0202  v--- --1- ---- --1-
-TAG_STICKYNOTE  = 0x0203    #  0x0203  v--- --1- ---- --11
-TAG_BOOKMARK    = 0x0204    #  0x0204  v--- --1- ---- -1--
-TAG_MNAME       = 0x0220    #  0x0220  v--- --1- --1- ----
-TAG_STRUCT      = 0x0300    ## 0x03tt  v--- --11 -ttt ttrr
-TAG_BRANCH      = 0x0300    #  0x030r  v--- --11 ---- --rr
-TAG_DATA        = 0x0304    #  0x0304  v--- --11 ---- -1--
-TAG_BLOCK       = 0x0308    #  0x0308  v--- --11 ---- 1err
-TAG_DID         = 0x0314    #  0x0314  v--- --11 ---1 -1--
-TAG_BSHRUB      = 0x0318    #  0x0318  v--- --11 ---1 1---
-TAG_BTREE       = 0x031c    #  0x031c  v--- --11 ---1 11rr
-TAG_MROOT       = 0x0321    #  0x032r  v--- --11 --1- --rr
-TAG_MDIR        = 0x0325    #  0x0324  v--- --11 --1- -1rr
-TAG_MTREE       = 0x032c    #  0x032c  v--- --11 --1- 11rr
-TAG_ATTR        = 0x0400    ## 0x04aa  v--- -1-a -aaa aaaa
-TAG_UATTR       = 0x0400    #  0x04aa  v--- -1-- -aaa aaaa
-TAG_SATTR       = 0x0500    #  0x05aa  v--- -1-1 -aaa aaaa
-TAG_SHRUB       = 0x1000    ## 0x1kkk  v--1 kkkk -kkk kkkk
-TAG_ALT         = 0x4000    ## 0x4kkk  v1cd kkkk -kkk kkkk
-TAG_B           = 0x0000
-TAG_R           = 0x2000
-TAG_LE          = 0x0000
-TAG_GT          = 0x1000
-TAG_CKSUM       = 0x3000    ## 0x300p  v-11 ---- ---- -pqq
-TAG_PHASE       = 0x0003
-TAG_PERTURB     = 0x0004
-TAG_NOTE        = 0x3100    ## 0x3100  v-11 ---1 ---- ----
-TAG_ECKSUM      = 0x3200    ## 0x3200  v-11 --1- ---- ----
-TAG_GCKSUMDELTA = 0x3300    ## 0x3300  v-11 --11 ---- ----
-
-
 # assign chars/colors to specific filesystem objects
 CHARS = {
     'mdir':     'm',
@@ -106,6 +60,288 @@ CHARS_BRAILLE = (
         '⠃⢃⡃⣃⠣⢣⡣⣣⠇⢇⡇⣇⠧⢧⡧⣧' '⠓⢓⡓⣓⠳⢳⡳⣳⠗⢗⡗⣗⠷⢷⡷⣷'
         '⠉⢉⡉⣉⠩⢩⡩⣩⠍⢍⡍⣍⠭⢭⡭⣭' '⠙⢙⡙⣙⠹⢹⡹⣹⠝⢝⡝⣝⠽⢽⡽⣽'
         '⠋⢋⡋⣋⠫⢫⡫⣫⠏⢏⡏⣏⠯⢯⡯⣯' '⠛⢛⡛⣛⠻⢻⡻⣻⠟⢟⡟⣟⠿⢿⡿⣿')
+
+SI_PREFIXES = {
+    18:  'E',
+    15:  'P',
+    12:  'T',
+    9:   'G',
+    6:   'M',
+    3:   'K',
+    0:   '',
+    -3:  'm',
+    -6:  'u',
+    -9:  'n',
+    -12: 'p',
+    -15: 'f',
+    -18: 'a',
+}
+
+SI2_PREFIXES = {
+    60:  'Ei',
+    50:  'Pi',
+    40:  'Ti',
+    30:  'Gi',
+    20:  'Mi',
+    10:  'Ki',
+    0:   '',
+    -10: 'mi',
+    -20: 'ui',
+    -30: 'ni',
+    -40: 'pi',
+    -50: 'fi',
+    -60: 'ai',
+}
+
+
+RCOMPAT_NONSTANDARD = 0x00000001 # Non-standard filesystem format
+RCOMPAT_WRONLY      = 0x00000004 # Reading is disallowed
+RCOMPAT_MMOSS       = 0x00000010 # May use an inlined mdir
+RCOMPAT_MSPROUT     = 0x00000020 # May use an mdir pointer
+RCOMPAT_MSHRUB      = 0x00000040 # May use an inlined mtree
+RCOMPAT_MTREE       = 0x00000080 # May use an mdir btree
+RCOMPAT_BMOSS       = 0x00000100 # Files may use inlined data
+RCOMPAT_BSPROUT     = 0x00000200 # Files may use block pointers
+RCOMPAT_BSHRUB      = 0x00000400 # Files may use inlined btrees
+RCOMPAT_BTREE       = 0x00000800 # Files may use btrees
+RCOMPAT_GRM         = 0x00010000 # Global-remove in use
+
+WCOMPAT_NONSTANDARD = 0x00000001 # Non-standard filesystem format
+WCOMPAT_RDONLY      = 0x00000002 # Writing is disallowed
+WCOMPAT_GCKSUM      = 0x00040000 # Global-checksum in use
+WCOMPAT_GBMAP       = 0x00080000 # Global on-disk block-map in use
+WCOMPAT_DIR         = 0x01000000 # Directory file types in use
+
+TAG_NULL        = 0x0000    ##  v--- ---- +--- ----
+TAG_INTERNAL    = 0x0000    ##  v--- ---- +ttt tttt
+TAG_CONFIG      = 0x0100    ##  v--- ---1 +ttt tttt
+TAG_MAGIC       = 0x0131    #   v--- ---1 +-11 --rr
+TAG_VERSION     = 0x0134    #   v--- ---1 +-11 -1--
+TAG_RCOMPAT     = 0x0135    #   v--- ---1 +-11 -1-1
+TAG_WCOMPAT     = 0x0136    #   v--- ---1 +-11 -11-
+TAG_OCOMPAT     = 0x0137    #   v--- ---1 +-11 -111
+TAG_GEOMETRY    = 0x0138    #   v--- ---1 +-11 1---
+TAG_NAMELIMIT   = 0x0139    #   v--- ---1 +-11 1--1
+TAG_FILELIMIT   = 0x013a    #   v--- ---1 +-11 1-1-
+TAG_GDELTA      = 0x0200    ##  v--- --1- +ttt tttt
+TAG_GRMDELTA    = 0x0230    #   v--- --1- +-11 --++
+TAG_GBMAPDELTA  = 0x0234    #   v--- --1- +-11 -1rr
+TAG_NAME        = 0x0300    ##  v--- --11 +ttt tttt
+TAG_BNAME       = 0x0300    #   v--- --11 +--- ----
+TAG_REG         = 0x0301    #   v--- --11 +--- ---1
+TAG_DIR         = 0x0302    #   v--- --11 +--- --1-
+TAG_STICKYNOTE  = 0x0303    #   v--- --11 +--- --11
+TAG_BOOKMARK    = 0x0304    #   v--- --11 +--- -1--
+TAG_MNAME       = 0x0330    #   v--- --11 +-11 ----
+TAG_STRUCT      = 0x0400    ##  v--- -1-- +ttt tttt
+TAG_BRANCH      = 0x0400    #   v--- -1-- +--- --rr
+TAG_DATA        = 0x0404    #   v--- -1-- +--- -1rr
+TAG_BLOCK       = 0x0408    #   v--- -1-- +--- 1err
+TAG_DID         = 0x0420    #   v--- -1-- +-1- ----
+TAG_BSHRUB      = 0x0428    #   v--- -1-- +-1- 1-rr
+TAG_BTREE       = 0x042c    #   v--- -1-- +-1- 11rr
+TAG_MROOT       = 0x0431    #   v--- -1-- +-11 --rr
+TAG_MDIR        = 0x0435    #   v--- -1-- +-11 -1rr
+TAG_MTREE       = 0x043c    #   v--- -1-- +-11 11rr
+TAG_BMRANGE     = 0x0440    #   v--- -1-- +1-- ++uu
+TAG_BMFREE      = 0x0440    #   v--- -1-- +1-- ----
+TAG_BMINUSE     = 0x0441    #   v--- -1-- +1-- ---1
+TAG_BMERASED    = 0x0442    #   v--- -1-- +1-- --1-
+TAG_BMBAD       = 0x0443    #   v--- -1-- +1-- --11
+TAG_ATTR        = 0x0600    ##  v--- -11a +aaa aaaa
+TAG_UATTR       = 0x0600    #   v--- -11- +aaa aaaa
+TAG_SATTR       = 0x0700    #   v--- -111 +aaa aaaa
+TAG_SHRUB       = 0x1000    ##  v--1 kkkk +kkk kkkk
+TAG_ALT         = 0x4000    ##  v1cd kkkk +kkk kkkk
+TAG_B           = 0x0000
+TAG_R           = 0x2000
+TAG_LE          = 0x0000
+TAG_GT          = 0x1000
+TAG_CKSUM       = 0x3000    ##  v-11 ---- ++++ +pqq
+TAG_PHASE       = 0x0003
+TAG_PERTURB     = 0x0004
+TAG_NOTE        = 0x3100    ##  v-11 ---1 ++++ ++++
+TAG_ECKSUM      = 0x3200    ##  v-11 --1- ++++ ++++
+TAG_GCKSUMDELTA = 0x3300    ##  v-11 --11 ++++ ++++
+
+
+# self-parsing tag repr
+class Tag:
+    def __init__(self, name, tag, encoding, help, *,
+            lineno=0):
+        self.name = name
+        self.tag = tag
+        self.encoding = encoding
+        self.help = help
+        self.lineno = lineno
+        # derive mask from encoding
+        self.mask = sum(
+                (1 if x in 'v-01' else 0) << len(self.encoding)-1-i
+                    for i, x in enumerate(self.encoding))
+
+    def __repr__(self):
+        return 'Tag(%r, %r, %r)' % (
+                self.name,
+                self.tag,
+                self.encoding)
+
+    def __eq__(self, other):
+        return self.name == other.name
+
+    def __ne__(self, other):
+        return self.name != other.name
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def line(self):
+        # substitute mask chars when zero
+        tag = '0x%s' % ''.join(
+                n if n != '0' else next(
+                    (x for x in self.encoding[i*4:i*4+4]
+                        if x not in 'v-01+'),
+                    '0')
+                for i, n in enumerate('%04x' % self.tag))
+        # group into nibbles
+        encoding = ' '.join(self.encoding[i*4:i*4+4]
+                for i in range(len(self.encoding)//4))
+        return ('LFS3_%s' % self.name, tag, encoding)
+
+    def specificity(self):
+        return sum(1 for x in self.encoding if x in 'v-01')
+
+    def matches(self, tag):
+        return (tag & self.mask) == (self.tag & self.mask)
+
+    def get(self, chars, tag):
+        return sum(
+                tag & ((1 if x in chars else 0) << len(self.encoding)-1-i)
+                    for i, x in enumerate(self.encoding))
+
+    def max(self, chars):
+        return max(len(self.encoding)-1-i
+                for i, x in enumerate(self.encoding) if x in chars)
+
+    def min(self, chars):
+        return min(len(self.encoding)-1-i
+                for i, x in enumerate(self.encoding) if x in chars)
+
+    def width(self, chars):
+        return self.max(chars) - self.min(chars)
+
+    def __contains__(self, chars):
+        return any(x in self.encoding for x in chars)
+
+    @staticmethod
+    @ft.cache
+    def tags():
+        # parse our script's source to figure out tags
+        import inspect
+        import re
+        tags = []
+        tag_pattern = re.compile(
+            '^(?P<name>TAG_[^ ]*) *= *(?P<tag>[^#]*?) *'
+                '#+ *(?P<encoding>(?:[^ ] *?){16}) *(?P<help>.*)$')
+        for i, line in enumerate(
+                inspect.getsource(inspect.getmodule(inspect.currentframe()))
+                    .replace('\\\n', '')
+                    .splitlines()):
+            m = tag_pattern.match(line)
+            if m:
+                tags.append(Tag(
+                        m.group('name'),
+                        globals()[m.group('name')],
+                        m.group('encoding').replace(' ', ''),
+                        m.group('help'),
+                        lineno=1+i))
+        return tags
+
+    # find best matching tag
+    _sentinel = object()
+    @staticmethod
+    def find(tag, *, default=_sentinel):
+        # find tags, note this is cached
+        tags__ = Tag.tags()
+
+        # find the most specific matching tag, ignoring valid bits
+        t = max((t for t in tags__ if t.matches(tag & 0x7fff)),
+                key=lambda t: t.specificity(),
+                default=None)
+        if t is not None:
+            return t
+        elif default is Tag._sentinel:
+            raise KeyError(tag)
+        else:
+            return default
+
+    # human readable tag repr
+    @staticmethod
+    def repr(tag, weight=None, size=None, *,
+            global_=False,
+            toff=None):
+        # find the most specific matching tag, ignoring the shrub bit
+        t = Tag.find(
+                tag & ~(TAG_SHRUB if tag & 0x7000 == TAG_SHRUB else 0),
+                default=None)
+
+        # build repr
+        r = []
+        # normal tag?
+        if not tag & TAG_ALT:
+            if t is not None:
+                # prefix shrub tags with shrub
+                if tag & 0x7000 == TAG_SHRUB:
+                    r.append('shrub')
+                # lowercase name
+                r.append(t.name.split('_', 1)[1].lower())
+                # gstate tag?
+                if global_:
+                    if r[-1] == 'gdelta':
+                        r[-1] = 'gstate'
+                    elif r[-1].endswith('delta'):
+                        r[-1] = r[-1][:-len('delta')]
+                # include perturb/phase bits
+                if 'q' in t:
+                    r.append('q%d' % t.get('q', tag))
+                if 'p' in t and tag & TAG_PERTURB:
+                    r.append('p')
+
+                # include unmatched fields, but not just redund, and
+                # only reserved bits if non-zero
+                if 'tua' in t or ('+' in t and t.get('+', tag) != 0):
+                    r.append(' 0x%0*x' % (
+                            (t.width('tuar+')+4-1)//4,
+                            t.get('tuar+', tag)))
+            # unknown tag?
+            else:
+                r.append('0x%04x' % tag)
+
+            # weight?
+            if weight:
+                r.append(' w%d' % weight)
+            # size? don't include if null
+            if size is not None and (size or tag & 0x7fff):
+                r.append(' %d' % size)
+
+        # alt pointer?
+        else:
+            r.append('alt')
+            r.append('r' if tag & TAG_R else 'b')
+            r.append('gt' if tag & TAG_GT else 'le')
+            r.append(' 0x%0*x' % (
+                    (t.width('k')+4-1)//4,
+                    t.get('k', tag)))
+
+            # weight?
+            if weight is not None:
+                r.append(' w%d' % weight)
+            # jump?
+            if size and toff is not None:
+                r.append(' 0x%x' % (0xffffffff & (toff-size)))
+            elif size:
+                r.append(' -%d' % size)
+
+        return ''.join(r)
 
 
 # some ways of block geometry representations
@@ -272,134 +508,6 @@ def xxd(data, width=16):
                     b if b >= ' ' and b <= '~' else '.'
                         for b in map(chr, data[i:i+width])))
 
-# human readable tag repr
-def tagrepr(tag, weight=None, size=None, *,
-        global_=False,
-        toff=None):
-    # null tags
-    if (tag & 0x6fff) == TAG_NULL:
-        return '%snull%s%s' % (
-                'shrub' if tag & TAG_SHRUB else '',
-                ' w%d' % weight if weight else '',
-                ' %d' % size if size else '')
-    # config tags
-    elif (tag & 0x6f00) == TAG_CONFIG:
-        return '%s%s%s%s' % (
-                'shrub' if tag & TAG_SHRUB else '',
-                'magic' if (tag & 0xfff) == TAG_MAGIC
-                    else 'version' if (tag & 0xfff) == TAG_VERSION
-                    else 'rcompat' if (tag & 0xfff) == TAG_RCOMPAT
-                    else 'wcompat' if (tag & 0xfff) == TAG_WCOMPAT
-                    else 'ocompat' if (tag & 0xfff) == TAG_OCOMPAT
-                    else 'geometry' if (tag & 0xfff) == TAG_GEOMETRY
-                    else 'namelimit' if (tag & 0xfff) == TAG_NAMELIMIT
-                    else 'filelimit' if (tag & 0xfff) == TAG_FILELIMIT
-                    else 'config 0x%02x' % (tag & 0xff),
-                ' w%d' % weight if weight else '',
-                ' %s' % size if size is not None else '')
-    # global-state delta tags
-    elif (tag & 0x6f00) == TAG_GDELTA:
-        if global_:
-            return '%s%s%s%s' % (
-                    'shrub' if tag & TAG_SHRUB else '',
-                    'grm' if (tag & 0xfff) == TAG_GRMDELTA
-                        else 'gstate 0x%02x' % (tag & 0xff),
-                    ' w%d' % weight if weight else '',
-                    ' %s' % size if size is not None else '')
-        else:
-            return '%s%s%s%s' % (
-                    'shrub' if tag & TAG_SHRUB else '',
-                    'grmdelta' if (tag & 0xfff) == TAG_GRMDELTA
-                        else 'gdelta 0x%02x' % (tag & 0xff),
-                    ' w%d' % weight if weight else '',
-                    ' %s' % size if size is not None else '')
-    # name tags, includes file types
-    elif (tag & 0x6f00) == TAG_NAME:
-        return '%s%s%s%s' % (
-                'shrub' if tag & TAG_SHRUB else '',
-                'bname' if (tag & 0xfff) == TAG_BNAME
-                    else 'reg' if (tag & 0xfff) == TAG_REG
-                    else 'dir' if (tag & 0xfff) == TAG_DIR
-                    else 'stickynote' if (tag & 0xfff) == TAG_STICKYNOTE
-                    else 'bookmark' if (tag & 0xfff) == TAG_BOOKMARK
-                    else 'mname' if (tag & 0xfff) == TAG_MNAME
-                    else 'name 0x%02x' % (tag & 0xff),
-                ' w%d' % weight if weight else '',
-                ' %s' % size if size is not None else '')
-    # structure tags
-    elif (tag & 0x6f00) == TAG_STRUCT:
-        return '%s%s%s%s' % (
-                'shrub' if tag & TAG_SHRUB else '',
-                'branch' if (tag & 0xfff) == TAG_BRANCH
-                    else 'data' if (tag & 0xfff) == TAG_DATA
-                    else 'block' if (tag & 0xfff) == TAG_BLOCK
-                    else 'did' if (tag & 0xfff) == TAG_DID
-                    else 'bshrub' if (tag & 0xfff) == TAG_BSHRUB
-                    else 'btree' if (tag & 0xfff) == TAG_BTREE
-                    else 'mroot' if (tag & 0xfff) == TAG_MROOT
-                    else 'mdir' if (tag & 0xfff) == TAG_MDIR
-                    else 'mtree' if (tag & 0xfff) == TAG_MTREE
-                    else 'struct 0x%02x' % (tag & 0xff),
-                ' w%d' % weight if weight else '',
-                ' %s' % size if size is not None else '')
-    # custom attributes
-    elif (tag & 0x6e00) == TAG_ATTR:
-        return '%s%sattr 0x%02x%s%s' % (
-                'shrub' if tag & TAG_SHRUB else '',
-                's' if tag & 0x100 else 'u',
-                ((tag & 0x100) >> 1) + (tag & 0xff),
-                ' w%d' % weight if weight else '',
-                ' %s' % size if size is not None else '')
-    # alt pointers
-    elif tag & TAG_ALT:
-        return 'alt%s%s 0x%03x%s%s' % (
-                'r' if tag & TAG_R else 'b',
-                'gt' if tag & TAG_GT else 'le',
-                tag & 0x0fff,
-                ' w%d' % weight if weight is not None else '',
-                ' 0x%x' % (0xffffffff & (toff-size))
-                    if size and toff is not None
-                    else ' -%d' % size if size
-                    else '')
-    # checksum tags
-    elif (tag & 0x7f00) == TAG_CKSUM:
-        return 'cksum%s%s%s%s%s' % (
-                'q%d' % (tag & 0x3),
-                'p' if tag & TAG_PERTURB else '',
-                ' 0x%02x' % (tag & 0xff) if tag & 0xf8 else '',
-                ' w%d' % weight if weight else '',
-                ' %s' % size if size is not None else '')
-    # note tags
-    elif (tag & 0x7f00) == TAG_NOTE:
-        return 'note%s%s%s' % (
-                ' 0x%02x' % (tag & 0xff) if tag & 0xff else '',
-                ' w%d' % weight if weight else '',
-                ' %s' % size if size is not None else '')
-    # erased-state checksum tags
-    elif (tag & 0x7f00) == TAG_ECKSUM:
-        return 'ecksum%s%s%s' % (
-                ' 0x%02x' % (tag & 0xff) if tag & 0xff else '',
-                ' w%d' % weight if weight else '',
-                ' %s' % size if size is not None else '')
-    # global-checksum delta tags
-    elif (tag & 0x7f00) == TAG_GCKSUMDELTA:
-        if global_:
-            return 'gcksum%s%s%s' % (
-                    ' 0x%02x' % (tag & 0xff) if tag & 0xff else '',
-                    ' w%d' % weight if weight else '',
-                    ' %s' % size if size is not None else '')
-        else:
-            return 'gcksumdelta%s%s%s' % (
-                    ' 0x%02x' % (tag & 0xff) if tag & 0xff else '',
-                    ' w%d' % weight if weight else '',
-                    ' %s' % size if size is not None else '')
-    # unknown tags
-    else:
-        return '0x%04x%s%s' % (
-                tag,
-                ' w%d' % weight if weight is not None else '',
-                ' %d' % size if size is not None else '')
-
 # compute the difference between two paths, returning everything
 # in a after the paths diverge, as well as the relevant index
 def pathdelta(a, b):
@@ -478,7 +586,7 @@ class Rattr:
         return '<%s %s>' % (self.__class__.__name__, self.repr())
 
     def repr(self):
-        return tagrepr(self.tag, self.weight, self.size)
+        return Tag.repr(self.tag, self.weight, self.size)
 
     def __iter__(self):
         return iter((self.tag, self.weight, self.data))
@@ -557,7 +665,7 @@ class Ralt:
         return '<%s %s>' % (self.__class__.__name__, self.repr())
 
     def repr(self):
-        return tagrepr(self.tag, self.weight, self.jump, toff=self.toff)
+        return Tag.repr(self.tag, self.weight, self.jump, toff=self.toff)
 
     def __iter__(self):
         return iter((self.tag, self.weight, self.jump))
@@ -1076,7 +1184,7 @@ class Btree:
         shrub = Rbyd.fetchshrub(rbyd, trunk)
         return cls(bd, shrub)
 
-    def lookupleaf(self, bid, *,
+    def lookupnext_(self, bid, *,
             path=False,
             depth=None):
         if not self or bid >= self.weight:
@@ -1135,7 +1243,7 @@ class Btree:
             path=False,
             depth=None):
         # just discard the rbyd info
-        r = self.lookupleaf(bid,
+        r = self.lookupnext_(bid,
                 path=path,
                 depth=depth)
         if path:
@@ -1155,11 +1263,11 @@ class Btree:
         #
         # note this function expects bid to be known, use lookupnext
         # first if you don't care about the exact bid (or better yet,
-        # lookupleaf and call lookup on the returned rbyd)
+        # lookupnext_ and call lookup on the returned rbyd)
         #
         # this matches rbyd's lookup behavior, which needs a known rid
         # to avoid a double lookup
-        r = self.lookupleaf(bid,
+        r = self.lookupnext_(bid,
                 path=path,
                 depth=depth)
         if path:
@@ -1200,7 +1308,7 @@ class Btree:
 
         bid = 0
         while True:
-            r = self.lookupleaf(bid,
+            r = self.lookupnext_(bid,
                     path=path,
                     depth=depth)
             if r:
@@ -1295,7 +1403,7 @@ class Btree:
                             else:
                                 yield bid_, rattr
         else:
-            r = self.lookupleaf(bid,
+            r = self.lookupnext_(bid,
                     path=path,
                     depth=depth)
             if path:
@@ -1318,7 +1426,7 @@ class Btree:
                         yield rattr
 
     # lookup by name
-    def namelookupleaf(self, did, name, *,
+    def namelookup_(self, did, name, *,
             path=False,
             depth=None):
         rbyd = self.rbyd
@@ -1366,7 +1474,7 @@ class Btree:
             path=False,
             depth=None):
         # just discard the rbyd info
-        r = self.namelookupleaf(did, name,
+        r = self.namelookup_(did, name,
                 path=path,
                 depth=depth)
         if path:
@@ -1780,7 +1888,7 @@ class Mtree:
         return cls(bd, mrootchain, mtree,
                 mbits=mbits)
 
-    def _lookupleaf(self, mid, *,
+    def _lookupnext_(self, mid, *,
             path=False,
             depth=None):
         if not isinstance(mid, Mid):
@@ -1815,8 +1923,8 @@ class Mtree:
 
         # mtree? lookup in mtree
         else:
-            # need to do two steps here in case lookupleaf stops early
-            r = self.mtree.lookupleaf(mid.mid,
+            # need to do two steps here in case lookupnext_ stops early
+            r = self.mtree.lookupnext_(mid.mid,
                     path=path or depth,
                     depth=depth-len(path_) if depth else None)
             if path or depth:
@@ -1860,13 +1968,13 @@ class Mtree:
             else:
                 return mdir
 
-    def lookupleaf(self, mid, *,
+    def lookupnext_(self, mid, *,
             mdirs_only=True,
             path=False,
             depth=None):
-        # most of the logic is in _lookupleaf, this just helps
+        # most of the logic is in _lookupnext_, this just helps
         # deduplicate the mdirs_only logic
-        r = self._lookupleaf(mid,
+        r = self._lookupnext_(mid,
                 path=path,
                 depth=depth)
         if path:
@@ -1892,7 +2000,7 @@ class Mtree:
             mid = self.mid(mid)
 
         # lookup the relevant mdir
-        r = self.lookupleaf(mid,
+        r = self.lookupnext_(mid,
                 path=path,
                 depth=depth)
         if path:
@@ -1952,7 +2060,7 @@ class Mtree:
 
             mid = self.mid(0)
             while True:
-                r = self.lookupleaf(mid,
+                r = self.lookupnext_(mid,
                         mdirs_only=False,
                         path=path,
                         depth=depth)
@@ -2130,7 +2238,7 @@ class Mtree:
             if not isinstance(mid, Mid):
                 mid = self.mid(mid)
 
-            r = self.lookupleaf(mid,
+            r = self.lookupnext_(mid,
                     path=path,
                     depth=depth)
             if path:
@@ -2156,7 +2264,7 @@ class Mtree:
                         yield rattr
 
     # lookup by name
-    def _namelookupleaf(self, did, name, *,
+    def _namelookup_(self, did, name, *,
             path=False,
             depth=None):
         if path or depth:
@@ -2182,8 +2290,8 @@ class Mtree:
 
         # mtree? find name in mtree
         else:
-            # need to do two steps here in case namelookupleaf stops early
-            r = self.mtree.namelookupleaf(did, name,
+            # need to do two steps here in case namelookup_ stops early
+            r = self.mtree.namelookup_(did, name,
                     path=path or depth,
                     depth=depth-len(path_) if depth else None)
             if path or depth:
@@ -2227,13 +2335,13 @@ class Mtree:
             else:
                 return mdir
 
-    def namelookupleaf(self, did, name, *,
+    def namelookup_(self, did, name, *,
             mdirs_only=True,
             path=False,
             depth=None):
-        # most of the logic is in _namelookupleaf, this just helps
+        # most of the logic is in _namelookup_, this just helps
         # deduplicate the mdirs_only logic
-        r = self._namelookupleaf(did, name,
+        r = self._namelookup_(did, name,
                 path=path,
                 depth=depth)
         if path:
@@ -2256,7 +2364,7 @@ class Mtree:
             path=False,
             depth=None):
         # lookup the relevant mdir
-        r = self.namelookupleaf(did, name,
+        r = self.namelookup_(did, name,
                 path=path,
                 depth=depth)
         if path:
@@ -2499,6 +2607,13 @@ class Config:
     class Rcompat(Config):
         tag = TAG_RCOMPAT
 
+        def __init__(self, mroot, tag, rattr):
+            super().__init__(mroot, tag, rattr)
+            self.flags = fromle32(self.data)
+
+        def __int__(self):
+            return self.flags
+
         def repr(self):
             return 'rcompat 0x%s' % (
                     ''.join('%02x' % f for f in reversed(self.data)))
@@ -2506,12 +2621,26 @@ class Config:
     class Wcompat(Config):
         tag = TAG_WCOMPAT
 
+        def __init__(self, mroot, tag, rattr):
+            super().__init__(mroot, tag, rattr)
+            self.flags = fromle32(self.data)
+
+        def __int__(self):
+            return self.flags
+
         def repr(self):
             return 'wcompat 0x%s' % (
                     ''.join('%02x' % f for f in reversed(self.data)))
 
     class Ocompat(Config):
         tag = TAG_OCOMPAT
+
+        def __init__(self, mroot, tag, rattr):
+            super().__init__(mroot, tag, rattr)
+            self.flags = fromle32(self.data)
+
+        def __int__(self):
+            return self.flags
 
         def repr(self):
             return 'ocompat 0x%s' % (
@@ -2585,8 +2714,9 @@ class Config:
 
 # lazy gstate object
 class Gstate:
-    def __init__(self, mtree):
+    def __init__(self, mtree, config):
         self.mtree = mtree
+        self.config = config
 
     # lookup a specific tag
     def lookup(self, tag=None, mask=None):
@@ -2661,8 +2791,11 @@ class Gstate:
     class Gstate:
         tag = None
         mask = None
+        rcompat = None
+        wcompat = None
+        ocompat = None
 
-        def __init__(self, mtree, tag, gdeltas):
+        def __init__(self, mtree, config, tag, gdeltas):
             # replace tag with what we find
             self.tag = tag
             # keep track of gdeltas for debugging
@@ -2677,6 +2810,31 @@ class Gstate:
                             fillvalue=0))
             self.data = data
 
+            # check compat flags while we can access config
+            if self.rcompat is not None:
+                self.rcompat = self.rcompat & (
+                        int(config.rcompat) if config.rcompat is not None
+                            else 0)
+            if self.wcompat is not None:
+                self.wcompat = self.wcompat & (
+                        int(config.wcompat) if config.wcompat is not None
+                            else 0)
+            if self.ocompat is not None:
+                self.ocompat = self.ocompat & (
+                        int(config.ocompat) if config.ocompat is not None
+                            else 0)
+
+        @property
+        def blocks(self):
+            return tuple(it.chain.from_iterable(
+                    gdelta.blocks for _, gdelta in self.gdeltas))
+
+        # true unless compat flags are missing
+        def __bool__(self):
+            return (self.rcompat != 0
+                    and self.wcompat != 0
+                    and self.ocompat != 0)
+
         @property
         def size(self):
             return len(self.data)
@@ -2688,7 +2846,7 @@ class Gstate:
             return '<%s %s>' % (self.__class__.__name__, self.repr())
 
         def repr(self):
-            return tagrepr(self.tag, 0, self.size, global_=True)
+            return Tag.repr(self.tag, 0, self.size, global_=True)
 
         def __iter__(self):
             return iter((self.tag, self.data))
@@ -2711,9 +2869,10 @@ class Gstate:
     # the global-checksum, cubed
     class Gcksum(Gstate):
         tag = TAG_GCKSUMDELTA
+        wcompat = WCOMPAT_GCKSUM
 
-        def __init__(self, mtree, tag, gdeltas):
-            super().__init__(mtree, tag, gdeltas)
+        def __init__(self, mtree, config, tag, gdeltas):
+            super().__init__(mtree, config, tag, gdeltas)
             self.gcksum = fromle32(self.data)
 
         def __int__(self):
@@ -2725,9 +2884,10 @@ class Gstate:
     # any global-removes
     class Grm(Gstate):
         tag = TAG_GRMDELTA
+        rcompat = RCOMPAT_GRM
 
-        def __init__(self, mtree, tag, gdeltas):
-            super().__init__(mtree, tag, gdeltas)
+        def __init__(self, mtree, config, tag, gdeltas):
+            super().__init__(mtree, config, tag, gdeltas)
             queue = []
             d = 0
             for _ in range(2):
@@ -2743,7 +2903,36 @@ class Gstate:
             self.queue = queue
 
         def repr(self):
-            return 'grm [%s]' % ', '.join(mid.repr() for mid in self.queue)
+            if self:
+                return 'grm [%s]' % ', '.join(
+                        mid.repr() for mid in self.queue)
+            else:
+                return 'grm (unused)'
+
+    # the global block map
+    class Gbmap(Gstate):
+        tag = TAG_GBMAPDELTA
+        wcompat = WCOMPAT_GBMAP
+
+        def __init__(self, mtree, config, tag, gdeltas):
+            super().__init__(mtree, config, tag, gdeltas)
+            d = 0
+            self.window, d_ = fromleb128(self.data, d); d += d_
+            self.known, d_ = fromleb128(self.data, d); d += d_
+            block, trunk, cksum, d_ = frombranch(self.data, d); d += d_
+            self.btree = Btree.fetchck(
+                    mtree.bd, block, trunk,
+                    config.geometry.block_count
+                        if config.geometry is not None else 0,
+                    cksum)
+
+        def repr(self):
+            if self:
+                return 'gbmap %s 0x%x %d' % (
+                        self.btree.addr(),
+                        self.window, self.known)
+            else:
+                return 'gbmap (unused)'
 
     # keep track of known gstate
     _known = [g for g in Gstate.__subclasses__() if g.tag is not None]
@@ -2753,10 +2942,10 @@ class Gstate:
         # known config?
         for g in self._known:
             if (g.tag & ~(g.mask or 0)) == (tag & ~(g.mask or 0)):
-                return g(self.mtree, tag, gdeltas)
+                return g(self.mtree, self.config, tag, gdeltas)
         # otherwise return a marker class
         else:
-            return Unknown(self.mtree, tag, gdeltas)
+            return self.Unknown(self.mtree, self.config, tag, gdeltas)
 
     # create cached accessors for known gstate
     def _parser(g):
@@ -2777,7 +2966,7 @@ class Lfs3:
 
         # create lazy config/gstate objects
         self.config = config or Config(self.mroot)
-        self.gstate = gstate or Gstate(self.mtree)
+        self.gstate = gstate or Gstate(self.mtree, self.config)
 
         # go ahead and fetch some expected fields
         self.version = self.config.version
@@ -3146,7 +3335,7 @@ class Lfs3:
             mbid, mrid = mid.mbid, mid.mrid + 1
             if mrid == mdir.weight:
                 mbid, mrid = mbid + (1 << self.mbits), 0
-                mdir = self.mtree.lookupleaf(mbid)
+                mdir = self.mtree.lookupnext_(mbid)
                 if mdir is None:
                     break
             # lookup name and adjust rid if necessary, you don't
@@ -3188,6 +3377,7 @@ class Lfs3:
     # traverse the filesystem
     def traverse(self, *,
             mtree_only=False,
+            gstate=True,
             shrubs=False,
             fragments=False,
             path=False):
@@ -3248,6 +3438,24 @@ class Lfs3:
                                     yield data, path_+path__
                                 else:
                                     yield data
+
+        # traverse any gstate
+        if not mtree_only and gstate:
+            for gstate_ in self.gstate:
+                if not gstate_ or getattr(gstate_, 'btree', None) is None:
+                    continue
+
+                for r in gstate_.btree.traverse(
+                        path=path):
+                    if path:
+                        bid, rbyd, path_ = r
+                    else:
+                        bid, rbyd = r
+
+                    if path:
+                        yield rbyd, [(self.mid(-1), gstate_)]+path_
+                    else:
+                        yield rbyd
 
     # common file operations, note Reg extends this for regular files
     class File:
@@ -3351,7 +3559,7 @@ class Lfs3:
             yield from self.sattrs()
 
         # lookup data in the underlying bshrub
-        def _lookupleaf(self, pos, *,
+        def _lookupnext_(self, pos, *,
                 path=False,
                 depth=None):
             # no bshrub?
@@ -3362,7 +3570,7 @@ class Lfs3:
                     return None, None
 
             # lookup data in our bshrub
-            r = self.bshrub.lookupleaf(pos,
+            r = self.bshrub.lookupnext_(pos,
                     path=path or depth,
                     depth=depth)
             if path or depth:
@@ -3411,11 +3619,11 @@ class Lfs3:
                 else:
                     return bid-(rattr.weight-1), rattr
 
-        def lookupleaf(self, pos, *,
+        def lookupnext_(self, pos, *,
                 data_only=True,
                 path=False,
                 depth=None):
-            r = self._lookupleaf(pos,
+            r = self._lookupnext_(pos,
                     path=path,
                     depth=depth)
             if path:
@@ -3439,7 +3647,7 @@ class Lfs3:
                 depth=None):
             pos = 0
             while True:
-                r = self.lookupleaf(pos,
+                r = self.lookupnext_(pos,
                         data_only=False,
                         path=path,
                         depth=depth)
@@ -3962,59 +4170,176 @@ class CsvAttr:
 
         return len(self.keyed)
 
+# SI-prefix formatter
+def si(x):
+    if x == 0:
+        return '0'
+    # figure out prefix and scale
+    p = 3*mt.floor(mt.log(abs(x), 10**3))
+    p = min(18, max(-18, p))
+    # format with 3 digits of precision
+    s = '%.3f' % (abs(x) / (10.0**p))
+    s = s[:3+1]
+    # truncate but only digits that follow the dot
+    if '.' in s:
+        s = s.rstrip('0')
+        s = s.rstrip('.')
+    return '%s%s%s' % ('-' if x < 0 else '', s, SI_PREFIXES[p])
+
+# SI-prefix formatter for powers-of-two
+def si2(x):
+    if x == 0:
+        return '0'
+    # figure out prefix and scale
+    p = 10*mt.floor(mt.log(abs(x), 2**10))
+    p = min(30, max(-30, p))
+    # format with 3 digits of precision
+    s = '%.3f' % (abs(x) / (2.0**p))
+    s = s[:3+1]
+    # truncate but only digits that follow the dot
+    if '.' in s:
+        s = s.rstrip('0')
+        s = s.rstrip('.')
+    return '%s%s%s' % ('-' if x < 0 else '', s, SI2_PREFIXES[p])
+
 # parse %-escaped strings
 #
 # attrs can override __getitem__ for lazy attr generation
-def punescape(s, attrs=None):
+def punescape(s, attrs=None, start=None, end=None, submatch=None):
     pattern = re.compile(
-        '%[%n]'
-            '|' '%x..'
-            '|' '%u....'
-            '|' '%U........'
-            '|' '%\((?P<field>[^)]*)\)'
-                '(?P<format>[+\- #0-9\.]*[sdboxXfFeEgG])')
-    def unescape(m):
-        if m.group()[1] == '%': return '%'
-        elif m.group()[1] == 'n': return '\n'
-        elif m.group()[1] == 'x': return chr(int(m.group()[2:], 16))
-        elif m.group()[1] == 'u': return chr(int(m.group()[2:], 16))
-        elif m.group()[1] == 'U': return chr(int(m.group()[2:], 16))
-        elif m.group()[1] == '(':
-            if attrs is not None:
-                try:
-                    v = attrs[m.group('field')]
-                except KeyError:
-                    return m.group()
-            else:
-                return m.group()
-            f = m.group('format')
-            if f[-1] in 'dboxX':
-                if isinstance(v, str):
-                    v = dat(v, 0)
-                v = int(v)
-            elif f[-1] in 'fFeEgG':
-                if isinstance(v, str):
-                    v = dat(v, 0)
-                v = float(v)
-            else:
-                f = ('<' if '-' in f else '>') + f.replace('-', '')
-                v = str(v)
-            # note we need Python's new format syntax for binary
-            return ('{:%s}' % f).format(v)
-        else: assert False
+        '%' '(?P<rep>[0-9]*)' '(?P<pun>'
+            '[%ns]'
+                '|' 'x..'
+                '|' 'u....'
+                '|' 'U........'
+                '|' '\((?P<field>[^)]*)\)'
+                    '(?P<format>[<^>+\- #0-9\.]*[siIdboxXfFeEgG])'
+                '|' '\{'
+                '|' '\}'
+                    '(?P<subformat>[<^>+\- #0-9\.]*[siIdboxXfFeEgG])' ')')
 
-    return re.sub(pattern, unescape, s)
+    def format(f, v):
+        if f[-1] in 'dboxX':
+            if isinstance(v, str):
+                v = dat(v, 0)
+            v = int(v)
+        elif f[-1] in 'iIfFeEgG':
+            if isinstance(v, str):
+                v = dat(v, 0)
+            v = float(v)
+            if f[-1] in 'iI':
+                v = (si if 'i' in f[-1] else si2)(v)
+                f = f.replace('i', 's').replace('I', 's')
+                if '+' in f and not v.startswith('-'):
+                    v = '+'+v
+                f = f.replace('+', '')
+        else:
+            v = str(v)
+
+        if '-' in f:
+            f = '<' + f.replace('-', '')
+        elif not any(d in f for d in '<^>'):
+            f = '>' + f
+        # note we need Python's new format syntax for binary
+        return ('{:%s}' % f).format(v)
+
+    s_ = []
+    i = start or 0
+    while i < (end if end is not None else len(s)):
+        m = pattern.match(s, i)
+        if m:
+            m_ = m.group('pun')[0]
+            i_ = m.end()
+            if m_ == '%':   v_ = '%'
+            elif m_ == 'n': v_ = '\n'
+            elif m_ == 's': v_ = ' '
+            elif m_ == 'x': v_ = chr(int(m.group('pun')[1:], 16))
+            elif m_ == 'u': v_ = chr(int(m.group('pun')[1:], 16))
+            elif m_ == 'U': v_ = chr(int(m.group('pun')[1:], 16))
+            elif m_ == '(':
+                if attrs is not None:
+                    try:
+                        v = attrs[m.group('field')]
+                    except KeyError:
+                        s_.append(m.group())
+                        i = i_
+                        continue
+                else:
+                    s_.append(m.group())
+                    i = i_
+                    continue
+                v_ = format(m.group('format'), v)
+            elif m_ == '{':
+                m__ = []
+                v = punescape(s, attrs, m.end(), None, m__)
+                if m__:
+                    v_ = format(m__[0].group('subformat'), v)
+                    i_ = m__[0].end()
+                else:
+                    v_ = str(v)
+                    i_ = end if end is not None else len(s)
+            elif m_ == '}':
+                if submatch is not None:
+                    submatch.append(m)
+                break
+            else:
+                s_.append(m.group())
+                i = i_
+                continue
+
+            if m.group('rep'):
+                v_ = int(m.group('rep'), 10) * v_
+            s_.append(v_)
+            i = i_
+        else:
+            s_.append(s[i])
+            i += 1
+
+    return ''.join(s_)
 
 # split %-escaped strings into chars
-def psplit(s):
+def psplit(s, start=None, end=None, submatch=None):
     pattern = re.compile(
-        '%[%n]'
-            '|' '%x..'
-            '|' '%u....'
-            '|' '%U........'
-            '|' '%\((?P<field>[^)]*)\)'
-                '(?P<format>[+\- #0-9\.]*[sdboxXfFeEgG])')
-    return [m.group() for m in re.finditer(pattern.pattern + '|.', s)]
+        '%' '(?P<rep>[0-9]*)' '(?P<pun>'
+            '[%ns]'
+                '|' 'x..'
+                '|' 'u....'
+                '|' 'U........'
+                '|' '\((?P<field>[^)]*)\)'
+                    '(?P<format>[<^>+\- #0-9\.]*[siIdboxXfFeEgG])'
+                '|' '\{'
+                '|' '\}'
+                    '(?P<subformat>[<^>+\- #0-9\.]*[siIdboxXfFeEgG])' ')')
+
+    s_ = []
+    i = start or 0
+    while i < (end if end is not None else len(s)):
+        m = pattern.match(s, i)
+        if m:
+            m_ = m.group('pun')[0]
+            i_ = m.end()
+            if m_ == '{':
+                m__ = []
+                v = psplit(s, m.end(), None, m__)
+                if m__:
+                    s_.append(m.group() + ''.join(v))
+                    i = m__[0].end()
+                else:
+                    s_.append(m.group() + ''.join(v))
+                    i = end if end is not None else len(s)
+                continue
+            elif m_ == '}':
+                if submatch is not None:
+                    submatch.append(m)
+                break
+
+            s_.append(m.group())
+            i = i_
+        else:
+            s_.append(s[i])
+            i += 1
+
+    return s_
 
 
 # a little ascii renderer
@@ -4421,11 +4746,11 @@ def main_(ring, disk, mroots=None, *,
         title_littlefs=False,
         title_usage=False,
         **args):
-    # give ring an writeln function
-    def writeln(s=''):
-        ring.write(s)
-        ring.write('\n')
-    ring.writeln = writeln
+    # give ring a writeln function
+    def writeln(self, s=''):
+        self.write(s)
+        self.write('\n')
+    ring.writeln = writeln.__get__(ring)
 
     # figure out what color should be
     if color == 'auto':
@@ -4892,7 +5217,7 @@ def main(disk, mroots=None, *,
         lines=None,
         head=False,
         cat=False,
-        sleep=False,
+        wait=False,
         **args):
     # keep-open?
     if keep_open:
@@ -4941,13 +5266,12 @@ def main(disk, mroots=None, *,
 
                 # try to inotifywait
                 if Inotify:
-                    ptime = time.time()
                     inotify.read()
                     inotify.close()
-                    # sleep a minimum amount of time to avoid flickering
-                    time.sleep(max(0, (sleep or 0.01) - (time.time()-ptime)))
-                else:
-                    time.sleep(sleep or 2)
+                # sleep a minimum amount of time to avoid flickering
+                time.sleep(wait if wait is not None
+                        else 2 if not Inotify
+                        else 0.01)
         except KeyboardInterrupt:
             pass
 
@@ -5121,7 +5445,7 @@ if __name__ == "__main__":
                     if ':' in x else float(x)),
             help="Aspect ratio to use with --to-scale. Defaults to 1:1.")
     parser.add_argument(
-            '-t', '--tiny',
+            '--tiny',
             action='store_true',
             help="Tiny mode, alias for --block-ratio=1, --to-scale=1, "
                 "and --no-header.")
@@ -5161,7 +5485,7 @@ if __name__ == "__main__":
             action='store_true',
             help="Pipe directly to stdout.")
     parser.add_argument(
-            '-~', '--sleep',
+            '-w', '--wait',
             type=float,
             help="Time in seconds to sleep between redraws when running "
                 "with -k. Defaults to 2 seconds.")

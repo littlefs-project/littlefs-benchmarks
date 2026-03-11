@@ -7,48 +7,96 @@
 #ifndef BENCH_RUNNER_H
 #define BENCH_RUNNER_H
 
+#define BENCH_STRINGIFY_(x) #x
+#define BENCH_STRINGIFY(x) BENCH_STRINGIFY_(x)
+
+// the default BENCH_DEFINES path can be overridden to add shims for
+// other filesystems out-of-tree
+//
+// note this is an unusual header file! instead of being included once,
+// BENCH_DEFINES is included several times with various "query macros"
+// defined before inclusion:
+//
+// - BENCH_INCLUDE - common includes (optional)
+// - BENCH_DEFINE(name, value) - name and default values for bench defines
+// - BENCH_CFG[+_CFG] - struct lfs3_cfg definition
+// - BENCH_BDCFG[+_CFG] - struct lfs3_*bd_cfg definition
+//
+#ifndef BENCH_DEFINES
+#define BENCH_DEFINES runners/bench_defines.h
+#endif
+
+// default to using kiwibd for benches
+#if !defined(BENCH_EMUBD) && !defined(BENCH_KIWIBD)
+#define BENCH_KIWIBD
+#endif
+
+// ifdef macros for emubd vs kiwibd
+#ifdef BENCH_EMUBD
+#define BENCH_IFDEF_EMUBD(a, b) (a)
+#else
+#define BENCH_IFDEF_EMUBD(a, b) (b)
+#endif
+#ifdef BENCH_KIWIBD
+#define BENCH_IFDEF_KIWIBD(a, b) (a)
+#else
+#define BENCH_IFDEF_KIWIBD(a, b) (b)
+#endif
 
 // override LFS3_TRACE
+#ifndef LFS3_NO_TRACE
 void bench_trace(const char *fmt, ...);
-
 #define LFS3_TRACE_(fmt, ...) \
-    bench_trace("%s:%d:trace: " fmt "%s\n", \
-        __FILE__, \
-        __LINE__, \
-        __VA_ARGS__)
+    bench_trace("%s:%d:trace: " fmt "%s\n", __FILE__, __LINE__, __VA_ARGS__)
 #define LFS3_TRACE(...) LFS3_TRACE_(__VA_ARGS__, "")
 #define LFS3_EMUBD_TRACE(...) LFS3_TRACE_(__VA_ARGS__, "")
-
-// BENCH_START/BENCH_STOP macros measure readed/proged/erased bytes
-// through emubd
-void bench_start(const char *m, uintmax_t n);
-void bench_stop(const char *m);
-
-#define BENCH_START(m, n) bench_start(m, n)
-#define BENCH_STOP(m) bench_stop(m)
-
-// BENCH_RESULT/BENCH_FRESULT allow for explicit non-io measurements
-void bench_result(const char *m, uintmax_t n, uintmax_t result);
-void bench_fresult(const char *m, uintmax_t n, double result);
-
-#define BENCH_RESULT(m, n, result) bench_result(m, n, result)
-#define BENCH_FRESULT(m, n, result) bench_fresult(m, n, result)
+#define LFS3_KIWIBD_TRACE(...) LFS3_TRACE_(__VA_ARGS__, "")
+#else
+#define LFS3_TRACE(...)
+#define LFS3_EMUBD_TRACE(...)
+#define LFS3_KIWIBD_TRACE(...)
+#endif
 
 
 // note these are indirectly included in any generated files
+#define BENCH_INCLUDE
+    #include BENCH_STRINGIFY(BENCH_DEFINES)
+#undef BENCH_INCLUDE
+
+#ifndef BENCH_KIWIBD
 #include "bd/lfs3_emubd.h"
+#else
+#include "bd/lfs3_kiwibd.h"
+#endif
+#include "lfs3_util.h"
+
 #include <stdio.h>
+#include <stdint.h>
 
 // give source a chance to define feature macros
 #undef _FEATURES_H
 #undef _STDIO_H
 
 
+// some common types
+#ifndef BENCH_KIWIBD
+typedef lfs3_emubd_io_t   bench_io_t;
+typedef lfs3_emubd_sio_t  bench_sio_t;
+typedef lfs3_emubd_ns_t   bench_ns_t;
+typedef lfs3_emubd_sns_t  bench_sns_t;
+#else
+typedef lfs3_kiwibd_io_t  bench_io_t;
+typedef lfs3_kiwibd_sio_t bench_sio_t;
+typedef lfs3_kiwibd_ns_t  bench_ns_t;
+typedef lfs3_kiwibd_sns_t bench_sns_t;
+#endif
+
 // generated bench configurations
-struct lfs3_config;
+struct lfs3_cfg;
 
 enum bench_flags {
     BENCH_INTERNAL  = 0x1,
+    BENCH_LITMUS    = 0x2,
 };
 typedef uint8_t bench_flags_t;
 
@@ -68,8 +116,11 @@ struct bench_case {
     const bench_define_t *defines;
     size_t permutations;
 
+    const char **probes;
+    size_t probe_count;
+
     bool (*if_)(void);
-    void (*run)(struct lfs3_config *cfg);
+    void (*run)(const struct lfs3_cfg *cfg);
 };
 
 struct bench_suite {
@@ -88,6 +139,40 @@ extern const struct bench_suite *const bench_suites[];
 extern const size_t bench_suite_count;
 
 
+// BENCH_START/BENCH_STOP macros measure readed/progged/erased bytes
+// through emubd
+void bench_start(const char *probe);
+void bench_stop(const char *probe, uintmax_t n);
+
+#define BENCH_START(probe) bench_start(probe)
+#define BENCH_STOP(probe, n) bench_stop(probe, n)
+
+// BENCH_RESULT/BENCH_FRESULT allow for explicit non-io measurements
+void bench_result(const char *probe, uintmax_t n, uintmax_t result);
+void bench_fresult(const char *probe, uintmax_t n, double result);
+
+#define BENCH_RESULT(probe, n, result) bench_result(probe, n, result)
+#define BENCH_FRESULT(probe, n, result) bench_fresult(probe, n, result)
+
+// extra hooks to get the current simtime, pause readed/progged/erased
+// counters, etc
+bench_sns_t bench_simtime(void);
+void bench_simreset(void);
+void bench_simpause(void);
+void bench_simresume(void);
+void bench_reset(void);
+void bench_pause(void);
+void bench_resume(void);
+
+#define BENCH_SIMTIME() bench_simtime()
+#define BENCH_SIMRESET() bench_simreset()
+#define BENCH_SIMPAUSE() bench_simpause()
+#define BENCH_SIMRESUME() bench_simresume()
+#define BENCH_RESET() bench_reset()
+#define BENCH_PAUSE() bench_pause()
+#define BENCH_RESUME() bench_resume()
+
+
 // deterministic prng for pseudo-randomness in benches
 uint32_t bench_prng(uint32_t *state);
 
@@ -100,72 +185,64 @@ void bench_permutation(size_t i, uint32_t *buffer, size_t size);
 #define BENCH_FACTORIAL(x) bench_factorial(x)
 #define BENCH_PERMUTATION(i, buffer, size) bench_permutation(i, buffer, size)
 
+// option to pause trace output
+void bench_trace_pause(void);
+void bench_trace_resume(void);
 
-// a few preconfigured defines that control how benches run
-#define BENCH_IMPLICIT_DEFINES \
-    /*        name                   value (overridable)                   */ \
-    BENCH_DEFINE(READ_SIZE,          1                                      ) \
-    BENCH_DEFINE(PROG_SIZE,          1                                      ) \
-    BENCH_DEFINE(BLOCK_SIZE,         4096                                   ) \
-    BENCH_DEFINE(BLOCK_COUNT,        DISK_SIZE/BLOCK_SIZE                   ) \
-    BENCH_DEFINE(DISK_SIZE,          1024*1024                              ) \
-    BENCH_DEFINE(BLOCK_RECYCLES,     -1                                     ) \
-    BENCH_DEFINE(RCACHE_SIZE,        LFS3_MAX(16, READ_SIZE)                ) \
-    BENCH_DEFINE(PCACHE_SIZE,        LFS3_MAX(16, PROG_SIZE)                ) \
-    BENCH_DEFINE(FILE_CACHE_SIZE,    16                                     ) \
-    BENCH_DEFINE(LOOKAHEAD_SIZE,     16                                     ) \
-    BENCH_DEFINE(GC_FLAGS,           0                                      ) \
-    BENCH_DEFINE(GC_STEPS,           0                                      ) \
-    BENCH_DEFINE(GC_COMPACT_THRESH,  0                                      ) \
-    BENCH_DEFINE(INLINE_SIZE,        BLOCK_SIZE/4                           ) \
-    BENCH_DEFINE(FRAGMENT_SIZE,      LFS3_MIN(BLOCK_SIZE/8, 512)            ) \
-    BENCH_DEFINE(CRYSTAL_THRESH,     BLOCK_SIZE/8                           ) \
-    BENCH_DEFINE(FRAGMENT_THRESH,    -1                                     ) \
-    BENCH_DEFINE(ERASE_VALUE,        0xff                                   ) \
-    BENCH_DEFINE(ERASE_CYCLES,       0                                      ) \
-    BENCH_DEFINE(BADBLOCK_BEHAVIOR,  LFS3_EMUBD_BADBLOCK_PROGERROR          ) \
-    BENCH_DEFINE(POWERLOSS_BEHAVIOR, LFS3_EMUBD_POWERLOSS_ATOMIC            ) \
-    BENCH_DEFINE(EMUBD_SEED,         0                                      )
+#define BENCH_TRACE_PAUSE() bench_trace_pause()
+#define BENCH_TRACE_RESUME() bench_trace_resume()
 
-// declare defines as global intmax_ts
-#define BENCH_DEFINE(k, v) \
-    extern intmax_t k;
+#ifdef BENCH_STACK
+// get the maximum/current stack usage for this run
+extern size_t bench_stack_watermark;
+__attribute__((noinline)) size_t bench_stack_current(void);
+void bench_stack_reset(void);
+__attribute__((noinline)) void bench_stack_pause(void);
+void bench_stack_resume(void);
 
-    BENCH_IMPLICIT_DEFINES
-#undef BENCH_DEFINE
-
-// map defines to cfg struct fields
-#define BENCH_CFG \
-    .read_size          = READ_SIZE,            \
-    .prog_size          = PROG_SIZE,            \
-    .block_size         = BLOCK_SIZE,           \
-    .block_count        = BLOCK_COUNT,          \
-    .block_recycles     = BLOCK_RECYCLES,       \
-    .rcache_size        = RCACHE_SIZE,          \
-    .pcache_size        = PCACHE_SIZE,          \
-    .file_cache_size    = FILE_CACHE_SIZE,      \
-    .lookahead_size     = LOOKAHEAD_SIZE,       \
-    BENCH_GC_CFG                                \
-    .gc_compact_thresh  = GC_COMPACT_THRESH,    \
-    .inline_size        = INLINE_SIZE,          \
-    .fragment_size      = FRAGMENT_SIZE,        \
-    .crystal_thresh     = CRYSTAL_THRESH,       \
-    .fragment_thresh    = FRAGMENT_THRESH,
-
-#ifdef LFS3_GC
-#define BENCH_GC_CFG                            \
-    .gc_flags           = GC_FLAGS,             \
-    .gc_steps           = GC_STEPS,
+#define BENCH_STACK_WATERMARK() bench_stack_watermark
+#define BENCH_STACK_CURRENT() bench_stack_current()
+#define BENCH_STACK_RESET() bench_stack_reset()
+#define BENCH_STACK_PAUSE() bench_stack_pause()
+#define BENCH_STACK_RESUME() bench_stack_resume()
 #else
-#define BENCH_GC_CFG
+// stubs if not measuring stack
+#define BENCH_STACK_RESET()
+#define BENCH_STACK_PAUSE()
+#define BENCH_STACK_RESUME()
 #endif
 
-#define BENCH_BDCFG \
-    .erase_value        = ERASE_VALUE,          \
-    .erase_cycles       = ERASE_CYCLES,         \
-    .badblock_behavior  = BADBLOCK_BEHAVIOR,    \
-    .powerloss_behavior = POWERLOSS_BEHAVIOR,   \
-    .seed               = EMUBD_SEED,
+#ifdef BENCH_HEAP
+// get the maximum/current heap usage for this run
+extern size_t bench_heap_watermark;
+extern size_t bench_heap_current;
+void bench_heap_pause(void);
+void bench_heap_resume(void);
+void bench_heap_inc(size_t size);
+void bench_heap_dec(size_t size);
+
+#define BENCH_HEAP_WATERMARK() bench_heap_watermark
+#define BENCH_HEAP_CURRENT() bench_heap_current
+#define BENCH_HEAP_RESET() bench_heap_reset()
+#define BENCH_HEAP_PAUSE() bench_heap_pause()
+#define BENCH_HEAP_RESUME() bench_heap_resume()
+#define BENCH_HEAP_INC(size) bench_heap_inc(size)
+#define BENCH_HEAP_DEC(size) bench_heap_dec(size)
+#else
+// stubs if not measuring heap
+#define BENCH_HEAP_RESET()
+#define BENCH_HEAP_PAUSE()
+#define BENCH_HEAP_RESUME()
+#define BENCH_HEAP_INC(size)
+#define BENCH_HEAP_DEC(size)
+#endif
+
+
+// declare implicit defines as global intmax_ts
+#define BENCH_DEFINE(k, v) \
+        extern intmax_t k;
+    #include BENCH_STRINGIFY(BENCH_DEFINES)
+#undef BENCH_DEFINE
 
 
 #endif

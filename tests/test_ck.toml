@@ -1,5 +1,5 @@
 # Test checksum validation things
-after = ['test_traversal', 'test_gc', 'test_mount']
+after = ['test_trvs', 'test_gc', 'test_mount']
 
 
 code = '''
@@ -128,8 +128,8 @@ code = '''
 defines.N = [1, 2, 4, 8, 16, 32, 64]
 defines.SIZE = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -180,9 +180,9 @@ code = '''
 
 # test we can detect at least fully clobbered blocks
 [cases.test_ck_ckmeta_easy]
-# METHOD=0 => lfs3_fs_ckmeta
+# METHOD=0 => lfs3_fs_ck
 # METHOD=1 => lfs3_fs_gc
-# METHOD=2 => lfs3_traversal_read
+# METHOD=2 => lfs3_trv_read
 # METHOD=3 => lfs3_mount
 defines.METHOD = [0, 1, 2, 3]
 defines.GC_FLAGS = 'LFS3_GC_CKMETA'
@@ -190,8 +190,8 @@ defines.GC_STEPS = -1
 defines.N = [1, 2, 4, 8, 16, 32, 64]
 defines.SIZE = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -230,17 +230,17 @@ code = '''
         }
 
         // traverse to find blocks
-        lfs3_traversal_t t;
-        lfs3_traversal_open(&lfs3, &t, LFS3_T_RDONLY) => 0;
+        lfs3_trv_t trv;
+        lfs3_trv_open(&lfs3, &trv, LFS3_T_RDONLY) => 0;
         lfs3_block_t k = 0;
         for (lfs3_block_t j = 0;; j++) {
             assert(j < 2*BLOCK_COUNT);
 
             struct lfs3_tinfo tinfo;
-            int err = lfs3_traversal_read(&lfs3, &t, &tinfo);
+            int err = lfs3_trv_read(&lfs3, &trv, &tinfo);
             assert(!err || err == LFS3_ERR_NOENT);
             if (err == LFS3_ERR_NOENT) {
-                lfs3_traversal_close(&lfs3, &t) => 0;
+                lfs3_trv_close(&lfs3, &trv) => 0;
                 lfs3_unmount(&lfs3) => 0;
                 goto done;
             }
@@ -259,7 +259,7 @@ code = '''
                             clobber_buf, BLOCK_SIZE) => 0;
                     if (tinfo.btype != LFS3_BTYPE_MDIR || k == i+1) {
                         i += (tinfo.btype == LFS3_BTYPE_MDIR) ? 2 : 1;
-                        lfs3_traversal_close(&lfs3, &t) => 0;
+                        lfs3_trv_close(&lfs3, &trv) => 0;
                         goto clobbered;
                     }
                 }
@@ -268,9 +268,9 @@ code = '''
         }
 
     clobbered:;
-        // find clobbered blocks with lfs3_fs_ckmeta
+        // find clobbered blocks with lfs3_fs_ck
         if (METHOD == 0) {
-            lfs3_fs_ckmeta(&lfs3) => LFS3_ERR_CORRUPT;
+            lfs3_fs_ck(&lfs3, LFS3_CK_CKMETA) => LFS3_ERR_CORRUPT;
 
         // find clobbered blocks with lfs3_fs_gc
         } else if (METHOD == 1) {
@@ -280,22 +280,22 @@ code = '''
             LFS3_UNREACHABLE();
             #endif
 
-        // find clobbered blocks with lfs3_traversal_read
+        // find clobbered blocks with lfs3_trv_read
         } else if (METHOD == 2) {
-            lfs3_traversal_t t;
-            lfs3_traversal_open(&lfs3, &t, LFS3_T_RDONLY | LFS3_T_CKMETA) => 0;
+            lfs3_trv_t trv;
+            lfs3_trv_open(&lfs3, &trv, LFS3_T_RDONLY | LFS3_T_CKMETA) => 0;
             for (lfs3_block_t i = 0;; i++) {
                 // a bit hacky, but this catches infinite loops
                 LFS3_ASSERT(i < 2*BLOCK_COUNT);
 
                 struct lfs3_tinfo tinfo;
-                int err = lfs3_traversal_read(&lfs3, &t, &tinfo);
+                int err = lfs3_trv_read(&lfs3, &trv, &tinfo);
                 assert(!err || err == LFS3_ERR_CORRUPT);
                 if (err == LFS3_ERR_CORRUPT) {
                     break;
                 }
             }
-            lfs3_traversal_close(&lfs3, &t) => 0;
+            lfs3_trv_close(&lfs3, &trv) => 0;
 
         // find clobbered blocks with lfs3_mount
         } else if (METHOD == 3) {
@@ -317,9 +317,9 @@ done:;
 '''
 
 [cases.test_ck_ckdata_easy]
-# METHOD=0 => lfs3_fs_ckdata
+# METHOD=0 => lfs3_fs_ck
 # METHOD=1 => lfs3_fs_gc
-# METHOD=2 => lfs3_traversal_read
+# METHOD=2 => lfs3_trv_read
 # METHOD=3 => lfs3_mount
 defines.METHOD = [0, 1, 2, 3]
 defines.GC_FLAGS = 'LFS3_GC_CKDATA'
@@ -327,8 +327,8 @@ defines.GC_STEPS = -1
 defines.N = [1, 2, 4, 8, 16, 32, 64]
 defines.SIZE = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -367,17 +367,17 @@ code = '''
         }
 
         // traverse to find blocks
-        lfs3_traversal_t t;
-        lfs3_traversal_open(&lfs3, &t, LFS3_T_RDONLY) => 0;
+        lfs3_trv_t trv;
+        lfs3_trv_open(&lfs3, &trv, LFS3_T_RDONLY) => 0;
         lfs3_block_t k = 0;
         for (lfs3_block_t j = 0;; j++) {
             assert(j < 2*BLOCK_COUNT);
 
             struct lfs3_tinfo tinfo;
-            int err = lfs3_traversal_read(&lfs3, &t, &tinfo);
+            int err = lfs3_trv_read(&lfs3, &trv, &tinfo);
             assert(!err || err == LFS3_ERR_NOENT);
             if (err == LFS3_ERR_NOENT) {
-                lfs3_traversal_close(&lfs3, &t) => 0;
+                lfs3_trv_close(&lfs3, &trv) => 0;
                 lfs3_unmount(&lfs3) => 0;
                 goto done;
             }
@@ -397,7 +397,7 @@ code = '''
                             clobber_buf, BLOCK_SIZE) => 0;
                     if (tinfo.btype != LFS3_BTYPE_MDIR || k == i+1) {
                         i += (tinfo.btype == LFS3_BTYPE_MDIR) ? 2 : 1;
-                        lfs3_traversal_close(&lfs3, &t) => 0;
+                        lfs3_trv_close(&lfs3, &trv) => 0;
                         goto clobbered;
                     }
                 }
@@ -406,9 +406,9 @@ code = '''
         }
 
     clobbered:;
-        // find clobbered blocks with lfs3_fs_ckmeta
+        // find clobbered blocks with lfs3_fs_ck
         if (METHOD == 0) {
-            lfs3_fs_ckdata(&lfs3) => LFS3_ERR_CORRUPT;
+            lfs3_fs_ck(&lfs3, LFS3_CK_CKDATA) => LFS3_ERR_CORRUPT;
 
         // find clobbered blocks with lfs3_fs_gc
         } else if (METHOD == 1) {
@@ -418,22 +418,22 @@ code = '''
             LFS3_UNREACHABLE();
             #endif
 
-        // find clobbered blocks with lfs3_traversal_read
+        // find clobbered blocks with lfs3_trv_read
         } else if (METHOD == 2) {
-            lfs3_traversal_t t;
-            lfs3_traversal_open(&lfs3, &t, LFS3_T_RDONLY | LFS3_T_CKDATA) => 0;
+            lfs3_trv_t trv;
+            lfs3_trv_open(&lfs3, &trv, LFS3_T_RDONLY | LFS3_T_CKDATA) => 0;
             for (lfs3_block_t i = 0;; i++) {
                 // a bit hacky, but this catches infinite loops
                 LFS3_ASSERT(i < 2*BLOCK_COUNT);
 
                 struct lfs3_tinfo tinfo;
-                int err = lfs3_traversal_read(&lfs3, &t, &tinfo);
+                int err = lfs3_trv_read(&lfs3, &trv, &tinfo);
                 assert(!err || err == LFS3_ERR_CORRUPT);
                 if (err == LFS3_ERR_CORRUPT) {
                     break;
                 }
             }
-            lfs3_traversal_close(&lfs3, &t) => 0;
+            lfs3_trv_close(&lfs3, &trv) => 0;
 
         // find clobbered blocks with lfs3_mount
         } else if (METHOD == 3) {
@@ -456,9 +456,9 @@ done:;
 
 # test some more interesting errors
 [cases.test_ck_ckmeta_hard]
-# METHOD=0 => lfs3_fs_ckmeta
+# METHOD=0 => lfs3_fs_ck
 # METHOD=1 => lfs3_fs_gc
-# METHOD=2 => lfs3_traversal_read
+# METHOD=2 => lfs3_trv_read
 # METHOD=3 => lfs3_mount
 defines.METHOD = [0, 1, 2, 3]
 defines.GC_FLAGS = 'LFS3_GC_CKMETA'
@@ -466,8 +466,8 @@ defines.GC_STEPS = -1
 defines.N = [1, 2, 4, 8, 16, 32, 64]
 defines.SIZE = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -509,18 +509,18 @@ code = '''
         }
 
         // traverse to find blocks
-        lfs3_traversal_t t;
-        lfs3_traversal_open(&lfs3, &t, LFS3_T_RDONLY) => 0;
+        lfs3_trv_t trv;
+        lfs3_trv_open(&lfs3, &trv, LFS3_T_RDONLY) => 0;
         lfs3_block_t k = 0;
         lfs3_block_t badblock;
         for (lfs3_block_t j = 0;; j++) {
             assert(j < 2*BLOCK_COUNT);
 
             struct lfs3_tinfo tinfo;
-            int err = lfs3_traversal_read(&lfs3, &t, &tinfo);
+            int err = lfs3_trv_read(&lfs3, &trv, &tinfo);
             assert(!err || err == LFS3_ERR_NOENT);
             if (err == LFS3_ERR_NOENT) {
-                lfs3_traversal_close(&lfs3, &t) => 0;
+                lfs3_trv_close(&lfs3, &trv) => 0;
                 lfs3_unmount(&lfs3) => 0;
                 goto done;
             }
@@ -530,7 +530,7 @@ code = '''
                 // found an interesting block?
                 if (k == i) {
                     badblock = tinfo.block;
-                    lfs3_traversal_close(&lfs3, &t) => 0;
+                    lfs3_trv_close(&lfs3, &trv) => 0;
                     goto clobber;
                 }
                 k += 1;
@@ -550,9 +550,9 @@ code = '''
             printf("flipping 0x%x.%x+%x\n", badblock, badbit/8, badbit%8);
             lfs3_emubd_flipbit(CFG, badblock, badbit) => 0;
 
-            // find clobbered blocks with lfs3_fs_ckmeta
+            // find clobbered blocks with lfs3_fs_ck
             if (METHOD == 0) {
-                int err = lfs3_fs_ckmeta(&lfs3);
+                int err = lfs3_fs_ck(&lfs3, LFS3_CK_CKMETA);
                 assert(!err || err == LFS3_ERR_CORRUPT);
                 if (err == LFS3_ERR_CORRUPT) {
                     goto detected;
@@ -570,17 +570,17 @@ code = '''
                 LFS3_UNREACHABLE();
                 #endif
 
-            // find clobbered blocks with lfs3_traversal_read
+            // find clobbered blocks with lfs3_trv_read
             } else if (METHOD == 2) {
-                lfs3_traversal_t t;
-                lfs3_traversal_open(&lfs3, &t,
+                lfs3_trv_t trv;
+                lfs3_trv_open(&lfs3, &trv,
                         LFS3_T_RDONLY | LFS3_T_CKMETA) => 0;
                 for (lfs3_block_t i = 0;; i++) {
                     // a bit hacky, but this catches infinite loops
                     LFS3_ASSERT(i < 2*BLOCK_COUNT);
 
                     struct lfs3_tinfo tinfo;
-                    int err = lfs3_traversal_read(&lfs3, &t, &tinfo);
+                    int err = lfs3_trv_read(&lfs3, &trv, &tinfo);
                     assert(!err
                             || err == LFS3_ERR_NOENT
                             || err == LFS3_ERR_CORRUPT);
@@ -588,11 +588,11 @@ code = '''
                         break;
                     }
                     if (err == LFS3_ERR_CORRUPT) {
-                        lfs3_traversal_close(&lfs3, &t) => 0;
+                        lfs3_trv_close(&lfs3, &trv) => 0;
                         goto detected;
                     }
                 }
-                lfs3_traversal_close(&lfs3, &t) => 0;
+                lfs3_trv_close(&lfs3, &trv) => 0;
 
             // find clobbered blocks with lfs3_mount
             } else if (METHOD == 3) {
@@ -711,9 +711,9 @@ done:;
 '''
 
 [cases.test_ck_ckdata_hard]
-# METHOD=0 => lfs3_fs_ckdata
+# METHOD=0 => lfs3_fs_ck
 # METHOD=1 => lfs3_fs_gc
-# METHOD=2 => lfs3_traversal_read
+# METHOD=2 => lfs3_trv_read
 # METHOD=3 => lfs3_mount
 defines.METHOD = [0, 1, 2, 3]
 defines.GC_FLAGS = 'LFS3_GC_CKDATA'
@@ -721,8 +721,8 @@ defines.GC_STEPS = -1
 defines.N = [1, 2, 4, 8, 16, 32, 64]
 defines.SIZE = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -764,18 +764,18 @@ code = '''
         }
 
         // traverse to find blocks
-        lfs3_traversal_t t;
-        lfs3_traversal_open(&lfs3, &t, LFS3_T_RDONLY) => 0;
+        lfs3_trv_t trv;
+        lfs3_trv_open(&lfs3, &trv, LFS3_T_RDONLY) => 0;
         lfs3_block_t k = 0;
         lfs3_block_t badblock;
         for (lfs3_block_t j = 0;; j++) {
             assert(j < 2*BLOCK_COUNT);
 
             struct lfs3_tinfo tinfo;
-            int err = lfs3_traversal_read(&lfs3, &t, &tinfo);
+            int err = lfs3_trv_read(&lfs3, &trv, &tinfo);
             assert(!err || err == LFS3_ERR_NOENT);
             if (err == LFS3_ERR_NOENT) {
-                lfs3_traversal_close(&lfs3, &t) => 0;
+                lfs3_trv_close(&lfs3, &trv) => 0;
                 lfs3_unmount(&lfs3) => 0;
                 goto done;
             }
@@ -786,7 +786,7 @@ code = '''
                 // found an interesting block?
                 if (k == i) {
                     badblock = tinfo.block;
-                    lfs3_traversal_close(&lfs3, &t) => 0;
+                    lfs3_trv_close(&lfs3, &trv) => 0;
                     goto clobber;
                 }
                 k += 1;
@@ -806,9 +806,9 @@ code = '''
             printf("flipping 0x%x.%x+%x\n", badblock, badbit/8, badbit%8);
             lfs3_emubd_flipbit(CFG, badblock, badbit) => 0;
 
-            // find clobbered blocks with lfs3_fs_ckdata
+            // find clobbered blocks with lfs3_fs_ck
             if (METHOD == 0) {
-                int err = lfs3_fs_ckdata(&lfs3);
+                int err = lfs3_fs_ck(&lfs3, LFS3_CK_CKDATA);
                 assert(!err || err == LFS3_ERR_CORRUPT);
                 if (err == LFS3_ERR_CORRUPT) {
                     goto detected;
@@ -826,17 +826,17 @@ code = '''
                 LFS3_UNREACHABLE();
                 #endif
 
-            // find clobbered blocks with lfs3_traversal_read
+            // find clobbered blocks with lfs3_trv_read
             } else if (METHOD == 2) {
-                lfs3_traversal_t t;
-                lfs3_traversal_open(&lfs3, &t,
+                lfs3_trv_t trv;
+                lfs3_trv_open(&lfs3, &trv,
                         LFS3_T_RDONLY | LFS3_T_CKDATA) => 0;
                 for (lfs3_block_t i = 0;; i++) {
                     // a bit hacky, but this catches infinite loops
                     LFS3_ASSERT(i < 2*BLOCK_COUNT);
 
                     struct lfs3_tinfo tinfo;
-                    int err = lfs3_traversal_read(&lfs3, &t, &tinfo);
+                    int err = lfs3_trv_read(&lfs3, &trv, &tinfo);
                     assert(!err
                             || err == LFS3_ERR_NOENT
                             || err == LFS3_ERR_CORRUPT);
@@ -844,11 +844,11 @@ code = '''
                         break;
                     }
                     if (err == LFS3_ERR_CORRUPT) {
-                        lfs3_traversal_close(&lfs3, &t) => 0;
+                        lfs3_trv_close(&lfs3, &trv) => 0;
                         goto detected;
                     }
                 }
-                lfs3_traversal_close(&lfs3, &t) => 0;
+                lfs3_trv_close(&lfs3, &trv) => 0;
 
             // find clobbered blocks with lfs3_mount
             } else if (METHOD == 3) {
@@ -971,20 +971,21 @@ done:;
 
 # test we can detect at least fully clobbered blocks
 [cases.test_ck_file_ckmeta_easy]
-# METHOD=0 => lfs3_file_ckmeta
-# METHOD=1 => lfs3_file_close+open+ckmeta
+# METHOD=0 => lfs3_file_ck
+# METHOD=1 => lfs3_file_close+open+ck
 # METHOD=2 => lfs3_file_close+open
 defines.METHOD = [0, 1, 2]
 defines.N = [1, 2, 4, 8, 16, 32, 64]
 defines.SIZE = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
     '8*BLOCK_SIZE',
 ]
+in = 'lfs3.c'
 code = '''
     for (lfs3_block_t i = 0;; i++) {
         // a bit hacky, but this catches infinite loops
@@ -1007,23 +1008,24 @@ code = '''
         lfs3_file_write(&lfs3, &file, wbuf, SIZE) => SIZE;
 
         // traverse to find blocks
-        lfs3_traversal_t t;
-        lfs3_traversal_open(&lfs3, &t, LFS3_T_RDONLY) => 0;
+        lfs3_trv_t trv;
+        lfs3_trv_open(&lfs3, &trv, LFS3_T_RDONLY) => 0;
         lfs3_block_t k = 0;
         for (lfs3_block_t j = 0;; j++) {
             assert(j < 2*BLOCK_COUNT);
 
             struct lfs3_tinfo tinfo;
-            int err = lfs3_traversal_read(&lfs3, &t, &tinfo);
+            int err = lfs3_trv_read(&lfs3, &trv, &tinfo);
             assert(!err || err == LFS3_ERR_NOENT);
             if (err == LFS3_ERR_NOENT) {
-                lfs3_traversal_close(&lfs3, &t) => 0;
+                lfs3_trv_close(&lfs3, &trv) => 0;
                 lfs3_file_close(&lfs3, &file) => 0;
                 lfs3_unmount(&lfs3) => 0;
                 goto done;
             }
 
-            if (tinfo.btype == LFS3_BTYPE_BTREE) {
+            if (tinfo.btype == LFS3_BTYPE_BTREE
+                    && trv.gc.t.h.mdir.mid != LFS3_MID_GBMAP) {
                 if (k == i) {
                     // clobber this block
                     printf("clobbering 0x%x\n", tinfo.block);
@@ -1032,7 +1034,7 @@ code = '''
                     CFG->erase(CFG, tinfo.block) => 0;
                     CFG->prog(CFG, tinfo.block, 0,
                             clobber_buf, BLOCK_SIZE) => 0;
-                    lfs3_traversal_close(&lfs3, &t) => 0;
+                    lfs3_trv_close(&lfs3, &trv) => 0;
                     goto clobbered;
                 }
                 k += 1;
@@ -1040,15 +1042,15 @@ code = '''
         }
 
     clobbered:;
-        // find clobbered blocks with lfs3_file_ckmeta
+        // find clobbered blocks with lfs3_file_ck
         if (METHOD == 0) {
-            lfs3_file_ckmeta(&lfs3, &file) => LFS3_ERR_CORRUPT;
+            lfs3_file_ck(&lfs3, &file, LFS3_CK_CKMETA) => LFS3_ERR_CORRUPT;
 
-        // find clobbered blocks with lfs3_file_close+open+ckmeta
+        // find clobbered blocks with lfs3_file_close+open+ck
         } else if (METHOD == 1) {
             lfs3_file_close(&lfs3, &file) => 0;
             lfs3_file_open(&lfs3, &file, "octopus", LFS3_O_RDONLY) => 0;
-            lfs3_file_ckmeta(&lfs3, &file) => LFS3_ERR_CORRUPT;
+            lfs3_file_ck(&lfs3, &file, LFS3_CK_CKMETA) => LFS3_ERR_CORRUPT;
 
         // find clobbered blocks with lfs3_file_close+open
         } else if (METHOD == 2) {
@@ -1068,20 +1070,21 @@ done:;
 '''
 
 [cases.test_ck_file_ckdata_easy]
-# METHOD=0 => lfs3_file_ckdata
-# METHOD=1 => lfs3_file_close+open+ckdata
+# METHOD=0 => lfs3_file_ck
+# METHOD=1 => lfs3_file_close+open+ck
 # METHOD=2 => lfs3_file_close+open
 defines.METHOD = [0, 1, 2]
 defines.N = [1, 2, 4, 8, 16, 32, 64]
 defines.SIZE = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
     '8*BLOCK_SIZE',
 ]
+in = 'lfs3.c'
 code = '''
     for (lfs3_block_t i = 0;; i++) {
         // a bit hacky, but this catches infinite loops
@@ -1104,24 +1107,25 @@ code = '''
         lfs3_file_write(&lfs3, &file, wbuf, SIZE) => SIZE;
 
         // traverse to find blocks
-        lfs3_traversal_t t;
-        lfs3_traversal_open(&lfs3, &t, LFS3_T_RDONLY) => 0;
+        lfs3_trv_t trv;
+        lfs3_trv_open(&lfs3, &trv, LFS3_T_RDONLY) => 0;
         lfs3_block_t k = 0;
         for (lfs3_block_t j = 0;; j++) {
             assert(j < 2*BLOCK_COUNT);
 
             struct lfs3_tinfo tinfo;
-            int err = lfs3_traversal_read(&lfs3, &t, &tinfo);
+            int err = lfs3_trv_read(&lfs3, &trv, &tinfo);
             assert(!err || err == LFS3_ERR_NOENT);
             if (err == LFS3_ERR_NOENT) {
-                lfs3_traversal_close(&lfs3, &t) => 0;
+                lfs3_trv_close(&lfs3, &trv) => 0;
                 lfs3_file_close(&lfs3, &file) => 0;
                 lfs3_unmount(&lfs3) => 0;
                 goto done;
             }
 
-            if (tinfo.btype == LFS3_BTYPE_BTREE
-                    || tinfo.btype == LFS3_BTYPE_DATA) {
+            if ((tinfo.btype == LFS3_BTYPE_BTREE
+                        || tinfo.btype == LFS3_BTYPE_DATA)
+                    && trv.gc.t.h.mdir.mid != LFS3_MID_GBMAP) {
                 if (k == i) {
                     // clobber this block
                     printf("clobbering 0x%x\n", tinfo.block);
@@ -1130,7 +1134,7 @@ code = '''
                     CFG->erase(CFG, tinfo.block) => 0;
                     CFG->prog(CFG, tinfo.block, 0,
                             clobber_buf, BLOCK_SIZE) => 0;
-                    lfs3_traversal_close(&lfs3, &t) => 0;
+                    lfs3_trv_close(&lfs3, &trv) => 0;
                     goto clobbered;
                 }
                 k += 1;
@@ -1138,15 +1142,15 @@ code = '''
         }
 
     clobbered:;
-        // find clobbered blocks with lfs3_file_ckmeta
+        // find clobbered blocks with lfs3_file_ck
         if (METHOD == 0) {
-            lfs3_file_ckdata(&lfs3, &file) => LFS3_ERR_CORRUPT;
+            lfs3_file_ck(&lfs3, &file, LFS3_CK_CKDATA) => LFS3_ERR_CORRUPT;
 
-        // find clobbered blocks with lfs3_file_close+open+ckmeta
+        // find clobbered blocks with lfs3_file_close+open+ck
         } else if (METHOD == 1) {
             lfs3_file_close(&lfs3, &file) => 0;
             lfs3_file_open(&lfs3, &file, "octopus", LFS3_O_RDONLY) => 0;
-            lfs3_file_ckdata(&lfs3, &file) => LFS3_ERR_CORRUPT;
+            lfs3_file_ck(&lfs3, &file, LFS3_CK_CKDATA) => LFS3_ERR_CORRUPT;
 
         // find clobbered blocks with lfs3_file_close+open
         } else if (METHOD == 2) {
@@ -1168,15 +1172,15 @@ done:;
 
 # test some more interesting errors
 [cases.test_ck_file_ckmeta_hard]
-# METHOD=0 => lfs3_file_ckmeta
-# METHOD=1 => lfs3_file_close+open+ckmeta
+# METHOD=0 => lfs3_file_ck
+# METHOD=1 => lfs3_file_close+open+ck
 # METHOD=2 => lfs3_file_close+open
 defines.METHOD = [0, 1, 2]
 defines.N = [1, 2, 4, 8, 16, 32, 64]
 defines.SIZE = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -1185,6 +1189,7 @@ defines.SIZE = [
 defines.SEED = 42
 defines.M = 100
 fuzz = 'SEED'
+in = 'lfs3.c'
 code = '''
     uint32_t prng_ = SEED;
     for (lfs3_block_t i = 0;; i++) {
@@ -1208,28 +1213,29 @@ code = '''
         lfs3_file_write(&lfs3, &file, wbuf, SIZE) => SIZE;
 
         // traverse to find blocks
-        lfs3_traversal_t t;
-        lfs3_traversal_open(&lfs3, &t, LFS3_T_RDONLY) => 0;
+        lfs3_trv_t trv;
+        lfs3_trv_open(&lfs3, &trv, LFS3_T_RDONLY) => 0;
         lfs3_block_t k = 0;
         lfs3_block_t badblock;
         for (lfs3_block_t j = 0;; j++) {
             assert(j < 2*BLOCK_COUNT);
 
             struct lfs3_tinfo tinfo;
-            int err = lfs3_traversal_read(&lfs3, &t, &tinfo);
+            int err = lfs3_trv_read(&lfs3, &trv, &tinfo);
             assert(!err || err == LFS3_ERR_NOENT);
             if (err == LFS3_ERR_NOENT) {
-                lfs3_traversal_close(&lfs3, &t) => 0;
+                lfs3_trv_close(&lfs3, &trv) => 0;
                 lfs3_file_close(&lfs3, &file) => 0;
                 lfs3_unmount(&lfs3) => 0;
                 goto done;
             }
 
-            if (tinfo.btype == LFS3_BTYPE_BTREE) {
+            if (tinfo.btype == LFS3_BTYPE_BTREE
+                    && trv.gc.t.h.mdir.mid != LFS3_MID_GBMAP) {
                 // found an interesting block?
                 if (k == i) {
                     badblock = tinfo.block;
-                    lfs3_traversal_close(&lfs3, &t) => 0;
+                    lfs3_trv_close(&lfs3, &trv) => 0;
                     goto clobber;
                 }
                 k += 1;
@@ -1245,19 +1251,19 @@ code = '''
             printf("flipping 0x%x.%x+%x\n", badblock, badbit/8, badbit%8);
             lfs3_emubd_flipbit(CFG, badblock, badbit) => 0;
 
-            // find clobbered blocks with lfs3_file_ckmeta
+            // find clobbered blocks with lfs3_file_ck
             if (METHOD == 0) {
-                int err = lfs3_file_ckmeta(&lfs3, &file);
+                int err = lfs3_file_ck(&lfs3, &file, LFS3_CK_CKMETA);
                 assert(!err || err == LFS3_ERR_CORRUPT);
                 if (err == LFS3_ERR_CORRUPT) {
                     goto detected;
                 }
 
-            // find clobbered blocks with lfs3_file_close+open+ckmeta
+            // find clobbered blocks with lfs3_file_close+open+ck
             } else if (METHOD == 1) {
                 lfs3_file_close(&lfs3, &file) => 0;
                 lfs3_file_open(&lfs3, &file, "octopus", LFS3_O_RDONLY) => 0;
-                int err = lfs3_file_ckmeta(&lfs3, &file);
+                int err = lfs3_file_ck(&lfs3, &file, LFS3_CK_CKMETA);
                 assert(!err || err == LFS3_ERR_CORRUPT);
                 if (err == LFS3_ERR_CORRUPT) {
                     goto detected;
@@ -1316,15 +1322,15 @@ done:;
 '''
 
 [cases.test_ck_file_ckdata_hard]
-# METHOD=0 => lfs3_file_ckdata
-# METHOD=1 => lfs3_file_close+open+ckdata
+# METHOD=0 => lfs3_file_ck
+# METHOD=1 => lfs3_file_close+open+ck
 # METHOD=2 => lfs3_file_close+open
 defines.METHOD = [0, 1, 2]
 defines.N = [1, 2, 4, 8, 16, 32, 64]
 defines.SIZE = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -1333,6 +1339,7 @@ defines.SIZE = [
 defines.SEED = 42
 defines.M = 100
 fuzz = 'SEED'
+in = 'lfs3.c'
 code = '''
     uint32_t prng_ = SEED;
     for (lfs3_block_t i = 0;; i++) {
@@ -1356,29 +1363,30 @@ code = '''
         lfs3_file_write(&lfs3, &file, wbuf, SIZE) => SIZE;
 
         // traverse to find blocks
-        lfs3_traversal_t t;
-        lfs3_traversal_open(&lfs3, &t, LFS3_T_RDONLY) => 0;
+        lfs3_trv_t trv;
+        lfs3_trv_open(&lfs3, &trv, LFS3_T_RDONLY) => 0;
         lfs3_block_t k = 0;
         lfs3_block_t badblock;
         for (lfs3_block_t j = 0;; j++) {
             assert(j < 2*BLOCK_COUNT);
 
             struct lfs3_tinfo tinfo;
-            int err = lfs3_traversal_read(&lfs3, &t, &tinfo);
+            int err = lfs3_trv_read(&lfs3, &trv, &tinfo);
             assert(!err || err == LFS3_ERR_NOENT);
             if (err == LFS3_ERR_NOENT) {
-                lfs3_traversal_close(&lfs3, &t) => 0;
+                lfs3_trv_close(&lfs3, &trv) => 0;
                 lfs3_file_close(&lfs3, &file) => 0;
                 lfs3_unmount(&lfs3) => 0;
                 goto done;
             }
 
-            if (tinfo.btype == LFS3_BTYPE_BTREE
-                    || tinfo.btype == LFS3_BTYPE_DATA) {
+            if ((tinfo.btype == LFS3_BTYPE_BTREE
+                        || tinfo.btype == LFS3_BTYPE_DATA)
+                    && trv.gc.t.h.mdir.mid != LFS3_MID_GBMAP) {
                 // found an interesting block?
                 if (k == i) {
                     badblock = tinfo.block;
-                    lfs3_traversal_close(&lfs3, &t) => 0;
+                    lfs3_trv_close(&lfs3, &trv) => 0;
                     goto clobber;
                 }
                 k += 1;
@@ -1394,9 +1402,9 @@ code = '''
             printf("flipping 0x%x.%x+%x\n", badblock, badbit/8, badbit%8);
             lfs3_emubd_flipbit(CFG, badblock, badbit) => 0;
 
-            // find clobbered blocks with lfs3_file_ckdata
+            // find clobbered blocks with lfs3_file_ck
             if (METHOD == 0) {
-                int err = lfs3_file_ckdata(&lfs3, &file);
+                int err = lfs3_file_ck(&lfs3, &file, LFS3_CK_CKDATA);
                 assert(!err || err == LFS3_ERR_CORRUPT);
                 if (err == LFS3_ERR_CORRUPT) {
                     goto detected;
@@ -1406,7 +1414,7 @@ code = '''
             } else if (METHOD == 1) {
                 lfs3_file_close(&lfs3, &file) => 0;
                 lfs3_file_open(&lfs3, &file, "octopus", LFS3_O_RDONLY) => 0;
-                int err = lfs3_file_ckdata(&lfs3, &file);
+                int err = lfs3_file_ck(&lfs3, &file, LFS3_CK_CKDATA);
                 assert(!err || err == LFS3_ERR_CORRUPT);
                 if (err == LFS3_ERR_CORRUPT) {
                     goto detected;
@@ -1485,7 +1493,7 @@ code = '''
                 (lfs3_size_t)BADBLOCK, badbit/8, badbit, badbit/8, badbit%8);
 
         // mark our badbit as bad
-        lfs3_emubd_markbadbit(CFG, BADBLOCK, badbit) => 0;
+        lfs3_emubd_mkbadbit(CFG, BADBLOCK, badbit) => 0;
 
         // formatting the filesystem may already find the bit error
         lfs3_t lfs3;
@@ -1544,7 +1552,7 @@ code = '''
 
     corrupt:;
         // reset badbit
-        lfs3_emubd_markgood(CFG, BADBLOCK) => 0;
+        lfs3_emubd_mkgood(CFG, BADBLOCK) => 0;
     }
 '''
 
@@ -1578,18 +1586,18 @@ code = '''
     lfs3_file_close(&lfs3, &file) => 0;
 
     // find the data block
-    lfs3_traversal_t t;
-    lfs3_traversal_open(&lfs3, &t, LFS3_T_RDONLY) => 0;
+    lfs3_trv_t trv;
+    lfs3_trv_open(&lfs3, &trv, LFS3_T_RDONLY) => 0;
     lfs3_block_t badblock;
     while (true) {
         struct lfs3_tinfo tinfo;
-        lfs3_traversal_read(&lfs3, &t, &tinfo) => 0;
+        lfs3_trv_read(&lfs3, &trv, &tinfo) => 0;
         if (tinfo.btype == LFS3_BTYPE_DATA) {
             badblock = tinfo.block;
             break;
         }
     }
-    lfs3_traversal_close(&lfs3, &t) => 0;
+    lfs3_trv_close(&lfs3, &trv) => 0;
 
     lfs3_unmount(&lfs3) => 0;
 
@@ -1602,7 +1610,7 @@ code = '''
                 badblock, badbit/8, badbit, badbit/8, badbit%8);
 
         // mark our badbit as bad
-        lfs3_emubd_markbadbit(CFG, badblock, badbit) => 0;
+        lfs3_emubd_mkbadbit(CFG, badblock, badbit) => 0;
 
         // format
         lfs3_t lfs3;
@@ -1652,7 +1660,7 @@ code = '''
         lfs3_unmount(&lfs3) => 0;
 
         // reset badbit
-        lfs3_emubd_markgood(CFG, badblock) => 0;
+        lfs3_emubd_mkgood(CFG, badblock) => 0;
     }
 '''
 
@@ -1661,7 +1669,7 @@ code = '''
 defines.BADBIT = -1
 defines.BADBLOCK_BEHAVIOR = 'LFS3_EMUBD_BADBLOCK_PROGFLIP'
 # force the file to create a btree
-defines.INLINE_SIZE = 0
+defines.SHRUB_SIZE = 0
 defines.CRYSTAL_THRESH = -1
 defines.FRAGMENT_SIZE = 'BLOCK_SIZE/8'
 defines.SIZE = '2*FRAGMENT_SIZE'
@@ -1689,18 +1697,18 @@ code = '''
     lfs3_file_close(&lfs3, &file) => 0;
 
     // find the btree block
-    lfs3_traversal_t t;
-    lfs3_traversal_open(&lfs3, &t, LFS3_T_RDONLY) => 0;
+    lfs3_trv_t trv;
+    lfs3_trv_open(&lfs3, &trv, LFS3_T_RDONLY) => 0;
     lfs3_block_t badblock;
     while (true) {
         struct lfs3_tinfo tinfo;
-        lfs3_traversal_read(&lfs3, &t, &tinfo) => 0;
+        lfs3_trv_read(&lfs3, &trv, &tinfo) => 0;
         if (tinfo.btype == LFS3_BTYPE_BTREE) {
             badblock = tinfo.block;
             break;
         }
     }
-    lfs3_traversal_close(&lfs3, &t) => 0;
+    lfs3_trv_close(&lfs3, &trv) => 0;
 
     lfs3_unmount(&lfs3) => 0;
 
@@ -1713,7 +1721,7 @@ code = '''
                 badblock, badbit/8, badbit, badbit/8, badbit%8);
 
         // mark our badbit as bad
-        lfs3_emubd_markbadbit(CFG, badblock, badbit) => 0;
+        lfs3_emubd_mkbadbit(CFG, badblock, badbit) => 0;
 
         // format
         lfs3_t lfs3;
@@ -1763,7 +1771,7 @@ code = '''
         lfs3_unmount(&lfs3) => 0;
 
         // reset badbit
-        lfs3_emubd_markgood(CFG, badblock) => 0;
+        lfs3_emubd_mkgood(CFG, badblock) => 0;
     }
 '''
 
@@ -1808,8 +1816,8 @@ code = '''
                 badbit_/8, badbit_%8);
 
         // mark our badbits as bad
-        lfs3_emubd_markbadbit(CFG, BADBLOCK, badbit) => 0;
-        lfs3_emubd_markbadbit(CFG, BADBLOCK_, badbit_) => 0;
+        lfs3_emubd_mkbadbit(CFG, BADBLOCK, badbit) => 0;
+        lfs3_emubd_mkbadbit(CFG, BADBLOCK_, badbit_) => 0;
 
         // keep track of open files so we clean up correctly
         lfs3_file_t files[N];
@@ -1972,8 +1980,8 @@ code = '''
 
     corrupt:;
         // reset badbits
-        lfs3_emubd_markgood(CFG, BADBLOCK) => 0;
-        lfs3_emubd_markgood(CFG, BADBLOCK_) => 0;
+        lfs3_emubd_mkgood(CFG, BADBLOCK) => 0;
+        lfs3_emubd_mkgood(CFG, BADBLOCK_) => 0;
     }
 '''
 
@@ -2055,7 +2063,7 @@ code = '''
 
     corrupt:;
         // reset badbit
-        lfs3_emubd_markgood(CFG, BADBLOCK) => 0;
+        lfs3_emubd_mkgood(CFG, BADBLOCK) => 0;
     }
 '''
 
@@ -2088,18 +2096,18 @@ code = '''
     lfs3_file_close(&lfs3, &file) => 0;
 
     // find the data block
-    lfs3_traversal_t t;
-    lfs3_traversal_open(&lfs3, &t, LFS3_T_RDONLY) => 0;
+    lfs3_trv_t trv;
+    lfs3_trv_open(&lfs3, &trv, LFS3_T_RDONLY) => 0;
     lfs3_block_t badblock;
     while (true) {
         struct lfs3_tinfo tinfo;
-        lfs3_traversal_read(&lfs3, &t, &tinfo) => 0;
+        lfs3_trv_read(&lfs3, &trv, &tinfo) => 0;
         if (tinfo.btype == LFS3_BTYPE_DATA) {
             badblock = tinfo.block;
             break;
         }
     }
-    lfs3_traversal_close(&lfs3, &t) => 0;
+    lfs3_trv_close(&lfs3, &trv) => 0;
 
     lfs3_unmount(&lfs3) => 0;
 
@@ -2163,7 +2171,7 @@ code = '''
         lfs3_unmount(&lfs3) => 0;
 
         // reset badbit
-        lfs3_emubd_markgood(CFG, badblock) => 0;
+        lfs3_emubd_mkgood(CFG, badblock) => 0;
     }
 '''
 
@@ -2171,7 +2179,7 @@ code = '''
 [cases.test_ck_ckfetches_btree]
 defines.BADBIT = -1
 # force the file to create a btree
-defines.INLINE_SIZE = 0
+defines.SHRUB_SIZE = 0
 defines.CRYSTAL_THRESH = -1
 defines.FRAGMENT_SIZE = 'BLOCK_SIZE/8'
 defines.SIZE = '2*FRAGMENT_SIZE'
@@ -2199,18 +2207,18 @@ code = '''
     lfs3_file_close(&lfs3, &file) => 0;
 
     // find the btree block
-    lfs3_traversal_t t;
-    lfs3_traversal_open(&lfs3, &t, LFS3_T_RDONLY) => 0;
+    lfs3_trv_t trv;
+    lfs3_trv_open(&lfs3, &trv, LFS3_T_RDONLY) => 0;
     lfs3_block_t badblock;
     while (true) {
         struct lfs3_tinfo tinfo;
-        lfs3_traversal_read(&lfs3, &t, &tinfo) => 0;
+        lfs3_trv_read(&lfs3, &trv, &tinfo) => 0;
         if (tinfo.btype == LFS3_BTYPE_BTREE) {
             badblock = tinfo.block;
             break;
         }
     }
-    lfs3_traversal_close(&lfs3, &t) => 0;
+    lfs3_trv_close(&lfs3, &trv) => 0;
 
     lfs3_unmount(&lfs3) => 0;
 
@@ -2274,7 +2282,7 @@ code = '''
         lfs3_unmount(&lfs3) => 0;
 
         // reset badbit
-        lfs3_emubd_markgood(CFG, badblock) => 0;
+        lfs3_emubd_mkgood(CFG, badblock) => 0;
     }
 '''
 
@@ -2338,7 +2346,7 @@ code = '''
                 (lfs3_size_t)BADBLOCK, badbit/8, badbit, badbit/8, badbit%8);
 
         // mark our badbit as bad
-        lfs3_emubd_markbadbit(CFG, BADBLOCK, badbit) => 0;
+        lfs3_emubd_mkbadbit(CFG, BADBLOCK, badbit) => 0;
 
         // With metastability, basically any filesystem operation can
         // return LFS3_ERR_CORRUPT. This is ok, what we're really testing
@@ -2422,7 +2430,7 @@ code = '''
 
     corrupt:;
         // reset badbit
-        lfs3_emubd_markgood(CFG, BADBLOCK) => 0;
+        lfs3_emubd_mkgood(CFG, BADBLOCK) => 0;
     }
 '''
 
@@ -2434,7 +2442,7 @@ defines.BADBLOCK_BEHAVIOR = [
     'LFS3_EMUBD_BADBLOCK_READFLIP',
 ]
 # force the file to create a btree
-defines.INLINE_SIZE = 0
+defines.SHRUB_SIZE = 0
 defines.CRYSTAL_THRESH = -1
 defines.FRAGMENT_SIZE = 'BLOCK_SIZE/8'
 defines.SIZE = '2*FRAGMENT_SIZE'
@@ -2462,18 +2470,18 @@ code = '''
     lfs3_file_close(&lfs3, &file) => 0;
 
     // find the btree block
-    lfs3_traversal_t t;
-    lfs3_traversal_open(&lfs3, &t, LFS3_T_RDONLY) => 0;
+    lfs3_trv_t trv;
+    lfs3_trv_open(&lfs3, &trv, LFS3_T_RDONLY) => 0;
     lfs3_block_t badblock;
     while (true) {
         struct lfs3_tinfo tinfo;
-        lfs3_traversal_read(&lfs3, &t, &tinfo) => 0;
+        lfs3_trv_read(&lfs3, &trv, &tinfo) => 0;
         if (tinfo.btype == LFS3_BTYPE_BTREE) {
             badblock = tinfo.block;
             break;
         }
     }
-    lfs3_traversal_close(&lfs3, &t) => 0;
+    lfs3_trv_close(&lfs3, &trv) => 0;
 
     lfs3_unmount(&lfs3) => 0;
 
@@ -2496,7 +2504,7 @@ code = '''
                 badblock, badbit/8, badbit, badbit/8, badbit%8);
 
         // mark our badbit as bad
-        lfs3_emubd_markbadbit(CFG, badblock, badbit) => 0;
+        lfs3_emubd_mkbadbit(CFG, badblock, badbit) => 0;
 
         // With metastability, basically any filesystem operation can
         // return LFS3_ERR_CORRUPT. This is ok, what we're really testing
@@ -2565,7 +2573,7 @@ code = '''
         lfs3_unmount(&lfs3) => 0;
 
         // reset badbit
-        lfs3_emubd_markgood(CFG, badblock) => 0;
+        lfs3_emubd_mkgood(CFG, badblock) => 0;
     }
 '''
 
@@ -2582,7 +2590,7 @@ defines.BADBLOCK_BEHAVIOR = [
 ]
 # this should create a single block file
 defines.SIZE = 'BLOCK_SIZE'
-ifdef = 'LFS3_CKDATACKSUMREADS'
+ifdef = 'LFS3_CKDATACKSUMS'
 code = '''
     // first we need to figure out where the data block will actually
     // end up, fortunately our block randomization is intentionally
@@ -2590,8 +2598,8 @@ code = '''
 
     // format
     lfs3_t lfs3;
-    lfs3_format(&lfs3, LFS3_F_RDWR | LFS3_F_CKDATACKSUMREADS, CFG) => 0;
-    lfs3_mount(&lfs3, LFS3_M_RDWR | LFS3_M_CKDATACKSUMREADS, CFG) => 0;
+    lfs3_format(&lfs3, LFS3_F_RDWR | LFS3_F_CKDATACKSUMS, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | LFS3_M_CKDATACKSUMS, CFG) => 0;
 
     // create a file
     lfs3_file_t file;
@@ -2606,18 +2614,18 @@ code = '''
     lfs3_file_close(&lfs3, &file) => 0;
 
     // find the data block
-    lfs3_traversal_t t;
-    lfs3_traversal_open(&lfs3, &t, LFS3_T_RDONLY) => 0;
+    lfs3_trv_t trv;
+    lfs3_trv_open(&lfs3, &trv, LFS3_T_RDONLY) => 0;
     lfs3_block_t badblock;
     while (true) {
         struct lfs3_tinfo tinfo;
-        lfs3_traversal_read(&lfs3, &t, &tinfo) => 0;
+        lfs3_trv_read(&lfs3, &trv, &tinfo) => 0;
         if (tinfo.btype == LFS3_BTYPE_DATA) {
             badblock = tinfo.block;
             break;
         }
     }
-    lfs3_traversal_close(&lfs3, &t) => 0;
+    lfs3_trv_close(&lfs3, &trv) => 0;
 
     lfs3_unmount(&lfs3) => 0;
 
@@ -2633,7 +2641,7 @@ code = '''
                 badblock, badbit/8, badbit, badbit/8, badbit%8);
 
         // mark our badbit as bad
-        lfs3_emubd_markbadbit(CFG, badblock, badbit) => 0;
+        lfs3_emubd_mkbadbit(CFG, badblock, badbit) => 0;
 
         // With metastability, basically any filesystem operation can
         // return LFS3_ERR_CORRUPT. This is ok, what we're really testing
@@ -2641,8 +2649,8 @@ code = '''
 
         // format
         lfs3_t lfs3;
-        lfs3_format(&lfs3, LFS3_F_RDWR | LFS3_F_CKDATACKSUMREADS, CFG) => 0;
-        lfs3_mount(&lfs3, LFS3_M_RDWR | LFS3_M_CKDATACKSUMREADS, CFG) => 0;
+        lfs3_format(&lfs3, LFS3_F_RDWR | LFS3_F_CKDATACKSUMS, CFG) => 0;
+        lfs3_mount(&lfs3, LFS3_M_RDWR | LFS3_M_CKDATACKSUMS, CFG) => 0;
 
         {
             // create a file
@@ -2671,7 +2679,7 @@ code = '''
                 if (remount) {
                     lfs3_unmount(&lfs3) => 0;
                     lfs3_mount(&lfs3,
-                            LFS3_M_RDWR | LFS3_M_CKDATACKSUMREADS,
+                            LFS3_M_RDWR | LFS3_M_CKDATACKSUMS,
                             CFG) => 0;
                 }
 
@@ -2702,7 +2710,7 @@ code = '''
         lfs3_unmount(&lfs3) => 0;
 
         // reset badbit
-        lfs3_emubd_markgood(CFG, badblock) => 0;
+        lfs3_emubd_mkgood(CFG, badblock) => 0;
     }
 '''
 
@@ -2742,7 +2750,7 @@ defines.MTREEONLY     = 'METHOD == 2'
 defines.CKPROGS       = 'METHOD == 0'
 defines.CKFETCHES     = 'METHOD == 2'
 defines.CKMETAPARITY      = false
-defines.CKDATACKSUMREADS  = 'METHOD == 3'
+defines.CKDATACKSUMS  = 'METHOD == 3'
 defines.N = [1, 2, 4, 8, 16, 32, 64, 128, 256]
 defines.SEED = 'range(10)'
 fuzz = 'SEED'
@@ -2750,7 +2758,7 @@ if = [
     'LFS3_IFDEF_CKPROGS(true, !CKPROGS)',
     'LFS3_IFDEF_CKFETCHES(true, !CKFETCHES)',
     'LFS3_IFDEF_CKMETAPARITY(true, !CKMETAPARITY)',
-    'LFS3_IFDEF_CKDATACKSUMREADS(true, !CKDATACKSUMREADS)',
+    'LFS3_IFDEF_CKDATACKSUMS(true, !CKDATACKSUMS)',
 ]
 code = '''
     // seed our block device with our seed so we have different error
@@ -2774,8 +2782,8 @@ code = '''
                 | ((CKMETAPARITY)
                     ? LFS3_IFDEF_CKMETAPARITY(LFS3_F_CKMETAPARITY, -1)
                     : 0)
-                | ((CKDATACKSUMREADS)
-                    ? LFS3_IFDEF_CKDATACKSUMREADS(LFS3_F_CKDATACKSUMREADS, -1)
+                | ((CKDATACKSUMS)
+                    ? LFS3_IFDEF_CKDATACKSUMS(LFS3_F_CKDATACKSUMS, -1)
                     : 0),
             CFG) => 0;
     lfs3_mount(&lfs3,
@@ -2785,8 +2793,8 @@ code = '''
                 | ((CKMETAPARITY)
                     ? LFS3_IFDEF_CKMETAPARITY(LFS3_M_CKMETAPARITY, -1)
                     : 0)
-                | ((CKDATACKSUMREADS)
-                    ? LFS3_IFDEF_CKDATACKSUMREADS(LFS3_M_CKDATACKSUMREADS, -1)
+                | ((CKDATACKSUMS)
+                    ? LFS3_IFDEF_CKDATACKSUMS(LFS3_M_CKDATACKSUMS, -1)
                     : 0),
             CFG) => 0;
 
@@ -2810,7 +2818,7 @@ code = '''
             // bit differently
 
             // mark our badblock as bad
-            lfs3_emubd_markbad(CFG, badblock) => 0;
+            lfs3_emubd_mkbad(CFG, badblock) => 0;
 
             // manually flipping? flip all badbits in badblocks
             if (BADBLOCK_BEHAVIOR == LFS3_EMUBD_BADBLOCK_MANUAL) {
@@ -2819,14 +2827,14 @@ code = '''
 
             // run ckdata?
             if (CKDATA) {
-                int err = lfs3_fs_ckdata(&lfs3);
+                int err = lfs3_fs_ck(&lfs3, LFS3_CK_CKDATA);
                 assert(!err || err == LFS3_ERR_CORRUPT);
                 if (err == LFS3_ERR_CORRUPT) {
                     goto corrupt_mounted;
                 }
             // run ckmeta?
             } else if (CKMETA && !MTREEONLY) {
-                int err = lfs3_fs_ckmeta(&lfs3);
+                int err = lfs3_fs_ck(&lfs3, LFS3_CK_CKMETA);
                 assert(!err || err == LFS3_ERR_CORRUPT);
                 if (err == LFS3_ERR_CORRUPT) {
                     goto corrupt_mounted;
@@ -2834,15 +2842,15 @@ code = '''
             // run ckmeta mtreeonly?
             } else if (CKMETA && MTREEONLY) {
                 // need an explicit traversal for this
-                lfs3_traversal_t t;
-                lfs3_traversal_open(&lfs3, &t,
+                lfs3_trv_t trv;
+                lfs3_trv_open(&lfs3, &trv,
                         LFS3_T_RDONLY | LFS3_T_MTREEONLY | LFS3_T_CKMETA) => 0;
                 for (lfs3_block_t i = 0;; i++) {
                     // a bit hacky, but this catches infinite loops
                     LFS3_ASSERT(i < 2*BLOCK_COUNT);
 
                     struct lfs3_tinfo tinfo;
-                    int err = lfs3_traversal_read(&lfs3, &t, &tinfo);
+                    int err = lfs3_trv_read(&lfs3, &trv, &tinfo);
                     assert(!err
                             || err == LFS3_ERR_NOENT
                             || err == LFS3_ERR_CORRUPT);
@@ -2850,11 +2858,11 @@ code = '''
                         break;
                     }
                     if (err == LFS3_ERR_CORRUPT) {
-                        lfs3_traversal_close(&lfs3, &t) => 0;
+                        lfs3_trv_close(&lfs3, &trv) => 0;
                         goto corrupt_mounted;
                     }
                 }
-                lfs3_traversal_close(&lfs3, &t) => 0;
+                lfs3_trv_close(&lfs3, &trv) => 0;
             }
         }
 
@@ -2933,7 +2941,7 @@ code = '''
                         }
                         // then insert
                         memmove(&sim[k+1], &sim[k],
-                                (sim_size-k)*sizeof(lfs3_size_t));
+                                (sim_size-1-k)*sizeof(lfs3_size_t));
                         sim[k] = y;
                     }
                     break;
@@ -2968,9 +2976,9 @@ code = '''
                         | ((CKMETAPARITY)
                             ? LFS3_IFDEF_CKMETAPARITY(LFS3_M_CKMETAPARITY, -1)
                             : 0)
-                        | ((CKDATACKSUMREADS)
-                            ? LFS3_IFDEF_CKDATACKSUMREADS(
-                                LFS3_M_CKDATACKSUMREADS,
+                        | ((CKDATACKSUMS)
+                            ? LFS3_IFDEF_CKDATACKSUMS(
+                                LFS3_M_CKDATACKSUMS,
                                 -1)
                             : 0),
                     CFG) => 0;
@@ -3049,12 +3057,12 @@ defines.MTREEONLY     = 'METHOD == 2'
 defines.CKPROGS       = 'METHOD == 0'
 defines.CKFETCHES     = 'METHOD == 2'
 defines.CKMETAPARITY      = false
-defines.CKDATACKSUMREADS  = 'METHOD == 3'
+defines.CKDATACKSUMS  = 'METHOD == 3'
 defines.N = [1, 2, 4, 8, 16, 32, 64]
 defines.SIZE = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -3066,7 +3074,7 @@ if = [
     'LFS3_IFDEF_CKPROGS(true, !CKPROGS)',
     'LFS3_IFDEF_CKFETCHES(true, !CKFETCHES)',
     'LFS3_IFDEF_CKMETAPARITY(true, !CKMETAPARITY)',
-    'LFS3_IFDEF_CKDATACKSUMREADS(true, !CKDATACKSUMREADS)',
+    'LFS3_IFDEF_CKDATACKSUMS(true, !CKDATACKSUMS)',
     '(SIZE*N)/BLOCK_SIZE <= 16',
 ]
 code = '''
@@ -3091,8 +3099,8 @@ code = '''
                 | ((CKMETAPARITY)
                     ? LFS3_IFDEF_CKMETAPARITY(LFS3_F_CKMETAPARITY, -1)
                     : 0)
-                | ((CKDATACKSUMREADS)
-                    ? LFS3_IFDEF_CKDATACKSUMREADS(LFS3_F_CKDATACKSUMREADS, -1)
+                | ((CKDATACKSUMS)
+                    ? LFS3_IFDEF_CKDATACKSUMS(LFS3_F_CKDATACKSUMS, -1)
                     : 0),
             CFG) => 0;
     lfs3_mount(&lfs3,
@@ -3102,8 +3110,8 @@ code = '''
                 | ((CKMETAPARITY)
                     ? LFS3_IFDEF_CKMETAPARITY(LFS3_M_CKMETAPARITY, -1)
                     : 0)
-                | ((CKDATACKSUMREADS)
-                    ? LFS3_IFDEF_CKDATACKSUMREADS(LFS3_M_CKDATACKSUMREADS, -1)
+                | ((CKDATACKSUMS)
+                    ? LFS3_IFDEF_CKDATACKSUMS(LFS3_M_CKDATACKSUMS, -1)
                     : 0),
             CFG) => 0;
 
@@ -3128,7 +3136,7 @@ code = '''
             // bit differently
 
             // mark our badblock as bad
-            lfs3_emubd_markbad(CFG, badblock) => 0;
+            lfs3_emubd_mkbad(CFG, badblock) => 0;
 
             // manually flipping? flip all badbits in badblocks
             if (BADBLOCK_BEHAVIOR == LFS3_EMUBD_BADBLOCK_MANUAL) {
@@ -3137,14 +3145,14 @@ code = '''
 
             // run ckdata?
             if (CKDATA) {
-                int err = lfs3_fs_ckdata(&lfs3);
+                int err = lfs3_fs_ck(&lfs3, LFS3_CK_CKDATA);
                 assert(!err || err == LFS3_ERR_CORRUPT);
                 if (err == LFS3_ERR_CORRUPT) {
                     goto corrupt_mounted;
                 }
             // run ckmeta?
             } else if (CKMETA && !MTREEONLY) {
-                int err = lfs3_fs_ckmeta(&lfs3);
+                int err = lfs3_fs_ck(&lfs3, LFS3_CK_CKMETA);
                 assert(!err || err == LFS3_ERR_CORRUPT);
                 if (err == LFS3_ERR_CORRUPT) {
                     goto corrupt_mounted;
@@ -3152,15 +3160,15 @@ code = '''
             // run ckmeta mtreeonly?
             } else if (CKMETA && MTREEONLY) {
                 // need an explicit traversal for this
-                lfs3_traversal_t t;
-                lfs3_traversal_open(&lfs3, &t,
+                lfs3_trv_t trv;
+                lfs3_trv_open(&lfs3, &trv,
                         LFS3_T_RDONLY | LFS3_T_MTREEONLY | LFS3_T_CKMETA) => 0;
                 for (lfs3_block_t i = 0;; i++) {
                     // a bit hacky, but this catches infinite loops
                     LFS3_ASSERT(i < 2*BLOCK_COUNT);
 
                     struct lfs3_tinfo tinfo;
-                    int err = lfs3_traversal_read(&lfs3, &t, &tinfo);
+                    int err = lfs3_trv_read(&lfs3, &trv, &tinfo);
                     assert(!err
                             || err == LFS3_ERR_NOENT
                             || err == LFS3_ERR_CORRUPT);
@@ -3168,11 +3176,11 @@ code = '''
                         break;
                     }
                     if (err == LFS3_ERR_CORRUPT) {
-                        lfs3_traversal_close(&lfs3, &t) => 0;
+                        lfs3_trv_close(&lfs3, &trv) => 0;
                         goto corrupt_mounted;
                     }
                 }
-                lfs3_traversal_close(&lfs3, &t) => 0;
+                lfs3_trv_close(&lfs3, &trv) => 0;
             }
         }
 
@@ -3294,9 +3302,9 @@ code = '''
                         }
                         // then insert
                         memmove(&sim[k+1], &sim[k],
-                                (sim_size-k)*sizeof(lfs3_size_t));
+                                (sim_size-1-k)*sizeof(lfs3_size_t));
                         memmove(&sim_prngs[k+1], &sim_prngs[k],
-                                (sim_size-k)*sizeof(uint32_t));
+                                (sim_size-1-k)*sizeof(uint32_t));
                         sim[k] = y;
                         sim_prngs[k] = wprng;
                     }
@@ -3332,9 +3340,9 @@ code = '''
                         | ((CKMETAPARITY)
                             ? LFS3_IFDEF_CKMETAPARITY(LFS3_M_CKMETAPARITY, -1)
                             : 0)
-                        | ((CKDATACKSUMREADS)
-                            ? LFS3_IFDEF_CKDATACKSUMREADS(
-                                LFS3_M_CKDATACKSUMREADS,
+                        | ((CKDATACKSUMS)
+                            ? LFS3_IFDEF_CKDATACKSUMS(
+                                LFS3_M_CKDATACKSUMS,
                                 -1)
                             : 0),
                     CFG) => 0;
@@ -3436,10 +3444,10 @@ defines.MTREEONLY     = false
 defines.CKPROGS       = 'METHOD == 0'
 defines.CKFETCHES     = 'METHOD == 2'
 defines.CKMETAPARITY      = false
-defines.CKDATACKSUMREADS  = 'METHOD == 3'
+defines.CKDATACKSUMS  = 'METHOD == 3'
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -3458,7 +3466,7 @@ if = [
     'LFS3_IFDEF_CKPROGS(true, !CKPROGS)',
     'LFS3_IFDEF_CKFETCHES(true, !CKFETCHES)',
     'LFS3_IFDEF_CKMETAPARITY(true, !CKMETAPARITY)',
-    'LFS3_IFDEF_CKDATACKSUMREADS(true, !CKDATACKSUMREADS)',
+    'LFS3_IFDEF_CKDATACKSUMS(true, !CKDATACKSUMS)',
     'CHUNK <= SIZE',
     # this just saves testing time
     'SIZE <= 4*1024*FRAGMENT_SIZE',
@@ -3485,8 +3493,8 @@ code = '''
                 | ((CKMETAPARITY)
                     ? LFS3_IFDEF_CKMETAPARITY(LFS3_F_CKMETAPARITY, -1)
                     : 0)
-                | ((CKDATACKSUMREADS)
-                    ? LFS3_IFDEF_CKDATACKSUMREADS(LFS3_F_CKDATACKSUMREADS, -1)
+                | ((CKDATACKSUMS)
+                    ? LFS3_IFDEF_CKDATACKSUMS(LFS3_F_CKDATACKSUMS, -1)
                     : 0),
             CFG) => 0;
     lfs3_mount(&lfs3,
@@ -3496,8 +3504,8 @@ code = '''
                 | ((CKMETAPARITY)
                     ? LFS3_IFDEF_CKMETAPARITY(LFS3_M_CKMETAPARITY, -1)
                     : 0)
-                | ((CKDATACKSUMREADS)
-                    ? LFS3_IFDEF_CKDATACKSUMREADS(LFS3_M_CKDATACKSUMREADS, -1)
+                | ((CKDATACKSUMS)
+                    ? LFS3_IFDEF_CKDATACKSUMS(LFS3_M_CKDATACKSUMS, -1)
                     : 0),
             CFG) => 0;
 
@@ -3544,7 +3552,7 @@ code = '''
             // bit differently
 
             // mark our badblock as bad
-            lfs3_emubd_markbad(CFG, badblock) => 0;
+            lfs3_emubd_mkbad(CFG, badblock) => 0;
 
             // manually flipping? flip all badbits in badblocks
             if (BADBLOCK_BEHAVIOR == LFS3_EMUBD_BADBLOCK_MANUAL) {
@@ -3553,14 +3561,14 @@ code = '''
 
             // run ckdata?
             if (CKDATA) {
-                int err = lfs3_fs_ckdata(&lfs3);
+                int err = lfs3_fs_ck(&lfs3, LFS3_CK_CKDATA);
                 assert(!err || err == LFS3_ERR_CORRUPT);
                 if (err == LFS3_ERR_CORRUPT) {
                     goto corrupt_open;
                 }
             // run ckmeta?
             } else if (CKMETA && !MTREEONLY) {
-                int err = lfs3_fs_ckmeta(&lfs3);
+                int err = lfs3_fs_ck(&lfs3, LFS3_CK_CKMETA);
                 assert(!err || err == LFS3_ERR_CORRUPT);
                 if (err == LFS3_ERR_CORRUPT) {
                     goto corrupt_open;
@@ -3568,15 +3576,15 @@ code = '''
             // run ckmeta mtreeonly?
             } else if (CKMETA && MTREEONLY) {
                 // need an explicit traversal for this
-                lfs3_traversal_t t;
-                lfs3_traversal_open(&lfs3, &t,
+                lfs3_trv_t trv;
+                lfs3_trv_open(&lfs3, &trv,
                         LFS3_T_RDONLY | LFS3_T_MTREEONLY | LFS3_T_CKMETA) => 0;
                 for (lfs3_block_t i = 0;; i++) {
                     // a bit hacky, but this catches infinite loops
                     LFS3_ASSERT(i < 2*BLOCK_COUNT);
 
                     struct lfs3_tinfo tinfo;
-                    int err = lfs3_traversal_read(&lfs3, &t, &tinfo);
+                    int err = lfs3_trv_read(&lfs3, &trv, &tinfo);
                     assert(!err
                             || err == LFS3_ERR_NOENT
                             || err == LFS3_ERR_CORRUPT);
@@ -3584,11 +3592,11 @@ code = '''
                         break;
                     }
                     if (err == LFS3_ERR_CORRUPT) {
-                        lfs3_traversal_close(&lfs3, &t) => 0;
+                        lfs3_trv_close(&lfs3, &trv) => 0;
                         goto corrupt_open;
                     }
                 }
-                lfs3_traversal_close(&lfs3, &t) => 0;
+                lfs3_trv_close(&lfs3, &trv) => 0;
             }
         }
 
@@ -3653,9 +3661,9 @@ code = '''
                         | ((CKMETAPARITY)
                             ? LFS3_IFDEF_CKMETAPARITY(LFS3_M_CKMETAPARITY, -1)
                             : 0)
-                        | ((CKDATACKSUMREADS)
-                            ? LFS3_IFDEF_CKDATACKSUMREADS(
-                                LFS3_M_CKDATACKSUMREADS,
+                        | ((CKDATACKSUMS)
+                            ? LFS3_IFDEF_CKDATACKSUMS(
+                                LFS3_M_CKDATACKSUMS,
                                 -1)
                             : 0),
                     CFG) => 0;
@@ -3737,12 +3745,14 @@ defines.MTREEONLY     = false
 defines.CKPROGS       = 'METHOD == 0'
 defines.CKFETCHES     = 'METHOD == 2'
 defines.CKMETAPARITY      = false
-defines.CKDATACKSUMREADS  = 'METHOD == 3'
+defines.CKDATACKSUMS  = 'METHOD == 3'
+# you probably need to flush if you expect errors
+defines.FLUSH = true
 defines.N = [1, 2, 4, 8, 16, 32, 64]
 defines.SIZE = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -3754,7 +3764,7 @@ if = [
     'LFS3_IFDEF_CKPROGS(true, !CKPROGS)',
     'LFS3_IFDEF_CKFETCHES(true, !CKFETCHES)',
     'LFS3_IFDEF_CKMETAPARITY(true, !CKMETAPARITY)',
-    'LFS3_IFDEF_CKDATACKSUMREADS(true, !CKDATACKSUMREADS)',
+    'LFS3_IFDEF_CKDATACKSUMS(true, !CKDATACKSUMS)',
     '(SIZE*N)/BLOCK_SIZE <= 16',
 ]
 code = '''
@@ -3779,8 +3789,8 @@ code = '''
                 | ((CKMETAPARITY)
                     ? LFS3_IFDEF_CKMETAPARITY(LFS3_F_CKMETAPARITY, -1)
                     : 0)
-                | ((CKDATACKSUMREADS)
-                    ? LFS3_IFDEF_CKDATACKSUMREADS(LFS3_F_CKDATACKSUMREADS, -1)
+                | ((CKDATACKSUMS)
+                    ? LFS3_IFDEF_CKDATACKSUMS(LFS3_F_CKDATACKSUMS, -1)
                     : 0),
             CFG) => 0;
     lfs3_mount(&lfs3,
@@ -3790,8 +3800,8 @@ code = '''
                 | ((CKMETAPARITY)
                     ? LFS3_IFDEF_CKMETAPARITY(LFS3_M_CKMETAPARITY, -1)
                     : 0)
-                | ((CKDATACKSUMREADS)
-                    ? LFS3_IFDEF_CKDATACKSUMREADS(LFS3_M_CKDATACKSUMREADS, -1)
+                | ((CKDATACKSUMS)
+                    ? LFS3_IFDEF_CKDATACKSUMS(LFS3_M_CKDATACKSUMS, -1)
                     : 0),
             CFG) => 0;
 
@@ -3827,7 +3837,7 @@ code = '''
             // bit differently
 
             // mark our badblock as bad
-            lfs3_emubd_markbad(CFG, badblock) => 0;
+            lfs3_emubd_mkbad(CFG, badblock) => 0;
 
             // manually flipping? flip all badbits in badblocks
             if (BADBLOCK_BEHAVIOR == LFS3_EMUBD_BADBLOCK_MANUAL) {
@@ -3836,14 +3846,14 @@ code = '''
 
             // run ckdata?
             if (CKDATA) {
-                int err = lfs3_fs_ckdata(&lfs3);
+                int err = lfs3_fs_ck(&lfs3, LFS3_CK_CKDATA);
                 assert(!err || err == LFS3_ERR_CORRUPT);
                 if (err == LFS3_ERR_CORRUPT) {
                     goto corrupt_mounted;
                 }
             // run ckmeta?
             } else if (CKMETA && !MTREEONLY) {
-                int err = lfs3_fs_ckmeta(&lfs3);
+                int err = lfs3_fs_ck(&lfs3, LFS3_CK_CKMETA);
                 assert(!err || err == LFS3_ERR_CORRUPT);
                 if (err == LFS3_ERR_CORRUPT) {
                     goto corrupt_mounted;
@@ -3851,15 +3861,15 @@ code = '''
             // run ckmeta mtreeonly?
             } else if (CKMETA && MTREEONLY) {
                 // need an explicit traversal for this
-                lfs3_traversal_t t;
-                lfs3_traversal_open(&lfs3, &t,
+                lfs3_trv_t trv;
+                lfs3_trv_open(&lfs3, &trv,
                         LFS3_T_RDONLY | LFS3_T_MTREEONLY | LFS3_T_CKMETA) => 0;
                 for (lfs3_block_t i = 0;; i++) {
                     // a bit hacky, but this catches infinite loops
                     LFS3_ASSERT(i < 2*BLOCK_COUNT);
 
                     struct lfs3_tinfo tinfo;
-                    int err = lfs3_traversal_read(&lfs3, &t, &tinfo);
+                    int err = lfs3_trv_read(&lfs3, &trv, &tinfo);
                     assert(!err
                             || err == LFS3_ERR_NOENT
                             || err == LFS3_ERR_CORRUPT);
@@ -3867,11 +3877,11 @@ code = '''
                         break;
                     }
                     if (err == LFS3_ERR_CORRUPT) {
-                        lfs3_traversal_close(&lfs3, &t) => 0;
+                        lfs3_trv_close(&lfs3, &trv) => 0;
                         goto corrupt_mounted;
                     }
                 }
-                lfs3_traversal_close(&lfs3, &t) => 0;
+                lfs3_trv_close(&lfs3, &trv) => 0;
             }
         }
 
@@ -3914,7 +3924,9 @@ code = '''
             char name[256];
             sprintf(name, "batman%03x", x);
             int err = lfs3_file_open(&lfs3, &sim_files[j]->file, name,
-                    LFS3_O_RDWR | LFS3_O_CREAT);
+                    LFS3_O_RDWR
+                        | LFS3_O_CREAT
+                        | ((FLUSH) ? LFS3_O_FLUSH : 0));
             assert(!err || err == LFS3_ERR_NOSPC);
             if (err == LFS3_ERR_NOSPC) {
                 free(sim_files[j]);
@@ -4173,11 +4185,11 @@ code = '''
                         }
                         // then insert
                         memmove(&sim[k+1], &sim[k],
-                                (sim_size-k)*sizeof(lfs3_size_t));
+                                (sim_size-1-k)*sizeof(lfs3_size_t));
                         memmove(&sim_prngs[k+1], &sim_prngs[k],
-                                (sim_size-k)*sizeof(uint32_t));
+                                (sim_size-1-k)*sizeof(uint32_t));
                         memmove(&sim_isstickys[k+1], &sim_isstickys[k],
-                                (sim_size-k)*sizeof(bool));
+                                (sim_size-1-k)*sizeof(bool));
                         sim[k] = y;
                         sim_prngs[k] = wprng;
                         sim_isstickys[k] = sticky;
@@ -4336,12 +4348,14 @@ defines.MTREEONLY     = false
 defines.CKPROGS       = 'METHOD == 0'
 defines.CKFETCHES     = 'METHOD == 2'
 defines.CKMETAPARITY      = false
-defines.CKDATACKSUMREADS  = 'METHOD == 3'
+defines.CKDATACKSUMS  = 'METHOD == 3'
+# you probably need to flush if you expect errors
+defines.FLUSH = true
 defines.N = [1, 2, 4, 8, 16, 32, 64]
 defines.SIZE = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -4353,7 +4367,7 @@ if = [
     'LFS3_IFDEF_CKPROGS(true, !CKPROGS)',
     'LFS3_IFDEF_CKFETCHES(true, !CKFETCHES)',
     'LFS3_IFDEF_CKMETAPARITY(true, !CKMETAPARITY)',
-    'LFS3_IFDEF_CKDATACKSUMREADS(true, !CKDATACKSUMREADS)',
+    'LFS3_IFDEF_CKDATACKSUMS(true, !CKDATACKSUMS)',
     '(SIZE*N)/BLOCK_SIZE <= 16',
 ]
 code = '''
@@ -4378,8 +4392,8 @@ code = '''
                 | ((CKMETAPARITY)
                     ? LFS3_IFDEF_CKMETAPARITY(LFS3_F_CKMETAPARITY, -1)
                     : 0)
-                | ((CKDATACKSUMREADS)
-                    ? LFS3_IFDEF_CKDATACKSUMREADS(LFS3_F_CKDATACKSUMREADS, -1)
+                | ((CKDATACKSUMS)
+                    ? LFS3_IFDEF_CKDATACKSUMS(LFS3_F_CKDATACKSUMS, -1)
                     : 0),
             CFG) => 0;
     lfs3_mount(&lfs3,
@@ -4389,8 +4403,8 @@ code = '''
                 | ((CKMETAPARITY)
                     ? LFS3_IFDEF_CKMETAPARITY(LFS3_M_CKMETAPARITY, -1)
                     : 0)
-                | ((CKDATACKSUMREADS)
-                    ? LFS3_IFDEF_CKDATACKSUMREADS(LFS3_M_CKDATACKSUMREADS, -1)
+                | ((CKDATACKSUMS)
+                    ? LFS3_IFDEF_CKDATACKSUMS(LFS3_M_CKDATACKSUMS, -1)
                     : 0),
             CFG) => 0;
 
@@ -4427,7 +4441,7 @@ code = '''
             // bit differently
 
             // mark our badblock as bad
-            lfs3_emubd_markbad(CFG, badblock) => 0;
+            lfs3_emubd_mkbad(CFG, badblock) => 0;
 
             // manually flipping? flip all badbits in badblocks
             if (BADBLOCK_BEHAVIOR == LFS3_EMUBD_BADBLOCK_MANUAL) {
@@ -4436,14 +4450,14 @@ code = '''
 
             // run ckdata?
             if (CKDATA) {
-                int err = lfs3_fs_ckdata(&lfs3);
+                int err = lfs3_fs_ck(&lfs3, LFS3_CK_CKDATA);
                 assert(!err || err == LFS3_ERR_CORRUPT);
                 if (err == LFS3_ERR_CORRUPT) {
                     goto corrupt_mounted;
                 }
             // run ckmeta?
             } else if (CKMETA && !MTREEONLY) {
-                int err = lfs3_fs_ckmeta(&lfs3);
+                int err = lfs3_fs_ck(&lfs3, LFS3_CK_CKMETA);
                 assert(!err || err == LFS3_ERR_CORRUPT);
                 if (err == LFS3_ERR_CORRUPT) {
                     goto corrupt_mounted;
@@ -4451,15 +4465,15 @@ code = '''
             // run ckmeta mtreeonly?
             } else if (CKMETA && MTREEONLY) {
                 // need an explicit traversal for this
-                lfs3_traversal_t t;
-                lfs3_traversal_open(&lfs3, &t,
+                lfs3_trv_t trv;
+                lfs3_trv_open(&lfs3, &trv,
                         LFS3_T_RDONLY | LFS3_T_MTREEONLY | LFS3_T_CKMETA) => 0;
                 for (lfs3_block_t i = 0;; i++) {
                     // a bit hacky, but this catches infinite loops
                     LFS3_ASSERT(i < 2*BLOCK_COUNT);
 
                     struct lfs3_tinfo tinfo;
-                    int err = lfs3_traversal_read(&lfs3, &t, &tinfo);
+                    int err = lfs3_trv_read(&lfs3, &trv, &tinfo);
                     assert(!err
                             || err == LFS3_ERR_NOENT
                             || err == LFS3_ERR_CORRUPT);
@@ -4467,11 +4481,11 @@ code = '''
                         break;
                     }
                     if (err == LFS3_ERR_CORRUPT) {
-                        lfs3_traversal_close(&lfs3, &t) => 0;
+                        lfs3_trv_close(&lfs3, &trv) => 0;
                         goto corrupt_mounted;
                     }
                 }
-                lfs3_traversal_close(&lfs3, &t) => 0;
+                lfs3_trv_close(&lfs3, &trv) => 0;
             }
         }
 
@@ -4517,7 +4531,9 @@ code = '''
             char name[256];
             sprintf(name, "batman%03x", x);
             int err = lfs3_file_open(&lfs3, &sim_files[j]->file, name,
-                    LFS3_O_RDWR | LFS3_O_CREAT);
+                    LFS3_O_RDWR
+                        | LFS3_O_CREAT
+                        | ((FLUSH) ? LFS3_O_FLUSH : 0));
             assert(!err || err == LFS3_ERR_NOSPC);
             if (err == LFS3_ERR_NOSPC) {
                 free(sim_files[j]);
@@ -4802,13 +4818,13 @@ code = '''
                         }
                         // then insert
                         memmove(&sim[k+1], &sim[k],
-                                (sim_size-k)*sizeof(lfs3_size_t));
+                                (sim_size-1-k)*sizeof(lfs3_size_t));
                         memmove(&sim_prngs[k+1], &sim_prngs[k],
-                                (sim_size-k)*sizeof(uint32_t));
+                                (sim_size-1-k)*sizeof(uint32_t));
                         memmove(&sim_isstickys[k+1], &sim_isstickys[k],
-                                (sim_size-k)*sizeof(bool));
+                                (sim_size-1-k)*sizeof(bool));
                         memmove(&sim_isdirs[k+1], &sim_isdirs[k],
-                                (sim_size-k)*sizeof(bool));
+                                (sim_size-1-k)*sizeof(bool));
                         sim[k] = y;
                         sim_prngs[k] = wprng;
                         sim_isstickys[k] = sticky;

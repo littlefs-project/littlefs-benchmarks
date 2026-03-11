@@ -6,8 +6,8 @@ after = ['test_fwrite', 'test_fsync']
 # test files don't exist until first sync/close
 [cases.test_stickynotes_uncreat]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -220,8 +220,8 @@ code = '''
 # test files don't exist until first sync/close, even under powerloss
 [cases.test_stickynotes_uncreat_pl]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -298,8 +298,8 @@ code = '''
 # test files don't exist until first sync/close, even under powerloss
 [cases.test_stickynotes_uncreat_many_pl]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
 ]
 defines.CHUNK = 8
 defines.N = 128
@@ -386,8 +386,8 @@ code = '''
 # test files only exist as stickynotes until first sync/close
 [cases.test_stickynotes_uncreat_sync_wr]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -608,8 +608,8 @@ code = '''
 
 [cases.test_stickynotes_uncreat_sync_rw]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -824,8 +824,8 @@ code = '''
 
 [cases.test_stickynotes_uncreat_wdwr]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -2447,7 +2447,7 @@ code = '''
     // well, because of the root really, but also because of the
     // stickynote
     //
-    lfs3_rename(&lfs3, "batman", "/") => LFS3_ERR_INVAL;
+    lfs3_rename(&lfs3, "batman", "/") => LFS3_ERR_BUSY;
 
     // we should still be able to read our uncreat
     lfs3_file_rewind(&lfs3, &uncreat) => 0;
@@ -2628,8 +2628,8 @@ code = '''
 # test desync files don't exist until first sync + close
 [cases.test_stickynotes_undesync]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -2843,8 +2843,8 @@ code = '''
 # test desync files don't exist until first sync + close, even under powerloss
 [cases.test_stickynotes_undesync_pl]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -2923,8 +2923,8 @@ code = '''
 # test desync files don't exist until first sync + close, even under powerloss
 [cases.test_stickynotes_undesync_many_pl]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
 ]
 defines.CHUNK = 8
 defines.N = 128
@@ -3019,8 +3019,8 @@ code = '''
 # test desync files aren't even openable until first sync + close
 [cases.test_stickynotes_undesync_sync_wr]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -3230,8 +3230,8 @@ code = '''
 
 [cases.test_stickynotes_undesync_sync_rw]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -3448,8 +3448,8 @@ code = '''
 
 [cases.test_stickynotes_undesync_wdwr]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -3989,8 +3989,8 @@ code = '''
 # test that desynced, and then closed, files don't show up
 [cases.test_stickynotes_orphan]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -4116,8 +4116,8 @@ code = '''
 
 [cases.test_stickynotes_orphan_wdwr]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -4425,8 +4425,8 @@ code = '''
 defines.N = 'range(6)'
 defines.M = 'range(6)'
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -5279,8 +5279,8 @@ code = '''
 # test that removed files never show up
 [cases.test_stickynotes_zombie]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -5414,8 +5414,8 @@ code = '''
 
 [cases.test_stickynotes_zombie_posthumous]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -5549,8 +5549,8 @@ code = '''
 
 [cases.test_stickynotes_zombie_rwrw]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -5810,8 +5810,8 @@ code = '''
 
 [cases.test_stickynotes_zombie_rwrw_posthumous]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -6071,8 +6071,8 @@ code = '''
 
 [cases.test_stickynotes_zombie_zombie_rwrwrw]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -6389,8 +6389,8 @@ code = '''
 
 [cases.test_stickynotes_zombie_zombie_rwrwrw_posthumous]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -7919,8 +7919,8 @@ code = '''
 # test that we actually cleanup orphans correctly
 [cases.test_stickynotes_cleanup]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -8021,7 +8021,7 @@ code = '''
             <= ((1+lfs3_popc(BOOKENDS)) << lfs3.mbits));
     lfs3_mdir_t mdir;
     lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
-    assert(mdir.rbyd.weight <= 1+lfs3_popc(BOOKENDS));
+    assert(mdir.r.weight <= 1+lfs3_popc(BOOKENDS));
 
     // check that other files are unaffected
     for (int remount = 0; remount < 2; remount++) {
@@ -8064,8 +8064,8 @@ code = '''
 
 [cases.test_stickynotes_cleanup_open]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -8160,7 +8160,7 @@ code = '''
             <= ((1+lfs3_popc(BOOKENDS)) << lfs3.mbits));
     lfs3_mdir_t mdir;
     lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
-    assert(mdir.rbyd.weight <= 1+lfs3_popc(BOOKENDS));
+    assert(mdir.r.weight <= 1+lfs3_popc(BOOKENDS));
 
     // check that other files are unaffected
     for (int remount = 0; remount < 2; remount++) {
@@ -8219,8 +8219,8 @@ code = '''
 
 [cases.test_stickynotes_cleanup_uncreat]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -8313,7 +8313,7 @@ code = '''
             <= ((1+lfs3_popc(BOOKENDS)) << lfs3.mbits));
     lfs3_mdir_t mdir;
     lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
-    assert(mdir.rbyd.weight <= 1+lfs3_popc(BOOKENDS));
+    assert(mdir.r.weight <= 1+lfs3_popc(BOOKENDS));
 
     // check that other files are unaffected
     for (int remount = 0; remount < 2; remount++) {
@@ -8372,8 +8372,8 @@ code = '''
 
 [cases.test_stickynotes_cleanup_zombie]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -8472,7 +8472,7 @@ code = '''
             <= ((1+lfs3_popc(BOOKENDS)) << lfs3.mbits));
     lfs3_mdir_t mdir;
     lfs3_mtree_lookup(&lfs3, 0, &mdir) => 0;
-    assert(mdir.rbyd.weight <= 1+lfs3_popc(BOOKENDS));
+    assert(mdir.r.weight <= 1+lfs3_popc(BOOKENDS));
 
     // check that other files are unaffected
     if (BOOKENDS & 0x1) {
@@ -8517,8 +8517,8 @@ code = '''
 #
 [cases.test_stickynotes_file_mv]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -8762,8 +8762,8 @@ code = '''
 
 [cases.test_stickynotes_file_mv_postmv]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -9067,8 +9067,8 @@ code = '''
 
 [cases.test_stickynotes_file_mv_file_rwrw]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -9421,8 +9421,8 @@ code = '''
 
 [cases.test_stickynotes_file_mv_rwrw_postmv]
 defines.SIZE = [
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -10128,8 +10128,8 @@ code = '''
 defines.N = [1, 2, 4, 8, 16, 32, 64]
 defines.SIZE = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -10475,8 +10475,8 @@ code = '''
 defines.N = [1, 2, 4, 8, 16, 32, 64]
 defines.SIZE = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -10822,13 +10822,15 @@ code = '''
 
 # fuzz tests involving many uncreats + zombies, this gets a bit crazy
 [cases.test_stickynotes_uz_fuzz]
+# you probably need to flush if you expect errors
+defines.FLUSH = false
 defines.N = [1, 2, 4, 8, 16, 32, 64]
 # do more ops than files to encourage file rewrites
 defines.OPS = '2*N'
 defines.SIZE = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -10897,7 +10899,9 @@ code = '''
             char name[256];
             sprintf(name, "batman%03x", x);
             lfs3_file_open(&lfs3, &sim_files[j]->file, name,
-                    LFS3_O_RDWR | LFS3_O_CREAT) => 0;
+                    LFS3_O_RDWR
+                        | LFS3_O_CREAT
+                        | ((FLUSH) ? LFS3_O_FLUSH : 0)) => 0;
 
             // write some initial data if we don't exist
             if (!exist || sticky) {
@@ -11122,11 +11126,11 @@ code = '''
                         }
                         // then insert
                         memmove(&sim[k+1], &sim[k],
-                                (sim_size-k)*sizeof(lfs3_size_t));
+                                (sim_size-1-k)*sizeof(lfs3_size_t));
                         memmove(&sim_prngs[k+1], &sim_prngs[k],
-                                (sim_size-k)*sizeof(uint32_t));
+                                (sim_size-1-k)*sizeof(uint32_t));
                         memmove(&sim_isstickys[k+1], &sim_isstickys[k],
-                                (sim_size-k)*sizeof(bool));
+                                (sim_size-1-k)*sizeof(bool));
                         sim[k] = y;
                         sim_prngs[k] = wprng;
                         sim_isstickys[k] = sticky;
@@ -11242,13 +11246,15 @@ code = '''
 
 # fuzz tests involving many uncreats + zombies + dirs, this gets a bit crazy
 [cases.test_stickynotes_uzd_fuzz]
+# you probably need to flush if you expect errors
+defines.FLUSH = false
 defines.N = [1, 2, 4, 8, 16, 32, 64]
 # do more ops than files to encourage file rewrites
 defines.OPS = '2*N'
 defines.SIZE = [
     '0',
-    'FILE_CACHE_SIZE/2',
-    '2*FILE_CACHE_SIZE',
+    'FCACHE_SIZE/2',
+    '2*FCACHE_SIZE',
     'BLOCK_SIZE/2',
     'BLOCK_SIZE',
     '2*BLOCK_SIZE',
@@ -11321,7 +11327,9 @@ code = '''
             char name[256];
             sprintf(name, "batman%03x", x);
             lfs3_file_open(&lfs3, &sim_files[j]->file, name,
-                    LFS3_O_RDWR | LFS3_O_CREAT) => 0;
+                    LFS3_O_RDWR
+                        | LFS3_O_CREAT
+                        | ((FLUSH) ? LFS3_O_FLUSH : 0)) => 0;
 
             // write some initial data if we don't exist
             if (!exist || sticky) {
@@ -11572,13 +11580,13 @@ code = '''
                         }
                         // then insert
                         memmove(&sim[k+1], &sim[k],
-                                (sim_size-k)*sizeof(lfs3_size_t));
+                                (sim_size-1-k)*sizeof(lfs3_size_t));
                         memmove(&sim_prngs[k+1], &sim_prngs[k],
-                                (sim_size-k)*sizeof(uint32_t));
+                                (sim_size-1-k)*sizeof(uint32_t));
                         memmove(&sim_isstickys[k+1], &sim_isstickys[k],
-                                (sim_size-k)*sizeof(bool));
+                                (sim_size-1-k)*sizeof(bool));
                         memmove(&sim_isdirs[k+1], &sim_isdirs[k],
-                                (sim_size-k)*sizeof(bool));
+                                (sim_size-1-k)*sizeof(bool));
                         sim[k] = y;
                         sim_prngs[k] = wprng;
                         sim_isstickys[k] = sticky;

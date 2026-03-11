@@ -36,7 +36,7 @@ class CsvInt(co.namedtuple('CsvInt', 'a')):
     def __new__(cls, a=0):
         if isinstance(a, CsvInt):
             return a
-        if isinstance(a, str):
+        elif isinstance(a, str):
             try:
                 a = int(a, 0)
             except ValueError:
@@ -47,9 +47,7 @@ class CsvInt(co.namedtuple('CsvInt', 'a')):
                     a = -mt.inf
                 else:
                     raise
-        if not (isinstance(a, int) or mt.isinf(a)):
-            a = int(a)
-        return super().__new__(cls, a)
+        return super().__new__(cls, float(a) if mt.isinf(a) else int(a))
 
     def __repr__(self):
         return '%s(%r)' % (self.__class__.__name__, self.a)
@@ -145,11 +143,12 @@ class CtxResult(co.namedtuple('CtxResult', [
         'z', 'i', 'file', 'function',
         'off', 'size',
         'children', 'notes'])):
-    _prefix = 'ctx'
+    _prefix = 'ctx_'
     _by = ['z', 'i', 'file', 'function']
     _fields = ['off', 'size']
     _sort = ['size']
     _types = {'off': CsvInt, 'size': CsvInt}
+    _z = 'z'
     _children = 'children'
     _notes = 'notes'
 
@@ -522,9 +521,16 @@ def collect_ctx(obj_paths, *,
                 if 'DW_AT_type' in entry:
                     type = info[int(entry['DW_AT_type'].strip('<>'), 0)]
                     size += sizeof(type, seen | {entry.off})
+            # base type?
+            elif entry.tag == 'DW_TAG_base_type':
+                size = int(entry['DW_AT_byte_size'])
+            # function pointer?
+            elif entry.tag == 'DW_TAG_subroutine_type':
+                size = 0
             # struct? include any nested pointers
             elif entry.tag == 'DW_TAG_structure_type':
-                size = int(entry['DW_AT_byte_size'])
+                # note structs/unions can be incomplete
+                size = int(entry.get('DW_AT_byte_size', 0))
                 for child in entry.children:
                     if child.tag != 'DW_TAG_member':
                         continue
@@ -536,7 +542,8 @@ def collect_ctx(obj_paths, *,
                     size += sizeof(type__, seen | {entry.off})
             # union? include any nested pointers
             elif entry.tag == 'DW_TAG_union_type':
-                size = int(entry['DW_AT_byte_size'])
+                # note structs/unions can be incomplete
+                size = int(entry.get('DW_AT_byte_size', 0))
                 size_ = 0
                 for child in entry.children:
                     if child.tag != 'DW_TAG_member':
@@ -555,12 +562,6 @@ def collect_ctx(obj_paths, *,
                 for child in entry.children:
                     if child.tag == 'DW_TAG_subrange_type':
                         size *= int(child['DW_AT_upper_bound']) + 1
-            # base type?
-            elif entry.tag == 'DW_TAG_base_type':
-                size = int(entry['DW_AT_byte_size'])
-            # function pointer?
-            elif entry.tag == 'DW_TAG_subroutine_type':
-                size = 0
             # a modifier?
             elif (entry.tag in {
                         'DW_TAG_typedef',
@@ -744,6 +745,7 @@ class Rev(co.namedtuple('Rev', 'a')):
 def fold(Result, results, *,
         by=None,
         defines=[],
+        undefines=[],
         sort=None,
         depth=1,
         **_):
@@ -755,20 +757,27 @@ def fold(Result, results, *,
     if by is None:
         by = Result._by
 
-    for k in it.chain(by or [], (k for k, _ in defines)):
+    for k in it.chain(by or [],
+            (k for k, _ in defines),
+            (k for k, _ in undefines)):
         if k not in Result._by and k not in Result._fields:
             print("error: could not find field %r?" % k,
                     file=sys.stderr)
             sys.exit(-1)
 
     # filter by matching defines
-    if defines:
+    if defines or undefines:
         results_ = []
         for r in results:
-            if all(any(fnmatch.fnmatchcase(str(getattr(r, k, '')), v)
+            if not all(any(fnmatch.fnmatchcase(str(getattr(r, k, '')), v)
                         for v in vs)
                     for k, vs in defines):
-                results_.append(r)
+                continue
+            if any(any(fnmatch.fnmatchcase(str(getattr(r, k, '')), v)
+                        for v in vs)
+                    for k, vs in undefines):
+                continue
+            results_.append(r)
         results = results_
 
     # organize results into conflicts
@@ -812,14 +821,14 @@ def fold(Result, results, *,
     return folded
 
 def hotify(Result, results, *,
-        enumerates=None,
         depth=1,
         hot=None,
         **_):
-    # note! hotifying risks confusion if you don't enumerate/have a
-    # z field, since it will allow folding across recursive boundaries
+    # note! hotifying risks confusion if you don't have a z field, since
+    # it will allow folding across recursive boundaries
 
     # hotify only makes sense for recursive results
+    assert hasattr(Result, '_z')
     assert hasattr(Result, '_children')
 
     results_ = []
@@ -841,12 +850,8 @@ def hotify(Result, results, *,
                                 for k_ in ([k] if k else Result._sort)))
                         for k, reverse in it.chain(hot, [(None, False)])))
 
-            hot_.append(r._replace(**(
-                    # enumerate?
-                    ({e: len(hot_) for e in enumerates}
-                            if enumerates is not None
-                            else {})
-                        | {Result._children: []})))
+            # flatten, dropping children
+            hot_.append(r._replace(**{Result._children: []}))
 
             # recurse?
             if depth_ > 1:
@@ -861,21 +866,28 @@ def hotify(Result, results, *,
 def table(Result, results, diff_results=None, *,
         by=None,
         fields=None,
+        hidden=None,
         sort=None,
-        labels=None,
         depth=1,
         hot=None,
-        percent=False,
+        small_diff=False,
+        percent_diff=False,
         all=False,
         compare=None,
+        hlabel=None,
+        tlabel=None,
         no_header=False,
         small_header=False,
         no_total=False,
-        small_table=False,
+        small_total=False,
         summary=False,
         **_):
     import builtins
     all_, all = all, builtins.all
+
+    # summary implies small_header
+    if summary:
+        small_header = True
 
     if by is None:
         by = Result._by
@@ -884,32 +896,20 @@ def table(Result, results, diff_results=None, *,
     types = Result._types
 
     # organize by name
-    table = {
-            ','.join(str(getattr(r, k)
-                        if getattr(r, k) is not None
-                        else '')
-                    for k in by): r
-                for r in results}
-    diff_table = {
-            ','.join(str(getattr(r, k)
-                        if getattr(r, k) is not None
-                        else '')
-                    for k in by): r
-                for r in diff_results or []}
-
-    # lost results? this only happens if we didn't fold by the same
-    # by field, which is an error and risks confusing results
-    assert len(table) == len(results)
-    if diff_results is not None:
-        assert len(diff_table) == len(diff_results)
+    def table_name(r):
+        return ','.join(str(getattr(r, k)
+                    if getattr(r, k) is not None
+                    else '')
+                for k in by)
+    table = {table_name(r): r for r in results}
+    diff_table = {table_name(r): r for r in diff_results or []}
 
     # find compare entry if there is one
     if compare:
         compare_ = min(
             (n for n in table.keys()
                 if all(fnmatch.fnmatchcase(k, c)
-                    for k, c in it.zip_longest(n.split(','), compare,
-                        fillvalue=''))),
+                    for k, c in zip(n.split(','), compare))),
             default=compare)
         compare_r = table.get(compare_)
 
@@ -919,23 +919,30 @@ def table(Result, results, diff_results=None, *,
     # header
     if not no_header:
         header = ['%s%s' % (
-                    ','.join(labels if labels is not None else by),
+                    ','.join((hlabel('',k) if hlabel is not None else k)
+                        for k in by if hidden is None or k not in hidden),
                     ' (%d added, %d removed)' % (
                             sum(1 for n in table if n not in diff_table),
                             sum(1 for n in diff_table if n not in table))
-                        if diff_results is not None and not percent else '')
-                if not small_header and not small_table and not summary
-                    else '']
-        if diff_results is None or percent:
+                        if diff_results is not None
+                            and not percent_diff
+                            and not small_diff
+                            else '')
+                if not small_header else '']
+        if diff_results is None or percent_diff:
             for k in fields:
-                header.append(k)
+                header.append(hlabel('',k) if hlabel is not None else k)
+        elif small_diff:
+            for k in fields:
+                header.append((hlabel('o',k) if hlabel is not None else 'o'+k))
+                header.append((hlabel('n',k) if hlabel is not None else 'n'+k))
         else:
             for k in fields:
-                header.append('o'+k)
+                header.append((hlabel('o',k) if hlabel is not None else 'o'+k))
             for k in fields:
-                header.append('n'+k)
+                header.append((hlabel('n',k) if hlabel is not None else 'n'+k))
             for k in fields:
-                header.append('d'+k)
+                header.append((hlabel('d',k) if hlabel is not None else 'd'+k))
         lines.append(header)
 
     # delete these to try to catch typos below, we need to rebuild
@@ -944,9 +951,9 @@ def table(Result, results, diff_results=None, *,
     del diff_table
 
     # entry helper
-    def table_entry(name, r, diff_r=None):
+    def table_entry(n, r, diff_r=None):
         # prepend name
-        entry = [name]
+        entry = [n]
 
         # normal entry?
         if ((compare is None or r == compare_r)
@@ -970,8 +977,8 @@ def table(Result, results, diff_results=None, *,
                                 types[k].ratio(
                                     getattr(r, k, None),
                                     getattr(compare_r, k, None)))))
-        # percent entry?
-        elif percent:
+        # percent diff entry?
+        elif percent_diff:
             for k in fields:
                 entry.append(
                         (getattr(r, k).table()
@@ -980,6 +987,23 @@ def table(Result, results, diff_results=None, *,
                             (lambda t: ['+∞%'] if t == +mt.inf
                                     else ['-∞%'] if t == -mt.inf
                                     else ['%+.1f%%' % (100*t)])(
+                                types[k].ratio(
+                                    getattr(r, k, None),
+                                    getattr(diff_r, k, None)))))
+        # small diff entry?
+        elif small_diff:
+            for k in fields:
+                entry.append(getattr(diff_r, k).table()
+                        if getattr(diff_r, k, None) is not None
+                        else types[k].none)
+                entry.append(
+                        (getattr(r, k).table()
+                                if getattr(r, k, None) is not None
+                                else types[k].none,
+                            (lambda t: ['+∞%'] if t == +mt.inf
+                                    else ['-∞%'] if t == -mt.inf
+                                    else ['%+.1f%%' % (100*t)] if t
+                                    else [])(
                                 types[k].ratio(
                                     getattr(r, k, None),
                                     getattr(diff_r, k, None)))))
@@ -1021,30 +1045,26 @@ def table(Result, results, diff_results=None, *,
             depth_,
             prefixes=('', '', '', '')):
         # build the children table at each layer
-        table_ = {
-                ','.join(str(getattr(r, k)
-                            if getattr(r, k) is not None
-                            else '')
-                        for k in by): r
-                    for r in results_}
-        diff_table_ = {
-                ','.join(str(getattr(r, k)
-                            if getattr(r, k) is not None
-                            else '')
-                        for k in by): r
-                    for r in diff_results_ or []}
-        names_ = [n
-                for n in table_.keys() | diff_table_.keys()
+        table_ = {table_name(r): r for r in results_}
+        diff_table_ = {table_name(r): r for r in diff_results_ or []}
+        # this gets a bit tricky, we want to merge both result and diff
+        # result names, while preserving duplicates in the result list
+        results__ = [(n, r)
+                for n, r in it.chain(
+                    ((table_name(r), r) for r in results_),
+                    ((table_name(r), None)
+                        for r in diff_results_ or []
+                        if table_name(r) not in table_))
                 if diff_results is None
                     or all_
                     or any(
                         types[k].ratio(
-                                getattr(table_.get(n), k, None),
+                                getattr(r, k, None),
                                 getattr(diff_table_.get(n), k, None))
                             for k in fields)]
 
         # sort again, now with diff info, note that python's sort is stable
-        names_.sort(key=lambda n: (
+        results__.sort(key=lambda nr: (lambda n, r: (
                 # sort by explicit sort fields
                 next(
                     tuple((Rev
@@ -1055,79 +1075,84 @@ def table(Result, results, diff_results=None, *,
                                         else ()
                                     for k_ in ([k] if k else Result._sort)))
                             for k, reverse in (sort or []))
-                        for r_ in [table_.get(n), diff_table_.get(n)]
+                        for r_ in [r, diff_table_.get(n)]
                         if r_ is not None),
                 # sort by ratio if diffing
                 Rev(tuple(types[k].ratio(
-                            getattr(table_.get(n), k, None),
+                            getattr(r, k, None),
                             getattr(diff_table_.get(n), k, None))
                         for k in fields))
                     if diff_results is not None
                     else (),
                 # move compare entry to the top, note this can be
                 # overridden by explicitly sorting by fields
-                (table_.get(n) != compare_r,
+                (r != compare_r,
                         # sort by ratio if comparing
                         Rev(tuple(
                             types[k].ratio(
-                                    getattr(table_.get(n), k, None),
+                                    getattr(r, k, None),
                                     getattr(compare_r, k, None))
                                 for k in fields)))
                     if compare
                     else (),
                 # sort by result
-                (table_[n],) if n in table_ else (),
+                (r,) if r is not None else (),
                 # and finally by name (diffs may be missing results)
-                n))
+                n))(*nr))
 
-        for i, name in enumerate(names_):
+        for i, (n, r) in enumerate(results__):
             # find comparable results
-            r = table_.get(name)
-            diff_r = diff_table_.get(name)
+            diff_r = diff_table_.get(n)
 
-            # figure out a good label
-            if labels is not None:
-                label = next(
+            # figure out a good name
+            if hidden is not None:
+                name = next(
                         ','.join(str(getattr(r_, k)
                                     if getattr(r_, k) is not None
                                     else '')
-                                for k in labels)
+                                for k in by if k not in hidden)
                             for r_ in [r, diff_r]
                             if r_ is not None)
             else:
-                label = name
+                name = n
 
             # build line
-            line = table_entry(label, r, diff_r)
+            line = table_entry(name, r, diff_r)
 
             # add prefixes
             line = [x if isinstance(x, tuple) else (x, []) for x in line]
-            line[0] = (prefixes[0+(i==len(names_)-1)] + line[0][0], line[0][1])
+            line[0] = (
+                    prefixes[0+(i==len(results__)-1)] + line[0][0],
+                    line[0][1])
             lines.append(line)
 
             # recurse?
-            if name in table_ and depth_ > 1:
+            if r is not None and depth_ > 1:
                 table_recurse(
                         getattr(r, Result._children),
                         getattr(diff_r, Result._children, None),
                         depth_-1,
-                        (prefixes[2+(i==len(names_)-1)] + "|-> ",
-                         prefixes[2+(i==len(names_)-1)] + "'-> ",
-                         prefixes[2+(i==len(names_)-1)] + "|   ",
-                         prefixes[2+(i==len(names_)-1)] + "    "))
+                        (prefixes[2+(i==len(results__)-1)] + "|-> ",
+                         prefixes[2+(i==len(results__)-1)] + "'-> ",
+                         prefixes[2+(i==len(results__)-1)] + "|   ",
+                         prefixes[2+(i==len(results__)-1)] + "    "))
 
     # build entries
     if not summary:
         table_recurse(results, diff_results, depth)
 
     # total
-    if not no_total and not (small_table and not summary):
-        r = next(iter(fold(Result, results, by=[])), None)
+    if not no_total:
+        r = next(iter(fold(Result, results, by=[])), Result())
         if diff_results is None:
             diff_r = None
         else:
-            diff_r = next(iter(fold(Result, diff_results, by=[])), None)
-        lines.append(table_entry('TOTAL', r, diff_r))
+            diff_r = next(iter(fold(Result, diff_results, by=[])), Result())
+        lines.append(table_entry(
+                '' if small_total
+                    else tlabel(r) if tlabel is not None
+                    else 'TOTAL',
+                r, diff_r))
 
     # homogenize
     lines = [[x if isinstance(x, tuple) else (x, []) for x in line]
@@ -1140,8 +1165,10 @@ def table(Result, results, diff_results=None, *,
     for line in lines:
         for i, x in enumerate(line):
             widths[i] = max(widths[i], ((len(x[0])+1+4-1)//4)*4-1)
-            if i != len(line)-1:
+            if x[1] and i != len(line)-1:
                 nwidths[i] = max(nwidths[i], 1+sum(2+len(n) for n in x[1]))
+    if not any(line[0][0] for line in lines):
+        widths[0] = 0
 
     # print our table
     for line in lines:
@@ -1159,7 +1186,7 @@ def read_csv(path, Result, *,
     # prefix? this only applies to field fields
     if prefix is None:
         if hasattr(Result, '_prefix'):
-            prefix = '%s_' % Result._prefix
+            prefix = Result._prefix
         else:
             prefix = ''
 
@@ -1237,7 +1264,7 @@ def write_csv(path, Result, results, *,
     # prefix? this only applies to field fields
     if prefix is None:
         if hasattr(Result, '_prefix'):
-            prefix = '%s_' % Result._prefix
+            prefix = Result._prefix
         else:
             prefix = ''
 
@@ -1300,18 +1327,19 @@ def main(obj_paths, *,
         by=None,
         fields=None,
         defines=[],
+        undefines=[],
         sort=None,
         depth=None,
         hot=None,
         **args):
     # figure out what fields we're interested in
-    labels = None
+    hidden = None
     if by is None:
         if args.get('output') or args.get('output_json'):
             by = CtxResult._by
         elif depth is not None or hot is not None:
             by = ['z', 'i', 'function']
-            labels = ['function']
+            hidden = {'z', 'i'}
         else:
             by = ['function']
 
@@ -1349,6 +1377,8 @@ def main(obj_paths, *,
     results = fold(CtxResult, results,
             by=by,
             defines=defines,
+            undefines=undefines,
+            sort=sort,
             depth=depth)
 
     # hotify?
@@ -1373,6 +1403,7 @@ def main(obj_paths, *,
         diff_results = fold(CtxResult, diff_results,
                 by=by,
                 defines=defines,
+                undefines=undefines,
                 depth=depth)
 
         # hotify?
@@ -1400,8 +1431,8 @@ def main(obj_paths, *,
         table(CtxResult, results, diff_results,
                 by=by,
                 fields=fields,
+                hidden=hidden,
                 sort=sort,
-                labels=labels,
                 depth=depth,
                 **args)
 
@@ -1438,17 +1469,25 @@ if __name__ == "__main__":
             '-d', '--diff',
             help="Specify CSV/JSON file to diff against.")
     parser.add_argument(
-            '-p', '--percent',
+            '--small-diff',
             action='store_true',
-            help="Only show percentage change, not a full diff.")
+            help="Don't show diff delta.")
+    # need a special Action here because this % causes problems
+    class StoreTruePercentDiff(argparse._StoreTrueAction):
+        def format_usage(self):
+            return '-%%'
     parser.add_argument(
-            '-c', '--compare',
-            type=lambda x: tuple(v.strip() for v in x.split(',')),
-            help="Compare results to the row matching this by pattern.")
+            '-%', '--percent-diff',
+            action=StoreTruePercentDiff,
+            help="Only show percentage change, not a full diff.")
     parser.add_argument(
             '-a', '--all',
             action='store_true',
             help="Show all, not just the ones that changed.")
+    parser.add_argument(
+            '-C', '--compare',
+            type=lambda x: tuple(v.strip() for v in x.split(',')),
+            help="Compare results to the row matching this by pattern.")
     parser.add_argument(
             '-b', '--by',
             action='append',
@@ -1460,6 +1499,20 @@ if __name__ == "__main__":
             action='append',
             choices=CtxResult._fields,
             help="Show this field.")
+    class AppendQuery(argparse.Action):
+        def __call__(self, parser, namespace, value, option):
+            if namespace.fields is None:
+                namespace.fields = []
+            namespace.fields.append(value)
+            namespace.summary = True
+            namespace.no_header = True
+            namespace.small_total = True
+    parser.add_argument(
+            '-Q', '--query',
+            action=AppendQuery,
+            choices=CtxResult._fields,
+            help="Like -f/--field, but also implies --total. Useful for "
+                "scripting.")
     parser.add_argument(
             '-D', '--define',
             dest='defines',
@@ -1470,6 +1523,17 @@ if __name__ == "__main__":
                     {v.strip() for v in vs.split(',')})
                 )(*x.split('=', 1)),
             help="Only include results where this field is this value. May "
+                "include comma-separated options and globs.")
+    parser.add_argument(
+            '-U', '--undefine',
+            dest='undefines',
+            action='append',
+            type=lambda x: (
+                lambda k, vs: (
+                    k.strip(),
+                    {v.strip() for v in vs.split(',')})
+                )(*x.split('=', 1)),
+            help="Don't include results where this field is this value. May "
                 "include comma-separated options and globs.")
     class AppendSort(argparse.Action):
         def __call__(self, parser, namespace, value, option):
@@ -1522,17 +1586,35 @@ if __name__ == "__main__":
             action='store_true',
             help="Don't show the total.")
     parser.add_argument(
-            '-Q', '--small-table',
+            '--small-total',
             action='store_true',
+            help="Don't show TOTAL name.")
+    class StoreSmallTable(argparse._StoreTrueAction):
+        def __call__(self, parser, namespace, value, option):
+            namespace.small_header = True
+            namespace.no_total = True
+    parser.add_argument(
+            '--small-table',
+            action=StoreSmallTable,
             help="Equivalent to --small-header + --no-total.")
     parser.add_argument(
             '-Y', '--summary',
             action='store_true',
             help="Only show the total.")
+    class StoreTotal(argparse._StoreTrueAction):
+        def __call__(self, parser, namespace, value, option):
+            namespace.summary = True
+            namespace.no_header = True
+            namespace.small_total = True
+    parser.add_argument(
+            '--total',
+            action=StoreTotal,
+            help="Equivalent to --summary + --no-header + --small-total. "
+                "Useful for scripting.")
     parser.add_argument(
             '--prefix',
             help="Prefix to use for fields in CSV/JSON output. Defaults "
-                "to %r." % ("%s_" % CtxResult._prefix))
+                "to %r." % CtxResult._prefix)
     parser.add_argument(
             '-i', '--internal',
             action='store_true',

@@ -144,6 +144,23 @@ def stddevlim(lim, xs):
     # compute the limit as relative stddevs from the mean
     return mean + float(lim)*stddev
 
+# find x/y limit based on a ratio of all data points
+def ratiolim(lim, xs):
+    # make a list, we need two passes
+    xs = [float(x) for x in xs]
+    if len(xs) == 0:
+        return 0
+    # calculate mean
+    mean = sum(xs) / len(xs)
+    # find distances from the mean
+    ds = [abs(x - mean) for x in xs]
+    # sort, and find limit based on number of data points, round
+    # up to prefer including data points
+    ds.sort()
+    r = ds[min(max(mt.ceil(abs(lim) * len(ds))-1, 0), len(ds)-1)]
+    # compute the limit as relative to the mean
+    return mean + (-r if lim < 0 else r)
+
 # open with '-' for stdin/stdout
 def openio(path, mode='r', buffering=-1):
     import os
@@ -339,7 +356,9 @@ class Rev(co.namedtuple('Rev', 'a')):
     def __ge__(self, other):
         return self.a <= other.a
 
-def collect(csv_paths, defines=[]):
+def collect(csv_paths, *,
+        defines=[],
+        undefines=[]):
     # collect results from CSV files
     fields = []
     results = []
@@ -356,22 +375,34 @@ def collect(csv_paths, defines=[]):
                                 for v in vs)
                             for k, vs in defines):
                         continue
+                    if any(any(fnmatch.fnmatchcase(r.get(k, ''), v)
+                                for v in vs)
+                            for k, vs in undefines):
+                        continue
 
                     results.append(r)
+
         except FileNotFoundError:
             pass
 
     return fields, results
 
-def fold(results, by=None, x=None, y=None, defines=[]):
+def fold(results, by=None, x=None, y=None, *,
+        defines=[],
+        undefines=[]):
     # filter by matching defines
-    if defines:
+    if defines or undefines:
         results_ = []
         for r in results:
-            if all(any(fnmatch.fnmatchcase(r.get(k, ''), v)
+            if not all(any(fnmatch.fnmatchcase(r.get(k, ''), v)
                         for v in vs)
                     for k, vs in defines):
-                results_.append(r)
+                continue
+            if any(any(fnmatch.fnmatchcase(r.get(k, ''), v)
+                        for v in vs)
+                    for k, vs in undefines):
+                continue
+            results_.append(r)
         results = results_
 
     if by:
@@ -607,56 +638,141 @@ class CsvAttr:
 # parse %-escaped strings
 #
 # attrs can override __getitem__ for lazy attr generation
-def punescape(s, attrs=None):
+def punescape(s, attrs=None, start=None, end=None, submatch=None):
     pattern = re.compile(
-        '%[%n]'
-            '|' '%x..'
-            '|' '%u....'
-            '|' '%U........'
-            '|' '%\((?P<field>[^)]*)\)'
-                '(?P<format>[+\- #0-9\.]*[sdboxXfFeEgG])')
-    def unescape(m):
-        if m.group()[1] == '%': return '%'
-        elif m.group()[1] == 'n': return '\n'
-        elif m.group()[1] == 'x': return chr(int(m.group()[2:], 16))
-        elif m.group()[1] == 'u': return chr(int(m.group()[2:], 16))
-        elif m.group()[1] == 'U': return chr(int(m.group()[2:], 16))
-        elif m.group()[1] == '(':
-            if attrs is not None:
-                try:
-                    v = attrs[m.group('field')]
-                except KeyError:
-                    return m.group()
-            else:
-                return m.group()
-            f = m.group('format')
-            if f[-1] in 'dboxX':
-                if isinstance(v, str):
-                    v = dat(v, 0)
-                v = int(v)
-            elif f[-1] in 'fFeEgG':
-                if isinstance(v, str):
-                    v = dat(v, 0)
-                v = float(v)
-            else:
-                f = ('<' if '-' in f else '>') + f.replace('-', '')
-                v = str(v)
-            # note we need Python's new format syntax for binary
-            return ('{:%s}' % f).format(v)
-        else: assert False
+        '%' '(?P<rep>[0-9]*)' '(?P<pun>'
+            '[%ns]'
+                '|' 'x..'
+                '|' 'u....'
+                '|' 'U........'
+                '|' '\((?P<field>[^)]*)\)'
+                    '(?P<format>[<^>+\- #0-9\.]*[siIdboxXfFeEgG])'
+                '|' '\{'
+                '|' '\}'
+                    '(?P<subformat>[<^>+\- #0-9\.]*[siIdboxXfFeEgG])' ')')
 
-    return re.sub(pattern, unescape, s)
+    def format(f, v):
+        if f[-1] in 'dboxX':
+            if isinstance(v, str):
+                v = dat(v, 0)
+            v = int(v)
+        elif f[-1] in 'iIfFeEgG':
+            if isinstance(v, str):
+                v = dat(v, 0)
+            v = float(v)
+            if f[-1] in 'iI':
+                v = (si if 'i' in f[-1] else si2)(v)
+                f = f.replace('i', 's').replace('I', 's')
+                if '+' in f and not v.startswith('-'):
+                    v = '+'+v
+                f = f.replace('+', '')
+        else:
+            v = str(v)
+
+        if '-' in f:
+            f = '<' + f.replace('-', '')
+        elif not any(d in f for d in '<^>'):
+            f = '>' + f
+        # note we need Python's new format syntax for binary
+        return ('{:%s}' % f).format(v)
+
+    s_ = []
+    i = start or 0
+    while i < (end if end is not None else len(s)):
+        m = pattern.match(s, i)
+        if m:
+            m_ = m.group('pun')[0]
+            i_ = m.end()
+            if m_ == '%':   v_ = '%'
+            elif m_ == 'n': v_ = '\n'
+            elif m_ == 's': v_ = ' '
+            elif m_ == 'x': v_ = chr(int(m.group('pun')[1:], 16))
+            elif m_ == 'u': v_ = chr(int(m.group('pun')[1:], 16))
+            elif m_ == 'U': v_ = chr(int(m.group('pun')[1:], 16))
+            elif m_ == '(':
+                if attrs is not None:
+                    try:
+                        v = attrs[m.group('field')]
+                    except KeyError:
+                        s_.append(m.group())
+                        i = i_
+                        continue
+                else:
+                    s_.append(m.group())
+                    i = i_
+                    continue
+                v_ = format(m.group('format'), v)
+            elif m_ == '{':
+                m__ = []
+                v = punescape(s, attrs, m.end(), None, m__)
+                if m__:
+                    v_ = format(m__[0].group('subformat'), v)
+                    i_ = m__[0].end()
+                else:
+                    v_ = str(v)
+                    i_ = end if end is not None else len(s)
+            elif m_ == '}':
+                if submatch is not None:
+                    submatch.append(m)
+                break
+            else:
+                s_.append(m.group())
+                i = i_
+                continue
+
+            if m.group('rep'):
+                v_ = int(m.group('rep'), 10) * v_
+            s_.append(v_)
+            i = i_
+        else:
+            s_.append(s[i])
+            i += 1
+
+    return ''.join(s_)
 
 # split %-escaped strings into chars
-def psplit(s):
+def psplit(s, start=None, end=None, submatch=None):
     pattern = re.compile(
-        '%[%n]'
-            '|' '%x..'
-            '|' '%u....'
-            '|' '%U........'
-            '|' '%\((?P<field>[^)]*)\)'
-                '(?P<format>[+\- #0-9\.]*[sdboxXfFeEgG])')
-    return [m.group() for m in re.finditer(pattern.pattern + '|.', s)]
+        '%' '(?P<rep>[0-9]*)' '(?P<pun>'
+            '[%ns]'
+                '|' 'x..'
+                '|' 'u....'
+                '|' 'U........'
+                '|' '\((?P<field>[^)]*)\)'
+                    '(?P<format>[<^>+\- #0-9\.]*[siIdboxXfFeEgG])'
+                '|' '\{'
+                '|' '\}'
+                    '(?P<subformat>[<^>+\- #0-9\.]*[siIdboxXfFeEgG])' ')')
+
+    s_ = []
+    i = start or 0
+    while i < (end if end is not None else len(s)):
+        m = pattern.match(s, i)
+        if m:
+            m_ = m.group('pun')[0]
+            i_ = m.end()
+            if m_ == '{':
+                m__ = []
+                v = psplit(s, m.end(), None, m__)
+                if m__:
+                    s_.append(m.group() + ''.join(v))
+                    i = m__[0].end()
+                else:
+                    s_.append(m.group() + ''.join(v))
+                    i = end if end is not None else len(s)
+                continue
+            elif m_ == '}':
+                if submatch is not None:
+                    submatch.append(m)
+                break
+
+            s_.append(m.group())
+            i = i_
+        else:
+            s_.append(s[i])
+            i += 1
+
+    return s_
 
 
 # a little ascii renderer
@@ -1192,14 +1308,20 @@ class Grid:
             **args):
         grid = cls(Subplot(**args))
 
+        wcount = 1
+        hcount = 1
         for dir, subargs in subplots:
             subgrid = cls.fromargs(
                     width=subargs.pop('width',
-                        0.5 if dir in ['right', 'left'] else width),
+                        width/(wcount+1) if dir in ['right', 'left']
+                            else width),
                     height=subargs.pop('height',
-                        0.5 if dir in ['above', 'below'] else height),
+                        height/(hcount+1) if dir in ['above', 'below']
+                            else height),
                     **subargs)
             grid.merge(subgrid, dir)
+            wcount += 1 if dir in ['right', 'left'] else 0
+            hcount += 1 if dir in ['above', 'below'] else 0
 
         grid.scale(width, height)
         return grid
@@ -1209,7 +1331,9 @@ def main_(ring, csv_paths, *,
         by=None,
         x=None,
         y=None,
-        define=[],
+        defines=[],
+        undefines=[],
+        ignores=[],
         sort=None,
         labels=[],
         chars=[],
@@ -1226,6 +1350,8 @@ def main_(ring, csv_paths, *,
         ylim=(None,None),
         xlim_stddev=(None,None),
         ylim_stddev=(None,None),
+        xlim_ratio=(None,None),
+        ylim_ratio=(None,None),
         xlog=False,
         ylog=False,
         x2=False,
@@ -1243,11 +1369,11 @@ def main_(ring, csv_paths, *,
         subplot={},
         subplots=[],
         **args):
-    # give ring an writeln function
-    def writeln(s=''):
-        ring.write(s)
-        ring.write('\n')
-    ring.writeln = writeln
+    # give ring a writeln function
+    def writeln(self, s=''):
+        self.write(s)
+        self.write('\n')
+    ring.writeln = writeln.__get__(ring)
 
     # figure out what color should be
     if color == 'auto':
@@ -1292,7 +1418,7 @@ def main_(ring, csv_paths, *,
 
     # subplot can also contribute to subplots, resolve this here or things
     # become a mess...
-    subplots += subplot.pop('subplots', [])
+    subplots = subplot.pop('subplots', []) + subplots
 
     # allow any subplots to contribute to by/x/y
     def subplots_get(k, *, subplots=[], **args):
@@ -1305,10 +1431,17 @@ def main_(ring, csv_paths, *,
     all_x = (x or []) + subplots_get('x', **subplot, subplots=subplots)
     all_y = (y or []) + subplots_get('y', **subplot, subplots=subplots)
     all_defines = co.defaultdict(lambda: set())
-    for k, vs in it.chain(define or [],
-            subplots_get('define', **subplot, subplots=subplots)):
+    for k, vs in it.chain(
+            defines,
+            subplots_get('defines', **subplot, subplots=subplots)):
         all_defines[k] |= vs
     all_defines = sorted(all_defines.items())
+    all_undefines = co.defaultdict(lambda: set())
+    for k, vs in it.chain(
+            undefines,
+            subplots_get('undefines', **subplot, subplots=subplots)):
+        all_undefines[k] |= vs
+    all_undefines = sorted(all_undefines.items())
 
     if not all_by and not all_y:
         print("error: needs --by or -y to figure out fields",
@@ -1398,14 +1531,17 @@ def main_(ring, csv_paths, *,
     ## our main drawing logic
 
     # first collect results from CSV files
-    fields_, results = collect(csv_paths)
+    fields_, results = collect(csv_paths,
+            defines=defines,
+            undefines=undefines)
 
     # if y not specified, guess it's anything not in by/defines/x
     all_y_ = all_y
     if not all_y:
         all_y_ = [k for k in fields_
                 if k not in all_by
-                    and not any(k == k_ for k_, _ in all_defines)]
+                    and not any(k == k_ for k_, _ in all_defines)
+                    and not any(k == k_ for k_, _ in all_undefines)]
 
     # then extract the requested datasets
     #
@@ -1475,7 +1611,10 @@ def main_(ring, csv_paths, *,
                         if name in datalabels_
                         else ','.join(name))
 
-            if label:
+            # append and merge identical labels
+            if not label:
+                continue
+            if (label, datacolors_[name]) not in legend_:
                 legend_.append((label, datacolors_[name]))
                 legend_width = max(legend_width, len(label)+1)
 
@@ -1578,11 +1717,15 @@ def main_(ring, csv_paths, *,
         # allow subplot params to override global params
         x_ = set((x or []) + s.args.get('x', []))
         y_ = set((y or []) + s.args.get('y', []))
-        define_ = define + s.args.get('define', [])
+        defines_ = defines + s.args.get('defines', [])
+        undefines_ = undefines + s.args.get('undefines', [])
+        ignores_ = ignores + s.args.get('ignores', [])
         xlim_ = s.args.get('xlim', xlim)
         ylim_ = s.args.get('ylim', ylim)
         xlim_stddev_ = s.args.get('xlim_stddev', xlim_stddev)
         ylim_stddev_ = s.args.get('ylim_stddev', ylim_stddev)
+        xlim_ratio_ = s.args.get('xlim_ratio', xlim_ratio)
+        ylim_ratio_ = s.args.get('ylim_ratio', ylim_ratio)
         xlog_ = s.args.get('xlog', False) or xlog
         ylog_ = s.args.get('ylog', False) or ylog
 
@@ -1595,11 +1738,17 @@ def main_(ring, csv_paths, *,
             xlim_stddev_ = (None, xlim_stddev_[0])
         if len(ylim_stddev_) == 1:
             ylim_stddev_ = (None, ylim_stddev_[0])
+        if len(xlim_ratio_) == 1:
+            xlim_ratio_ = (None, xlim_ratio_[0])
+        if len(ylim_ratio_) == 1:
+            ylim_ratio_ = (None, ylim_ratio_[0])
 
         # data can be constrained by subplot-specific defines,
         # so re-extract for each plot
         subdatasets, subdataattrs = fold(
-                results, all_by, all_x, all_y_, define_)
+                results, all_by, all_x, all_y_,
+                defines=defines_,
+                undefines=undefines_)
 
         # order by labels
         subdatasets = co.OrderedDict(sorted(
@@ -1626,30 +1775,44 @@ def main_(ring, csv_paths, *,
 
         # find actual xlim/ylim
         x__ = (lambda: it.chain([0], (x
-                for dataset in subdatasets.values()
+                for name, dataset in subdatasets.items()
+                if not any(all(fnmatch.fnmatchcase(k, g)
+                        for k, g in zip(name, ignore))
+                    for ignore in ignores_)
                 for x, y in dataset
                 if y is not None)))
         y__ = (lambda: it.chain([0], (y
-                for dataset in subdatasets.values()
+                for name, dataset in subdatasets.items()
+                if not any(all(fnmatch.fnmatchcase(k, g)
+                        for k, g in zip(name, ignore))
+                    for ignore in ignores_)
                 for _, y in dataset
                 if y is not None)))
         xlim_ = (
                 xlim_[0] if xlim_[0] is not None
                     else stddevlim(xlim_stddev_[0], x__())
                     if xlim_stddev_[0] is not None
+                    else ratiolim(xlim_ratio_[0], x__())
+                    if xlim_ratio_[0] is not None
                     else min(x__()),
                 xlim_[1] if xlim_[1] is not None
                     else stddevlim(xlim_stddev_[1], x__())
                     if xlim_stddev_[1] is not None
+                    else ratiolim(xlim_ratio_[1], x__())
+                    if xlim_ratio_[1] is not None
                     else max(x__()))
         ylim_ = (
                 ylim_[0] if ylim_[0] is not None
                     else stddevlim(ylim_stddev_[0], y__())
                     if ylim_stddev_[0] is not None
+                    else ratiolim(ylim_ratio_[0], y__())
+                    if ylim_ratio_[0] is not None
                     else min(y__()),
                 ylim_[1] if ylim_[1] is not None
                     else stddevlim(ylim_stddev_[1], y__())
                     if ylim_stddev_[1] is not None
+                    else ratiolim(ylim_ratio_[1], y__())
+                    if ylim_ratio_[1] is not None
                     else max(y__()))
 
         # figure out labels/titles now that we have our data
@@ -1744,7 +1907,8 @@ def main_(ring, csv_paths, *,
                         for line in ylabel_)
                 if ylabel_ else '')
 
-        for x_ in range(grid.width):
+        x_ = 0
+        while x_ < grid.width:
             # figure out the grid x/y position
             subrow = row
             y_ = len(heights)-1
@@ -1754,6 +1918,7 @@ def main_(ring, csv_paths, *,
 
             s = grid[x_, y_]
             subrow = row - sum(heights[s.y+s.yspan:])
+            x_ += s.xspan
 
             # header
             if subrow < s.ymargin[-1]:
@@ -1877,7 +2042,7 @@ def main(csv_paths, *,
         keep_open=False,
         head=False,
         cat=False,
-        sleep=False,
+        wait=False,
         **args):
     # keep-open?
     if keep_open:
@@ -1906,13 +2071,12 @@ def main(csv_paths, *,
 
                 # try to inotifywait
                 if Inotify:
-                    ptime = time.time()
                     inotify.read()
                     inotify.close()
-                    # sleep a minimum amount of time to avoid flickering
-                    time.sleep(max(0, (sleep or 0.01) - (time.time()-ptime)))
-                else:
-                    time.sleep(sleep or 2)
+                # sleep a minimum amount of time to avoid flickering
+                time.sleep(wait if wait is not None
+                        else 2 if not Inotify
+                        else 0.01)
         except KeyboardInterrupt:
             pass
 
@@ -1953,14 +2117,33 @@ if __name__ == "__main__":
             help="Field to use for the y-axis.")
     parser.add_argument(
             '-D', '--define',
+            dest='defines',
+            action='append',
             type=lambda x: (
                 lambda k, vs: (
                     k.strip(),
                     {v.strip() for v in vs.split(',')})
                 )(*x.split('=', 1)),
-            action='append',
             help="Only include results where this field is this value. May "
                 "include comma-separated options and globs.")
+    parser.add_argument(
+            '-U', '--undefine',
+            dest='undefines',
+            action='append',
+            type=lambda x: (
+                lambda k, vs: (
+                    k.strip(),
+                    {v.strip() for v in vs.split(',')})
+                )(*x.split('=', 1)),
+            help="Don't include results where this field is this value. May "
+                "include comma-separated options and globs.")
+    parser.add_argument(
+            '-I', '--ignore',
+            dest='ignores',
+            action='append',
+            type=lambda x: tuple(k.strip() for k in x.split(',')),
+            help="Ignore this group during xlim/ylim calculations, where a "
+                "group is the comma-separated 'by' fields.")
     class AppendSort(argparse.Action):
         def __call__(self, parser, namespace, value, option):
             if namespace.sort is None:
@@ -2055,14 +2238,16 @@ if __name__ == "__main__":
             nargs='?',
             type=lambda x: int(x, 0),
             const=0,
-            help="Width in columns. <=0 uses the terminal width. Defaults "
+            help="Width in columns. <=0 uses the terminal width. In subplots "
+                "this instead expresses a ratio of the current grid. Defaults "
                 "to min(terminal, 80).")
     parser.add_argument(
             '-H', '--height',
             nargs='?',
             type=lambda x: int(x, 0),
             const=..., # handles shell prompt spacing, which is a bit subtle
-            help="Height in rows. <=0 uses the terminal height. Defaults "
+            help="Height in rows. <=0 uses the terminal height. In subplots "
+                "this instead expresses a ratio of the current grid. Defaults "
                 "to 17.")
     parser.add_argument(
             '-X', '--xlim',
@@ -2090,6 +2275,20 @@ if __name__ == "__main__":
                     for x in x.split(',')),
             help="Range for the y-axis specified as a number of standard "
                 "deviations from the mean.")
+    parser.add_argument(
+            '--xlim-ratio',
+            type=lambda x: tuple(
+                dat(x) if x.strip() else None
+                    for x in x.split(',')),
+            help="Range for the x-axis specified as a ratio of all data "
+                "points.")
+    parser.add_argument(
+            '--ylim-ratio',
+            type=lambda x: tuple(
+                dat(x) if x.strip() else None
+                    for x in x.split(',')),
+            help="Range for the y-axis specified as a ratio of all data "
+                "points.")
     parser.add_argument(
             '--xlog',
             action='store_true',
@@ -2168,7 +2367,7 @@ if __name__ == "__main__":
                 "string to control the subplot which supports most (but "
                 "not all) of the parameters listed here. The relative "
                 "dimensions of the subplot can be controlled with -W/-H "
-                "which now take a percentage.")
+                "which now take a ratio.")
     parser.add_argument(
             '--subplot-below',
             action=AppendSubplot,
@@ -2198,7 +2397,7 @@ if __name__ == "__main__":
             action='store_true',
             help="Pipe directly to stdout.")
     parser.add_argument(
-            '-~', '--sleep',
+            '-w', '--wait',
             type=float,
             help="Time in seconds to sleep between redraws when running "
                 "with -k. Defaults to 2 seconds.")
