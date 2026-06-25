@@ -6,11 +6,6 @@
 #include "benches/bench_helpers.h"
 
 
-// allow benches to skip warmup, but default to warming up
-__attribute__((weak))
-intmax_t SKIP_WARMUP = false;
-
-
 // warm up the filesystem
 //
 // this writes a 1 block file 2*block_count times to get it into a good
@@ -20,18 +15,8 @@ intmax_t SKIP_WARMUP = false;
 // format, which is inconsistent across filesystems and messes with
 // benchmarks
 int bench_helpers_warmup(const struct lfs3_cfg *cfg, void *fs) {
-    // skipping warmup?
-    if (SKIP_WARMUP) {
-        return 0;
-    }
-
-    // TODO can we also pause stack measurements here?
-    extern void bench_heap_pause(void);
-    bench_heap_pause();
     uint8_t *wbuf = malloc(BLOCK_SIZE);
     memset(wbuf, '1', BLOCK_SIZE);
-    extern void bench_heap_resume(void);
-    bench_heap_resume();
 
     #if defined(LFS3)
     (void)cfg;
@@ -123,11 +108,7 @@ int bench_helpers_warmup(const struct lfs3_cfg *cfg, void *fs) {
     yaffs_unlink("warmup") => 0;
     #endif
 
-    extern void bench_heap_pause(void);
-    bench_heap_pause();
     free(wbuf);
-    extern void bench_heap_resume(void);
-    bench_heap_resume();
     return 0;
 }
 
@@ -166,14 +147,14 @@ uintmax_t bench_helpers_usage(const struct lfs3_cfg *cfg, void *fs) {
     lfs3_trv_t trv;
     lfs3_trv_open(lfs3, &trv, 0) => 0;
     while (true) {
-        struct lfs3_tinfo tinfo;
-        int err = lfs3_trv_read(lfs3, &trv, &tinfo);
+        struct lfs3_binfo binfo;
+        int err = lfs3_trv_read(lfs3, &trv, &binfo);
         assert(!err || err == LFS3_ERR_NOENT);
         if (err == LFS3_ERR_NOENT) {
             break;
         }
 
-        usage_bmap[tinfo.block/8] |= 1 << (tinfo.block % 8);
+        usage_bmap[binfo.block/8] |= 1 << (binfo.block % 8);
     }
     lfs3_trv_close(lfs3, &trv) => 0;
 

@@ -113,17 +113,11 @@
     // 0 => full bus+buffer sim
     // 1 => simple per-byte sim
     BENCH_DEFINE(DISK_SIM,              0                                   )
-    BENCH_DEFINE(READ_SIZE,             (PAGE_SIZE)
-                                            ? PAGE_SIZE
-                                            : DISK_MAP(READ_SIZE)           )
-    BENCH_DEFINE(PROG_SIZE,             (PAGE_SIZE)
-                                            ? PAGE_SIZE
-                                            : DISK_MAP(PROG_SIZE)           )
+    BENCH_DEFINE(READ_SIZE,             DISK_MAP(READ_SIZE)                 )
+    BENCH_DEFINE(PROG_SIZE,             DISK_MAP(PROG_SIZE)                 )
     BENCH_DEFINE(ERASE_SIZE,            DISK_MAP(ERASE_SIZE)                )
     BENCH_DEFINE(BLOCK_SIZE,            LFS3_MAX(ERASE_SIZE, 512)           )
     BENCH_DEFINE(BLOCK_COUNT,           DISK_SIZE/LFS3_MAX(BLOCK_SIZE, 1)   )
-    // optional, overrides both READ_SIZE and PROG_SIZE
-    BENCH_DEFINE(PAGE_SIZE,             0                                   )
     // default cache size, this doesn't necessarily need to be limited by
     // read/prog, but doing so levels the playing field
     BENCH_DEFINE(CACHE_SIZE,            LFS3_MAX(
@@ -139,31 +133,20 @@
     // NOTE this was expanded to match littlefs2
     BENCH_DEFINE(FCACHE_SIZE,           CACHE_SIZE                          )
     BENCH_DEFINE(LOOKAHEAD_SIZE,        16                                  )
+    BENCH_DEFINE(LOOKGBMAP_THRESH,      BLOCK_COUNT/4                       )
+    BENCH_DEFINE(EVICTQUEUE_COUNT,      2                                   )
     BENCH_DEFINE(GC_FLAGS,              LFS3_GC_GC                          )
     BENCH_DEFINE(GC_STEPS,              0                                   )
     BENCH_DEFINE(GC_LOOKAHEAD_THRESH,   -1                                  )
     BENCH_DEFINE(GC_LOOKGBMAP_THRESH,   -1                                  )
     BENCH_DEFINE(GC_PREERASE_COUNT,     -1                                  )
-    BENCH_DEFINE(GC_COMPACT_THRESH,     0                                   )
-    BENCH_DEFINE(SHRUB_SIZE,            BLOCK_SIZE/4                        )
-    // TODO crystal/fragment_thresh 1/16 or 1/8?
-    BENCH_DEFINE(CRYSTAL_DIV,           0                                   )
-    BENCH_DEFINE(FRAGMENT_SIZE,         (CRYSTAL_DIV)
-                                            ? LFS3_MIN(
-                                                BLOCK_SIZE/CRYSTAL_DIV,
-                                                512)
-                                            : LFS3_MIN(
-                                                BLOCK_SIZE/16,
-                                                    512)                    )
-    // TODO should max-prog_size be enforced in lfs3_init?
-    BENCH_DEFINE(CRYSTAL_THRESH,        (CRYSTAL_DIV)
-                                            ? LFS3_MAX(
-                                                BLOCK_SIZE/CRYSTAL_DIV,
-                                                PROG_SIZE)
-                                            : LFS3_MAX(
-                                                BLOCK_SIZE/16,
-                                                PROG_SIZE)                  )
-    BENCH_DEFINE(LOOKGBMAP_THRESH,      BLOCK_COUNT/4                       )
+    BENCH_DEFINE(GC_COMPACTMETA_THRESH, 0                                   )
+    BENCH_DEFINE(GC_COMPACTBTREE_THRESH,
+                                        0                                   )
+    BENCH_DEFINE(SHRUB_SIZE,            BLOCK_SIZE/8                        )
+    BENCH_DEFINE(GRAIN_SIZE,            LFS3_MIN(BLOCK_SIZE/16, 512)        )
+    BENCH_DEFINE(CRYSTAL_THRESH,        BLOCK_SIZE/16                       )
+
     // littlefs2 specific defines
     #elif defined(LFS2)
     BENCH_DEFINE(BLOCK_CYCLES,          100                                 )
@@ -178,6 +161,7 @@
     BENCH_DEFINE(COMPACT_THRESH,        0                                   )
     BENCH_DEFINE(METADATA_MAX,          0                                   )
     BENCH_DEFINE(INLINE_MAX,            0                                   )
+
     // spiffs specific defines
     #elif defined(SPIFFS)
     // things break below 64 byte pages, but while spiffs technically
@@ -197,6 +181,7 @@
                                             + SCACHE_COUNT
                                                 * (sizeof(spiffs_cache_page)
                                                     + SPAGE_SIZE)           )
+
     // yaffs2 specific defines
     #elif defined(YAFFS2)
     // this is limited to 512B by struct yaffs_obj_hdr
@@ -336,20 +321,24 @@
             .fcache_size                = FCACHE_SIZE,
             .lookahead_size             = LOOKAHEAD_SIZE,
             #ifdef LFS3_GBMAP
-            .gc_lookgbmap_thresh        = GC_LOOKGBMAP_THRESH,
             .lookgbmap_thresh           = LOOKGBMAP_THRESH,
+            .gc_lookgbmap_thresh        = GC_LOOKGBMAP_THRESH,
             #endif
             #ifdef LFS3_PREERASE
             .gc_preerase_count          = GC_PREERASE_COUNT,
+            #endif
+            #ifdef LFS3_EVICT
+            .evictqueue_count           = EVICTQUEUE_COUNT,
             #endif
             #ifdef LFS3_GC
             .gc_flags                   = GC_FLAGS,
             .gc_steps                   = GC_STEPS,
             #endif
             .gc_lookahead_thresh        = GC_LOOKAHEAD_THRESH,
-            .gc_compact_thresh          = GC_COMPACT_THRESH,
+            .gc_compactmeta_thresh      = GC_COMPACTMETA_THRESH,
+            .gc_compactbtree_thresh     = GC_COMPACTBTREE_THRESH,
             .shrub_size                 = SHRUB_SIZE,
-            .fragment_size              = FRAGMENT_SIZE,
+            .grain_size                 = GRAIN_SIZE,
             .crystal_thresh             = CRYSTAL_THRESH,
             #endif
         },
