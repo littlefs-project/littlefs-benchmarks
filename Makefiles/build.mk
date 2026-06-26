@@ -58,12 +58,13 @@ sizes sizes-prelink: \
 # by code/data/ctx/etc
 #
 .PHONY: sizes-postlink bench-sizes
+sizes-postlink bench-sizes: BENCH_FILESYSTEMS ?= $(DEFAULT_BENCH_FILESYSTEMS)
 sizes-postlink bench-sizes: \
-		$(foreach fs, $(SIZE_FILESYSTEMS), \
+		$(foreach fs, $(BENCH_FILESYSTEMS), \
 			$($(U_$(fs))_BENCH_RUNNER) \
 			$($(U_$(fs))_CI))
 	$(strip ./scripts/csv.py \
-		$(foreach fs, $(SIZE_FILESYSTEMS), \
+		$(foreach fs, $(BENCH_FILESYSTEMS), \
 			<(./scripts/csv.py \
 				<(./scripts/code.py $($(U_$(fs))_BENCH_RUNNER) \
 					-bfunction -o- \
