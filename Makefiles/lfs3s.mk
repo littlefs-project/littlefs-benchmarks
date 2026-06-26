@@ -34,7 +34,7 @@ U_lfs3s = LFS3S
 N_lfs3s = 34
 I_lfs3s = 0
 C_lfs3s = $(C_BLUE)
-F_lfs3s = < # triangle left
+F_lfs3s = $$$$s$$$$ # s
 DEFAULT_BUILD_FILESYSTEMS += lfs3s
 DEFAULT_BENCH_FILESYSTEMS += lfs3s
 

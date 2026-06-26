@@ -34,7 +34,7 @@ U_lfs3f = LFS3F
 N_lfs3f = 33
 I_lfs3f = 0
 C_lfs3f = $(C_BLUE)
-F_lfs3f = v # triangle down
+F_lfs3f = $$$$f$$$$ # f
 DEFAULT_BUILD_FILESYSTEMS += lfs3f
 DEFAULT_BENCH_FILESYSTEMS += lfs3f
 
