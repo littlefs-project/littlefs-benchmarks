@@ -102,7 +102,7 @@
 #ifdef BENCH_DEFINE
     // include an id for the current fs to simplify above scripts
     BENCH_DEFINE(FS,                    BENCH_IFDEF_LFS3(
-                                                LFS3_IFDEF_GBMAP(3, 30),
+                                                LFS3_IFDEF_GBMAP(3, 31),
                                             BENCH_IFDEF_LFS2(2,
                                             BENCH_IFDEF_SPIFFS(4,
                                             BENCH_IFDEF_YAFFS2(5, 0))))     )

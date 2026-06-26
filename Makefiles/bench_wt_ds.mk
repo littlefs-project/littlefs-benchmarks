@@ -65,7 +65,7 @@ all bench bench-wt-ds: \
 define BENCH_WT_DS_RULE
 $1: $($(U_$3)_BENCH_RUNNER)
 	$$(strip ./scripts/bench.py -R$$< -B bench_wt_$2 \
-		$(BENCHFLAGS) \
+		$(BENCHFLAGS) $($(U_$3)_BENCHFLAGS) \
 		-DDISK_SIZE=$(or $5,$(WT_DS_DISK_SIZES)) \
 		$(if $(NO_WARMUP),-DNO_WARMUP=$(NO_WARMUP)) \
 		$(if $(SIM_TIME),-DSIM_TIME=$(SIM_TIME)) \

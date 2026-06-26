@@ -3,6 +3,10 @@ BUILD_MK := 1
 
 # include filesystem makefiles
 include Makefiles/lfs3.mk
+include Makefiles/lfs3gb.mk
+include Makefiles/lfs3g.mk
+include Makefiles/lfs3f.mk
+include Makefiles/lfs3s.mk
 include Makefiles/lfs2.mk
 include Makefiles/lfs1.mk
 include Makefiles/spiffs.mk

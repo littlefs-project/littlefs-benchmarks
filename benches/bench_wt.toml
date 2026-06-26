@@ -201,6 +201,7 @@ code = '''
 
 # random write throughput
 [cases.bench_wt_random]
+defines.GRANULAR = false
 code = '''
     #if defined(LFS3)
     lfs3_t lfs3;
@@ -261,7 +262,8 @@ code = '''
     #if defined(LFS3)
     lfs3_file_t file;
     lfs3_file_open(&lfs3, &file, "bench_random",
-            LFS3_O_WRONLY | LFS3_O_CREAT | LFS3_O_EXCL) => 0;
+            LFS3_O_WRONLY | LFS3_O_CREAT | LFS3_O_EXCL
+                | ((GRANULAR) ? LFS3_O_GRANULAR : 0)) => 0;
     #elif defined(LFS2)
     lfs2_file_t file;
     lfs2_file_open(&lfs2, &file, "bench_random",
@@ -374,7 +376,7 @@ code = '''
 # 1. fruncate/rotations instead of rewind+truncate
 # 2. sync called on every write
 [cases.bench_wt_logging]
-defines.NO_FRUNCATE = false
+defines.NO_FRUNCATE = true
 code = '''
     #if defined(LFS3)
     lfs3_t lfs3;
@@ -595,7 +597,7 @@ code = '''
 
 # many small file write throughput
 [cases.bench_wt_many]
-defines.NO_SET = false
+defines.NO_SET = true
 code = '''
     #if defined(LFS3)
     lfs3_t lfs3;
