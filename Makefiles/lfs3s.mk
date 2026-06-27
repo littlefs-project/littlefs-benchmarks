@@ -9,7 +9,7 @@ include Makefiles/common.mk
 LFS3S_BUILDDIR     ?= $(BUILDDIR)/littlefs3s
 LFS3S_BENCH_RUNNER ?= $(BUILDDIR)/bench_runner.lfs3s
 LFS3S_CFLAGS += -Ilittlefs3 -DLFS3=1
-LFS3S_BENCHFLAGS += -DNO_SET=0
+LFS3S_BENCHFLAGS += -DSET=1
 LFS3S_FILTER ?= sed -n -e'1p' -e'/\<lfs3_.\+bd/d' -e'/\<lfs3/p'
 LFS3S_SRC ?= $(filter-out %.t.c %.b.c %.a.c,$(wildcard littlefs3/*.c))
 LFS3S_OBJ := $(LFS3S_SRC:%.c=$(LFS3S_BUILDDIR)/%.o)

@@ -67,7 +67,7 @@ $1: $($(U_$3)_BENCH_RUNNER)
 	$$(strip ./scripts/bench.py -R$$< -B bench_wt_$2 \
 		$(BENCHFLAGS) $($(U_$3)_BENCHFLAGS) \
 		-DDISK_SIZE=$(or $5,$(WT_DS_DISK_SIZES)) \
-		$(if $(NO_WARMUP),-DNO_WARMUP=$(NO_WARMUP)) \
+		$(if $(SKIP_WARMUP),-DSKIP_WARMUP=$(SKIP_WARMUP)) \
 		$(if $(SIM_TIME),-DSIM_TIME=$(SIM_TIME)) \
 		$(if $(SIM_SIZE),-DSIM_SIZE=$(SIM_SIZE)) \
 		-DFS=$(N_$3) \
