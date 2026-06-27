@@ -25,8 +25,14 @@ BENCH_FILESYSTEMS ?= $(DEFAULT_BENCH_FILESYSTEMS)
 
 # list of disk geometries to bench on
 BENCH_GEOMETRIES ?= nor nand
-N_nor = 0
+N_nor  = NOR
+N_nand = NAND
+N_emmc = EMMC
+N_fram = FRAM
+N_nor  = 0
 N_nand = 1
+N_emmc = 2
+N_fram = 3
 
 # list of interesting bench cases
 BENCH_CASES ?= seq random logging many
