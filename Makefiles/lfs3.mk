@@ -74,14 +74,8 @@ build-lfs3: $(LFS3_BENCH_RUNNER)
 $(LFS3_BENCH_RUNNER): $(LFS3_BENCH_OBJ)
 	$(CC) $(CFLAGS) $(LFS3_CFLAGS) $^ $(LFLAGS) -o$@
 
-$(LFS3_BUILDDIR)/%.o $(LFS3_BUILDDIR)/%.ci: %.c
-	$(CC) -c -MMD $(CFLAGS) $(LFS3_CFLAGS) $< -o$(firstword $@)
-
 $(LFS3_BUILDDIR)/%.o $(LFS3_BUILDDIR)/%.ci: $(LFS3_BUILDDIR)/%.c
 	$(CC) -c -MMD $(CFLAGS) $(LFS3_CFLAGS) $< -o$(firstword $@)
-
-$(LFS3_BUILDDIR)/%.s: %.c
-	$(CC) -S $(CFLAGS) $(LFS3_CFLAGS) $< -o$@
 
 $(LFS3_BUILDDIR)/%.s: $(LFS3_BUILDDIR)/%.c
 	$(CC) -S $(CFLAGS) $(LFS3_CFLAGS) $< -o$@

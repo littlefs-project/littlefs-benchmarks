@@ -127,14 +127,8 @@ build-yaffs2: $(YAFFS2_BENCH_RUNNER)
 $(YAFFS2_BENCH_RUNNER): $(YAFFS2_BENCH_OBJ)
 	$(CC) $(CFLAGS) $(YAFFS2_CFLAGS) $^ $(LFLAGS) -o$@
 
-$(YAFFS2_BUILDDIR)/%.o $(YAFFS2_BUILDDIR)/%.ci: %.c
-	$(CC) -c -MMD $(CFLAGS) $(YAFFS2_CFLAGS) $< -o$(firstword $@)
-
 $(YAFFS2_BUILDDIR)/%.o $(YAFFS2_BUILDDIR)/%.ci: $(YAFFS2_BUILDDIR)/%.c
 	$(CC) -c -MMD $(CFLAGS) $(YAFFS2_CFLAGS) $< -o$(firstword $@)
-
-$(YAFFS2_BUILDDIR)/%.s: %.c
-	$(CC) -S $(CFLAGS) $(YAFFS2_CFLAGS) $< -o$@
 
 $(YAFFS2_BUILDDIR)/%.s: $(YAFFS2_BUILDDIR)/%.c
 	$(CC) -S $(CFLAGS) $(YAFFS2_CFLAGS) $< -o$@
