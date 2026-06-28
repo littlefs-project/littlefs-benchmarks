@@ -30,6 +30,23 @@ SAVEDIR ?= saved
 # common benches
 BENCHES ?= $(wildcard benches/*.toml)
 
+# filesystem overrides
+ifdef FILESYSTEMS
+SIZE_FILESYSTEMS := $(FILESYSTEMS)
+BUILD_FILESYSTEMS := $(FILESYSTEMS)
+BENCH_FILESYSTEMS := $(FILESYSTEMS)
+endif
+
+# geometry overrides
+ifdef GEOMETRIES
+BENCH_GEOMETRIES := $(GEOMETRIES)
+endif
+
+# case overrides
+ifdef CASES
+BENCH_CASES := $(CASES)
+endif
+
 
 # thumb mode!!? cross compile time!
 ifdef THUMB
