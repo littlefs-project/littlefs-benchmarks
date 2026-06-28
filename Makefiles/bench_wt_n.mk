@@ -1,23 +1,24 @@
-ifndef BENCH_WT_DS_MK
-BENCH_WT_DS_MK := 1
-
-# prevent parallel benching because of how big disk is
-DISK_BIG = 1
+ifndef BENCH_WT_N_MK
+BENCH_WT_N_MK := 1
 
 # include build rules + filesystems
 include Makefiles/build.mk
 
 # overrideable results dir
-WT_DS_RESULTSDIR ?= $(RESULTSDIR)/wt_ds
+WT_N_RESULTSDIR ?= $(RESULTSDIR)/wt_n
 # overrideable plots dir
-WT_DS_PLOTSDIR ?= $(PLOTSDIR)/wt_ds
+WT_N_PLOTSDIR ?= $(PLOTSDIR)/wt_n
 # overrideable tikz dir
-WT_DS_TIKZDIR ?= $(TIKZDIR)/wt_ds
+WT_N_TIKZDIR ?= $(TIKZDIR)/wt_n
 
 
-# range of disk sizes to test
-WT_DS_DISK_SIZES ?= 8388608,16777216,33554432,67108864,134217728,268435456,$\
-		536870912,1073741824,2147483648,4294967296,8589934592
+# target sizes to benchmark
+#
+# be careful with n<=~512, if n fits in a cache, the bench may never
+# terminate!
+WT_N_SIZES ?= $\
+    1024,2048,4096,8192,16384,32768,65536,131072,262144,524288,$\
+    1048576,2097152,4194304,8388608,16777216,33554432
 
 
 # default bench filesystems to default bench filesystems
@@ -40,11 +41,11 @@ BENCH_CASES ?= seq random logging many
 
 # this is a bit of a hack, but we want to make sure the BUILDDIR
 # directory structure is correct before we run any commands
-ifneq ($(WT_DS_RESULTSDIR),.)
+ifneq ($(WT_N_RESULTSDIR),.)
 $(if $(findstring n,$(MAKEFLAGS)),, $(shell mkdir -p \
-		$(WT_DS_RESULTSDIR) \
-		$(WT_DS_PLOTSDIR) \
-		$(WT_DS_TIKZDIR)))
+		$(WT_N_RESULTSDIR) \
+		$(WT_N_PLOTSDIR) \
+		$(WT_N_TIKZDIR)))
 endif
 
 
@@ -53,12 +54,12 @@ endif
 #======================================================================#
 
 ## Run benches
-.PHONY: all bench bench-wt-ds
-all bench bench-wt-ds: \
+.PHONY: all bench bench-wt-n
+all bench bench-wt-n: \
 		$(foreach c, $(BENCH_CASES), \
 			$(foreach fs, $(BENCH_FILESYSTEMS), \
 				$(foreach g, $(BENCH_GEOMETRIES), \
-					$(WT_DS_RESULTSDIR)/bench_wt_ds.$(c).$(fs).$(g).csv)))
+					$(WT_N_RESULTSDIR)/bench_wt_n.$(c).$(fs).$(g).csv)))
 
 # core bench rule
 #
@@ -66,9 +67,9 @@ all bench bench-wt-ds: \
 # $2 - bench case
 # $3 - fs type/version
 # $4 - disk geometry
-# $5 - disk sizes
+# $5 - target sizes
 #
-define BENCH_WT_DS_RULE
+define BENCH_WT_N_RULE
 $1: $($(U_$3)_BENCH_RUNNER)
 	$$(strip ./scripts/bench.py -R$$< -B bench_wt_$2 \
 		$(BENCHFLAGS) $($(U_$3)_BENCHFLAGS) \
@@ -77,7 +78,7 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		$(if $(SIM_SIZE),-DSIM_SIZE=$(SIM_SIZE)) \
 		-DFS=$(N_$3) \
 		-DDISK_GEOMETRY=$(N_$4) \
-		-DDISK_SIZE=$(or $5,$(WT_DS_DISK_SIZES)) \
+		-DSIZE=$(or $5,$(WT_N_SIZES)) \
 		-o$$@)
 endef
 
@@ -85,8 +86,8 @@ endef
 $(foreach c, $(BENCH_CASES),$\
 	$(foreach fs, $(BENCH_FILESYSTEMS),$\
 		$(foreach g, $(BENCH_GEOMETRIES),$\
-			$(eval $(call BENCH_WT_DS_RULE,$\
-				$(WT_DS_RESULTSDIR)/bench_wt_ds.$(c).$(fs).$(g).csv,$\
+			$(eval $(call BENCH_WT_N_RULE,$\
+				$(WT_N_RESULTSDIR)/bench_wt_n.$(c).$(fs).$(g).csv,$\
 				$(c),$\
 				$(fs),$\
 				$(g))))))
@@ -97,17 +98,17 @@ $(foreach c, $(BENCH_CASES),$\
 #======================================================================#
 
 ## Plot benchmarks
-.PHONY: all plot plot-wt-ds
-all plot plot-wt-ds: \
-		$(WT_DS_PLOTSDIR)/plots.html \
+.PHONY: all plot plot-wt-n
+all plot plot-wt-n: \
+		$(WT_N_PLOTSDIR)/plots.html \
 		$(foreach g, $(BENCH_GEOMETRIES), \
-			$(WT_DS_PLOTSDIR)/plot_wt_ds.$(g).svg)
+			$(WT_N_PLOTSDIR)/plot_wt_n.$(g).svg)
 
 ## Create a quick html page for easy viewing
-$(WT_DS_PLOTSDIR)/plots.html:
+$(WT_N_PLOTSDIR)/plots.html:
 	echo -e "$(subst $(nl),\n,$(HTML_HEADER))" >> $@
 	$(foreach g, $(BENCH_GEOMETRIES), \
-		echo -e "<p><img src="plot_wt_ds.$(g).svg"></p>" >> $@ $(nl))
+		echo -e "<p><img src="plot_wt_n.$(g).svg"></p>" >> $@ $(nl))
 	echo -e "$(subst $(nl),\n,$(HTML_FOOTER))" >> $@
 
 # core plot rule
@@ -120,7 +121,7 @@ $(WT_DS_PLOTSDIR)/plots.html:
 # $6 - x-skip
 # $7 - extra plotmpl.py flags
 #
-define PLOT_WT_DS_RULE
+define PLOT_WT_N_RULE
 $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
@@ -187,16 +188,16 @@ endef
 
 # plot rules
 $(foreach g, $(BENCH_GEOMETRIES), \
-	$(eval $(call PLOT_WT_DS_RULE,$\
-		$(WT_DS_PLOTSDIR)/plot_wt_ds.$(g).svg,$\
+	$(eval $(call PLOT_WT_N_RULE,$\
+		$(WT_N_PLOTSDIR)/plot_wt_n.$(g).svg,$\
 		$(foreach c, $(BENCH_CASES),$\
 			$(foreach fs, $(BENCH_FILESYSTEMS),$\
-				$(WT_DS_RESULTSDIR)/bench_wt_ds.$(c).$(fs).$(g).csv)),$\
-		"disk sizes - $(g) - simulated throughput",$\
-		DISK_SIZE,$\
-		$(WT_DS_DISK_SIZES),$\
-		2,$\
-		--xlabel="disk size")))
+				$(WT_N_RESULTSDIR)/bench_wt_n.$(c).$(fs).$(g).csv)),$\
+		"target sizes - $(g) - simulated throughput",$\
+		SIZE,$\
+		$(WT_N_SIZES),$\
+		3,$\
+		--xlabel="target size")))
 
 
 endif
