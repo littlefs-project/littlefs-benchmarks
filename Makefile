@@ -12,12 +12,12 @@ all: build list
 
 ## List available benches
 .PHONY: list
-list: | build
-	@echo "# available bench makefiles:"
-	@echo "# make sizes"
-	@echo "# make bench-sizes"
-	@echo "# make -f Makefiles/codemaps.mk"
+list:
+	@echo "# note: Available bench makefiles:"
+	@echo "# note: make sizes"
+	@echo "# note: make bench-sizes"
+	@echo "# note: make -f Makefiles/codemaps.mk"
 	@for f in Makefiles/bench*.mk ; do \
-		echo "# make -f $$f" ; \
+		echo "# note: make -f $$f" ; \
 	done
 

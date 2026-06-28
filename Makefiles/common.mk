@@ -24,6 +24,9 @@ PLOTSDIR ?= plots
 # overrideable tikz dir, defaults to ./tikz
 TIKZDIR ?= tikz
 
+# optional save dir, defaults to ./saved, for quickly saving things
+SAVEDIR ?= saved
+
 # common benches
 BENCHES ?= $(wildcard benches/*.toml)
 
@@ -241,6 +244,48 @@ tags-common ctags-common:
 
 
 #======================================================================#
+# save rules, for quickly saving things								   #
+#======================================================================#
+
+## Save everything
+.PHONY: save
+save: \
+		save-build \
+		save-codemaps \
+		save-results \
+		save-plots \
+		save-tikz
+
+$(SAVEDIR):
+	mkdir $@
+
+## Save bench-runner things
+.PHONY: save-build
+save-build: $(SAVEDIR)
+	cp -ru $(BUILDDIR) $(SAVEDIR)/
+
+## Save codemaps
+.PHONY: save-codemaps
+save-codemaps: $(SAVEDIR)
+	cp -ru $(CODEMAPSDIR) $(SAVEDIR)/
+
+## Save bench results
+.PHONY: save-results
+save-results: $(SAVEDIR)
+	cp -ru $(RESULTSDIR) $(SAVEDIR)/
+
+## Save bench plots
+.PHONY: save-plots
+save-plots: $(SAVEDIR)
+	cp -ru $(PLOTSDIR) $(SAVEDIR)/
+
+## Save tikz
+.PHONY: save-tikz
+save-tikz: $(SAVEDIR)
+	cp -ru $(TIKZDIR) $(SAVEDIR)/
+
+
+#======================================================================#
 # touch rules, to try to force rebenches without cleaning everything   #
 #======================================================================#
 
@@ -268,6 +313,8 @@ clean: \
 		clean-results \
 		clean-plots \
 		clean-tikz
+	@echo "# note: This does not clean saved results! To clean:"
+	@echo "# note: make clean-saved"
 
 ## Clean bench-runner things
 .PHONY: clean-build
@@ -293,6 +340,42 @@ clean-plots:
 .PHONY: clean-tikz
 clean-tikz:
 	rm -rf $(TIKZDIR)
+
+
+## Clean everything saved, this is _not_ cleaned by default
+.PHONY: clean-saved
+clean-saved: \
+		clean-saved-build \
+		clean-saved-codemaps \
+		clean-saved-results \
+		clean-saved-plots \
+		clean-saved-tikz
+	rm -df $(SAVEDIR)
+
+## Clean saved bench-runner things, this is _not_ cleaned by default
+.PHONY: clean-saved-build
+clean-saved-build:
+	rm -rf $(SAVEDIR)/$(BUILDDIR)
+
+## Clean saved codemaps, this is _not_ cleaned by default
+.PHONY: clean-saved-codemaps
+clean-saved-codemaps:
+	rm -rf $(SAVEDIR)/$(CODEMAPSDIR)
+
+## Clean saved bench results, this is _not_ cleaned by default
+.PHONY: clean-saved-results
+clean-saved-results:
+	rm -rf $(SAVEDIR)/$(RESULTSDIR)
+
+## Clean saved bench plots, this is _not_ cleaned by default
+.PHONY: clean-saved-plots
+clean-saved-plots:
+	rm -rf $(SAVEDIR)/$(PLOTSDIR)
+
+## Clean saved tikz, this is _not_ cleaned by default
+.PHONY: clean-saved-tikz
+clean-saved-tikz:
+	rm -rf $(SAVEDIR)/$(TIKZDIR)
 
 
 endif
