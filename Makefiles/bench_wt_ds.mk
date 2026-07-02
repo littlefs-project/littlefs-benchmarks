@@ -173,7 +173,6 @@ $1: $2
 		$(foreach fs, $(BENCH_FILESYSTEMS),$\
 			-F'$(N_$(fs))=$(addsuffix -,$(F_$(fs)))') \
 		--xlog \
-		--xticks=4 \
 		-X"$$(shell python -c 'a=min([$5]); print(a-a/4)'),$\
 			$$(shell python -c 'b=max([$5]); print(b+b/4)')" \
 		--x2 --xunits=B \

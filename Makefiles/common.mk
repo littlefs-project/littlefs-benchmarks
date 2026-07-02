@@ -77,6 +77,7 @@ CFLAGS += -Wno-format-overflow
 # compiler bug: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=101854
 CFLAGS += -Wno-stringop-overflow
 CFLAGS += -ftrack-macro-expansion=0
+LFLAGS += -lm # needed for math.h
 # enable stack measurements
 CFLAGS += -DBENCH_STACK
 CFLAGS += -Wl,--wrap=printf

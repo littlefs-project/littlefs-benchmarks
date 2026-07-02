@@ -1,20 +1,22 @@
-ifndef BENCH_WT_BS_MK
-BENCH_WT_BS_MK := 1
+ifndef BENCH_WL_GC_MK
+BENCH_WL_GC_MK := 1
 
 # include build rules + filesystems
 include Makefiles/build.mk
 
 # overrideable results dir
-WT_BS_RESULTSDIR ?= $(RESULTSDIR)/wt_bs
+WL_GC_RESULTSDIR ?= $(RESULTSDIR)/wl_gc
 # overrideable plots dir
-WT_BS_PLOTSDIR ?= $(PLOTSDIR)/wt_bs
+WL_GC_PLOTSDIR ?= $(PLOTSDIR)/wl_gc
 # overrideable tikz dir
-WT_BS_TIKZDIR ?= $(TIKZDIR)/wt_bs
+WL_GC_TIKZDIR ?= $(TIKZDIR)/wl_gc
 
 
-# range of block sizes to test
-WT_BS_BLOCK_SIZES ?= 4096,8192,16384,32768,65536,131072,$\
-		262144,524288,1048576
+# range of percentiles to test
+WL_GC_P ?= avg,p50,p90,p99,p99.9,p99.99,p99.999,max
+
+# run with gc
+BENCHFLAGS += -DGC=1
 
 
 # default bench filesystems to default bench filesystems
@@ -37,11 +39,11 @@ BENCH_CASES ?= seq random logging many
 
 # this is a bit of a hack, but we want to make sure the BUILDDIR
 # directory structure is correct before we run any commands
-ifneq ($(WT_BS_RESULTSDIR),.)
+ifneq ($(WL_GC_RESULTSDIR),.)
 $(if $(findstring n,$(MAKEFLAGS)),, $(shell mkdir -p \
-		$(WT_BS_RESULTSDIR) \
-		$(WT_BS_PLOTSDIR) \
-		$(WT_BS_TIKZDIR)))
+		$(WL_GC_RESULTSDIR) \
+		$(WL_GC_PLOTSDIR) \
+		$(WL_GC_TIKZDIR)))
 endif
 
 
@@ -50,12 +52,12 @@ endif
 #======================================================================#
 
 ## Run benches
-.PHONY: all bench bench-wt-bs
-all bench bench-wt-bs: \
+.PHONY: all bench bench-wl-gc
+all bench bench-wl-gc: \
 		$(foreach c, $(BENCH_CASES), \
 			$(foreach fs, $(BENCH_FILESYSTEMS), \
 				$(foreach g, $(BENCH_GEOMETRIES), \
-					$(WT_BS_RESULTSDIR)/bench_wt_bs.$(c).$(fs).$(g).csv)))
+					$(WL_GC_RESULTSDIR)/bench_wl_gc.$(c).$(fs).$(g).csv)))
 
 # core bench rule
 #
@@ -63,18 +65,19 @@ all bench bench-wt-bs: \
 # $2 - bench case
 # $3 - fs type/version
 # $4 - disk geometry
-# $5 - block sizes
+# $5 - percentiles
 #
-define BENCH_WT_BS_RULE
+define BENCH_WL_GC_RULE
 $1: $($(U_$3)_BENCH_RUNNER)
-	$$(strip ./scripts/bench.py -R$$< -B bench_wt_$2 \
+	$$(strip ./scripts/bench.py -R$$< -B bench_wl_$2 \
 		$(BENCHFLAGS) $($(U_$3)_BENCHFLAGS) \
 		$(if $(SKIP_WARMUP),-DSKIP_WARMUP=$(SKIP_WARMUP)) \
 		$(if $(SIM_TIME),-DSIM_TIME=$(SIM_TIME)) \
 		$(if $(SIM_SIZE),-DSIM_SIZE=$(SIM_SIZE)) \
 		-DFS=$(N_$3) \
 		-DDISK_GEOMETRY=$(N_$4) \
-		-DBLOCK_SIZE=$(or $5,$(WT_BS_BLOCK_SIZES)) \
+		$(foreach p, $(subst $(comma),$(space),$(or $5,$(WL_GC_P))),$\
+			-Swrite=$(p)) \
 		-o$$@)
 endef
 
@@ -82,8 +85,8 @@ endef
 $(foreach c, $(BENCH_CASES),$\
 	$(foreach fs, $(BENCH_FILESYSTEMS),$\
 		$(foreach g, $(BENCH_GEOMETRIES),$\
-			$(eval $(call BENCH_WT_BS_RULE,$\
-				$(WT_BS_RESULTSDIR)/bench_wt_bs.$(c).$(fs).$(g).csv,$\
+			$(eval $(call BENCH_WL_GC_RULE,$\
+				$(WL_GC_RESULTSDIR)/bench_wl_gc.$(c).$(fs).$(g).csv,$\
 				$(c),$\
 				$(fs),$\
 				$(g))))))
@@ -94,17 +97,17 @@ $(foreach c, $(BENCH_CASES),$\
 #======================================================================#
 
 ## Plot benchmarks
-.PHONY: all plot plot-wt-bs
-all plot plot-wt-bs: \
-		$(WT_BS_PLOTSDIR)/plots.html \
+.PHONY: all plot plot-wl-gc
+all plot plot-wl-gc: \
+		$(WL_GC_PLOTSDIR)/plots.html \
 		$(foreach g, $(BENCH_GEOMETRIES), \
-			$(WT_BS_PLOTSDIR)/plot_wt_bs.$(g).svg)
+			$(WL_GC_PLOTSDIR)/plot_wl_gc.$(g).svg)
 
 ## Create a quick html page for easy viewing
-$(WT_BS_PLOTSDIR)/plots.html:
+$(WL_GC_PLOTSDIR)/plots.html:
 	echo -e "$(subst $(nl),\n,$(HTML_HEADER))" >> $@
 	$(foreach g, $(BENCH_GEOMETRIES), \
-		echo -e "<p><img src="plot_wt_bs.$(g).svg"></p>" >> $@ $(nl))
+		echo -e "<p><img src="plot_wl_gc.$(g).svg"></p>" >> $@ $(nl))
 	echo -e "$(subst $(nl),\n,$(HTML_FOOTER))" >> $@
 
 # core plot rule
@@ -117,51 +120,33 @@ $(WT_BS_PLOTSDIR)/plots.html:
 # $6 - x-skip
 # $7 - extra plotmpl.py flags
 #
-define PLOT_WT_BS_RULE
+define PLOT_WL_GC_RULE
 $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
-			-bcase -bFS -b$4 -Dprobe=write \
-			-fthroughput='float(n)/max(float(bench_simtime)/1.0e9,1.0e-9)' \
-			-o-) \
-		<(./scripts/csv.py $$^ \
-			-bcase -bFS -b$4 -Dprobe=heap,stack \
-			-fram=bench_simtime \
+			-I -bcase -bFS -bprobe \
+			-flatency='bench_simtime/1.0e9' \
 			-o-) \
 		-W1500 -H350 \
 		--title=$3 \
 		-bFS \
-		-x$4 \
 		--subplot=" \
 				--title='seq' \
-				--ylabel='throughput' \
-				-Dcase=bench_wt_seq \
-				-ythroughput --y2 --yunits=B/s \
-			--subplot-below=\" \
-				--ylabel='ram' \
-				-Dcase=bench_wt_seq \
-				-yram --y2 --yunits=B\"" \
+				--ylabel='latency' \
+				-Dcase=bench_wl_seq \
+				-ylatency --yunits=s" \
 		--subplot-right=" \
 				--title='random' \
-				-Dcase=bench_wt_random \
-				-ythroughput --y2 --yunits=B/s \
-			--subplot-below=\" \
-				-Dcase=bench_wt_random \
-				-yram --y2 --yunits=B\"" \
+				-Dcase=bench_wl_random \
+				-ylatency --yunits=s" \
 		--subplot-right=" \
 				--title='logging' \
-				-Dcase=bench_wt_logging \
-				-ythroughput --y2 --yunits=B/s \
-			--subplot-below=\" \
-				-Dcase=bench_wt_logging \
-				-yram --y2 --yunits=B\"" \
+				-Dcase=bench_wl_logging \
+				-ylatency --yunits=s" \
 		--subplot-right=" \
 				--title='many' \
-				-Dcase=bench_wt_many \
-				-ythroughput --y2 --yunits=B/s \
-			--subplot-below=\" \
-				-Dcase=bench_wt_many \
-				-yram --y2 --yunits=B\"" \
+				-Dcase=bench_wl_many \
+				-ylatency --yunits=s" \
 		--legend \
 		$(foreach fs, $(BENCH_FILESYSTEMS),$\
 			-L'$(N_$(fs))=$(fs)') \
@@ -169,13 +154,11 @@ $1: $2
 			-C'$(N_$(fs))=$(C_$(fs))') \
 		$(foreach fs, $(BENCH_FILESYSTEMS),$\
 			-F'$(N_$(fs))=$(addsuffix -,$(F_$(fs)))') \
-		--xlog \
-		-X"$$(shell python -c 'a=min([$5]); print(a-a/4)'),$\
-			$$(shell python -c 'b=max([$5]); print(b+b/4)')" \
-		--x2 --xunits=B \
+		-X"-0.25,$\
+			$$(shell python -c 'b=len("$5".split(","))-1; print(b+1/4)')" \
 		$$(shell python -c '$\
-			for n in [$5][::$6]: $\
-				print("--add-xticklabel=%d=\"%%(x)IB\"" % n)') \
+			for i, p in enumerate("$5".split(",")[::$6]): $\
+				print("--add-xticklabel=%d=\"%s\"" % (i, p))') \
 		$7 \
 		$$(PLOTFLAGS) \
 		-o$$@)
@@ -183,16 +166,16 @@ endef
 
 # plot rules
 $(foreach g, $(BENCH_GEOMETRIES), \
-	$(eval $(call PLOT_WT_BS_RULE,$\
-		$(WT_BS_PLOTSDIR)/plot_wt_bs.$(g).svg,$\
+	$(eval $(call PLOT_WL_GC_RULE,$\
+		$(WL_GC_PLOTSDIR)/plot_wl_gc.$(g).svg,$\
 		$(foreach c, $(BENCH_CASES),$\
 			$(foreach fs, $(BENCH_FILESYSTEMS),$\
-				$(WT_BS_RESULTSDIR)/bench_wt_bs.$(c).$(fs).$(g).csv)),$\
+				$(WL_GC_RESULTSDIR)/bench_wl_gc.$(c).$(fs).$(g).csv)),$\
 		"block sizes - $(g) - simulated throughput",$\
-		BLOCK_SIZE,$\
-		$(WT_BS_BLOCK_SIZES),$\
-		2,$\
-		--xlabel="block size")))
+		probe,$\
+		$(WL_GC_P),$\
+		1,$\
+		--xlabel="percentile")))
 
 
 endif
