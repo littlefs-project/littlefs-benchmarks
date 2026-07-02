@@ -14,7 +14,7 @@ LFS3S_BENCHFLAGS += -DSET=1
 # add to list of filesystems
 FILESYSTEMS += lfs3s
 U_lfs3s = LFS3S
-N_lfs3s = 34
+N_lfs3s = 35
 I_lfs3s = 0
 C_lfs3s = $(C_BLUE)
 F_lfs3s = $$$$s$$$$ # s

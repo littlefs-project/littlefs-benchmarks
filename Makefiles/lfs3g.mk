@@ -14,7 +14,7 @@ LFS3G_BENCHFLAGS += -DGRANULAR=1
 # add to list of filesystems
 FILESYSTEMS += lfs3g
 U_lfs3g = LFS3G
-N_lfs3g = 32
+N_lfs3g = 33
 I_lfs3g = 0
 C_lfs3g = $(C_BLUE)
 F_lfs3g = $$$$g$$$$ # g
