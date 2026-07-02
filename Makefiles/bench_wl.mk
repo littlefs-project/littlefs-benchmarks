@@ -168,7 +168,7 @@ $(foreach g, $(BENCH_GEOMETRIES), \
 		$(foreach c, $(BENCH_CASES),$\
 			$(foreach fs, $(BENCH_FILESYSTEMS),$\
 				$(WL_RESULTSDIR)/bench_wl.$(c).$(fs).$(g).csv)),$\
-		"block sizes - $(g) - simulated throughput",$\
+		"$(g) - simulated latency",$\
 		probe,$\
 		$(WL_P),$\
 		1,$\

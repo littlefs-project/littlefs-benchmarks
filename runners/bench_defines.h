@@ -144,7 +144,8 @@
     BENCH_DEFINE(GC_STEPS,              0                                   )
     BENCH_DEFINE(GC_LOOKAHEAD_THRESH,   -1                                  )
     BENCH_DEFINE(GC_LOOKGBMAP_THRESH,   -1                                  )
-    BENCH_DEFINE(GC_PREERASE_COUNT,     -1                                  )
+    // NOTE this matches spiffs, TODO what about yaffs2?
+    BENCH_DEFINE(GC_PREERASE_COUNT,     3                                   )
     BENCH_DEFINE(GC_COMPACTMETA_THRESH, BLOCK_SIZE - BLOCK_SIZE/8           )
     BENCH_DEFINE(GC_COMPACTBTREE_THRESH,
                                         0                                   )

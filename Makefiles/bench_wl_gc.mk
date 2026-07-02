@@ -78,6 +78,8 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		-DDISK_GEOMETRY=$(N_$4) \
 		$(foreach p, $(subst $(comma),$(space),$(or $5,$(WL_GC_P))),$\
 			-Swrite=$(p)) \
+		$(foreach p, $(subst $(comma),$(space),$(or $5,$(WL_GC_P))),$\
+			-Sgc=$(p)) \
 		-o$$@)
 endef
 
@@ -132,21 +134,45 @@ $1: $2
 		-bFS \
 		--subplot=" \
 				--title='seq' \
-				--ylabel='latency' \
+				--ylabel='write latency' \
 				-Dcase=bench_wl_seq \
-				-ylatency --yunits=s" \
+				-Dprobe='write+*' \
+				-ylatency --yunits=s \
+			--subplot-below=\" \
+				--ylabel='gc latency' \
+				-Dcase=bench_wl_seq \
+				-Dprobe='gc+*' \
+				-ylatency --yunits=s\"" \
 		--subplot-right=" \
 				--title='random' \
 				-Dcase=bench_wl_random \
-				-ylatency --yunits=s" \
+				-Dprobe='write+*' \
+				-ylatency --yunits=s \
+			--subplot-below=\" \
+				--ylabel='gc latency' \
+				-Dcase=bench_wl_seq \
+				-Dprobe='gc+*' \
+				-ylatency --yunits=s\"" \
 		--subplot-right=" \
 				--title='logging' \
 				-Dcase=bench_wl_logging \
-				-ylatency --yunits=s" \
+				-Dprobe='write+*' \
+				-ylatency --yunits=s \
+			--subplot-below=\" \
+				--ylabel='gc latency' \
+				-Dcase=bench_wl_seq \
+				-Dprobe='gc+*' \
+				-ylatency --yunits=s\"" \
 		--subplot-right=" \
 				--title='many' \
 				-Dcase=bench_wl_many \
-				-ylatency --yunits=s" \
+				-Dprobe='write+*' \
+				-ylatency --yunits=s \
+			--subplot-below=\" \
+				--ylabel='gc latency' \
+				-Dcase=bench_wl_seq \
+				-Dprobe='gc+*' \
+				-ylatency --yunits=s\"" \
 		--legend \
 		$(foreach fs, $(BENCH_FILESYSTEMS),$\
 			-L'$(N_$(fs))=$(fs)') \
@@ -171,7 +197,7 @@ $(foreach g, $(BENCH_GEOMETRIES), \
 		$(foreach c, $(BENCH_CASES),$\
 			$(foreach fs, $(BENCH_FILESYSTEMS),$\
 				$(WL_GC_RESULTSDIR)/bench_wl_gc.$(c).$(fs).$(g).csv)),$\
-		"block sizes - $(g) - simulated throughput",$\
+		"$(g) - simulated latency - with gc",$\
 		probe,$\
 		$(WL_GC_P),$\
 		1,$\
