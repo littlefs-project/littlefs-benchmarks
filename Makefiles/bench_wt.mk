@@ -135,4 +135,103 @@ marks-wt-%: \
 	@echo
 
 
+#======================================================================#
+# plot rules                                                           #
+#======================================================================#
+
+## Plot benchmarks
+.PHONY: all plot plot-wt
+all plot plot-wt: \
+		$(WT_PLOTSDIR)/plots.html \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(WT_PLOTSDIR)/plot_wt.$(g).svg)
+
+## Create a quick html page for easy viewing
+$(WT_PLOTSDIR)/plots.html:
+	echo -e "$(subst $(nl),\n,$(HTML_HEADER))" >> $@
+	$(foreach g, $(BENCH_GEOMETRIES), \
+		echo -e "<p><img src="plot_wt.$(g).svg"></p>" >> $@ $(nl))
+	echo -e "$(subst $(nl),\n,$(HTML_FOOTER))" >> $@
+
+# core plot rule
+#
+# $1 - target
+# $2 - sources
+# $3 - title
+# $4 - x-axis
+# $5 - x-ticks
+# $6 - x-skip
+# $7 - extra plotmpl.py flags
+#
+define PLOT_WT_RULE
+$1: $2
+	$$(strip ./scripts/plotmpl.py \
+		<(./scripts/csv.py \
+			<(./scripts/csv.py $$^ \
+				-Si='enumerate()' -bcase -b$4 -Dprobe=write \
+				-fthroughput='float(n)/max(float(bench_simtime)/1.0e9,1.0e-9)' \
+				-o-) \
+			<(./scripts/csv.py $$^ \
+				-Si='enumerate()' -bcase -b$4 -Dprobe=heap,stack \
+				-fram=bench_simtime \
+				-o-) \
+			-Si='enumerate()' -bcase -b$4 \
+			-o-) \
+		-W1500 -H350 \
+		--title=$3 \
+		--subplot=" \
+				--title='seq' \
+				--ylabel='throughput' \
+				-Dcase=bench_wt_seq \
+				-ythroughput --y2 --yunits=B/s \
+			--subplot-below=\" \
+				--ylabel='ram' \
+				-Dcase=bench_wt_seq \
+				-yram --y2 --yunits=B\"" \
+		--subplot-right=" \
+				--title='random' \
+				-Dcase=bench_wt_random \
+				-ythroughput --y2 --yunits=B/s \
+			--subplot-below=\" \
+				-Dcase=bench_wt_random \
+				-yram --y2 --yunits=B\"" \
+		--subplot-right=" \
+				--title='logging' \
+				-Dcase=bench_wt_logging \
+				-ythroughput --y2 --yunits=B/s \
+			--subplot-below=\" \
+				-Dcase=bench_wt_logging \
+				-yram --y2 --yunits=B\"" \
+		--subplot-right=" \
+				--title='many' \
+				-Dcase=bench_wt_many \
+				-ythroughput --y2 --yunits=B/s \
+			--subplot-below=\" \
+				-Dcase=bench_wt_many \
+				-yram --y2 --yunits=B\"" \
+		-Fo: \
+		-X"-0.25,$\
+			$$(shell python -c 'b=len("$5".split())-1; print(b+1/4)')" \
+		$$(shell python -c '$\
+			for i, fs in enumerate("$5".split()[::$6]): $\
+				print("--add-xticklabel=%d=\"%s\"" % (i, fs))') \
+		$7 \
+		$$(PLOTFLAGS) \
+		-o$$@)
+endef
+
+# plot rules
+$(foreach g, $(BENCH_GEOMETRIES), \
+	$(eval $(call PLOT_WT_RULE,$\
+		$(WT_PLOTSDIR)/plot_wt.$(g).svg,$\
+		$(foreach c, $(BENCH_CASES),$\
+			$(foreach fs, $(BENCH_FILESYSTEMS),$\
+				$(WT_RESULTSDIR)/bench_wt.$(c).$(fs).$(g).csv)),$\
+		"$(g) - simulated latency",$\
+		FS,$\
+		$(BENCH_FILESYSTEMS),$\
+		1,$\
+		--xlabel="filesystem")))
+
+
 endif

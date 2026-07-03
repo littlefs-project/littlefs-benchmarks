@@ -98,13 +98,19 @@ $(foreach c, $(BENCH_CASES),$\
 all plot plot-wl: \
 		$(WL_PLOTSDIR)/plots.html \
 		$(foreach g, $(BENCH_GEOMETRIES), \
-			$(WL_PLOTSDIR)/plot_wl.$(g).svg)
+			$(WL_PLOTSDIR)/plot_wl.$(g).svg) \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(foreach p, $(subst $(comma),$(space),$(WL_P)), \
+				$(WL_PLOTSDIR)/plot_wl.$(p).$(g).svg))
 
 ## Create a quick html page for easy viewing
 $(WL_PLOTSDIR)/plots.html:
 	echo -e "$(subst $(nl),\n,$(HTML_HEADER))" >> $@
 	$(foreach g, $(BENCH_GEOMETRIES), \
 		echo -e "<p><img src="plot_wl.$(g).svg"></p>" >> $@ $(nl))
+	$(foreach g, $(BENCH_GEOMETRIES), \
+		$(foreach p, $(subst $(comma),$(space),$(WL_P)), \
+			echo -e "<p><img src="plot_wl.$(p).$(g).svg"></p>" >> $@ $(nl)))
 	echo -e "$(subst $(nl),\n,$(HTML_FOOTER))" >> $@
 
 # core plot rule
@@ -121,7 +127,7 @@ define PLOT_WL_RULE
 $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
-			-I -bcase -bFS -bprobe \
+			-Si='enumerate()' -bcase -bFS -b$4 \
 			-flatency='bench_simtime/1.0e9' \
 			-o-) \
 		-W1500 -H350 \
@@ -173,6 +179,66 @@ $(foreach g, $(BENCH_GEOMETRIES), \
 		$(WL_P),$\
 		1,$\
 		--xlabel="percentile")))
+
+# per-percentile plot rule
+#
+# $1 - target
+# $2 - sources
+# $3 - title
+# $4 - x-axis
+# $5 - x-ticks
+# $6 - x-skip
+# $7 - extra plotmpl.py flags
+#
+define PLOT_WL_P_RULE
+$1: $2
+	$$(strip ./scripts/plotmpl.py \
+		<(./scripts/csv.py $$^ \
+			-Si='enumerate()' -bcase -b$4 -Dprobe='write+$$*' \
+			-flatency='bench_simtime/1.0e9' \
+			-o-) \
+		-W1500 -H175 \
+		--title=$3 \
+		--subplot=" \
+				--title='seq' \
+				--ylabel='latency' \
+				-Dcase=bench_wl_seq \
+				-ylatency --yunits=s" \
+		--subplot-right=" \
+				--title='random' \
+				-Dcase=bench_wl_random \
+				-ylatency --yunits=s" \
+		--subplot-right=" \
+				--title='logging' \
+				-Dcase=bench_wl_logging \
+				-ylatency --yunits=s" \
+		--subplot-right=" \
+				--title='many' \
+				-Dcase=bench_wl_many \
+				-ylatency --yunits=s" \
+		-Fo: \
+		-X"-0.25,$\
+			$$(shell python -c 'b=len("$5".split())-1; print(b+1/4)')" \
+		$$(shell python -c '$\
+			for i, fs in enumerate("$5".split()[::$6]): $\
+				print("--add-xticklabel=%d=\"%s\"" % (i, fs))') \
+		$7 \
+		$$(PLOTFLAGS) \
+		-o$$@)
+endef
+
+# per-percentile plot rules
+$(foreach g, $(BENCH_GEOMETRIES), \
+	$(eval $(call PLOT_WL_P_RULE,$\
+		$(WL_PLOTSDIR)/plot_wl.%.$(g).svg,$\
+		$(foreach c, $(BENCH_CASES),$\
+			$(foreach fs, $(BENCH_FILESYSTEMS),$\
+				$(WL_RESULTSDIR)/bench_wl.$(c).$(fs).$(g).csv)),$\
+		"$$* - $(g) - simulated latency",$\
+		FS,$\
+		$(BENCH_FILESYSTEMS),$\
+		1,$\
+		--xlabel="filesystem")))
 
 
 endif
