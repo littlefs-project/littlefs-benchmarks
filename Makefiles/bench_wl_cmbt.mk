@@ -1,23 +1,38 @@
-ifndef BENCH_WL_MK
-BENCH_WL_MK := 1
+ifndef BENCH_WL_CMBT_MK
+BENCH_WL_CMBT_MK := 1
 
 # include build rules + filesystems
 include Makefiles/build.mk
 
 # overrideable results dir
-WL_RESULTSDIR ?= $(RESULTSDIR)/wl
+WL_CMBT_RESULTSDIR ?= $(RESULTSDIR)/wl_cmbt
 # overrideable plots dir
-WL_PLOTSDIR ?= $(PLOTSDIR)/wl
+WL_CMBT_PLOTSDIR ?= $(PLOTSDIR)/wl_cmbt
 # overrideable tikz dir
-WL_TIKZDIR ?= $(TIKZDIR)/wl
+WL_CMBT_TIKZDIR ?= $(TIKZDIR)/wl_cmbt
 
 
 # range of percentiles to measure
-WL_P ?= avg,p50,p90,p99,p99.9,p99.99,p99.999,max
+WL_CMBT_P ?= avg,p50,p90,p99,p99.9,p99.99,p99.999,max
+
+# range of gc_compactmeta_thresh to test
+#
+# this depends on disk geometry
+WL_CMBT_nor_COMPACTBTREE_THRESHES ?= $\
+	2048,2176,2304,2432,2560,2688,2816,2944,$\
+	3072,3200,3328,3456,3584,3712,3840,3968,$\
+	4096
+WL_CMBT_nand_COMPACTBTREE_THRESHES ?= $\
+	65536,69632,73728,77824,81920,86016,90112,94208,$\
+	98304,102400,106496,110592,114688,118784,122880,126976,$\
+	131072
+
+# run with gc
+BENCHFLAGS += -DGC=1 -DGC_FLAGS=0x00080000
 
 
-# default bench filesystems to default bench filesystems
-BENCH_FILESYSTEMS ?= $(DEFAULT_BENCH_FILESYSTEMS)
+# default bench filesystems to default littlefs3 filesystems
+BENCH_FILESYSTEMS ?= $(DEFAULT_LFS3_FILESYSTEMS)
 
 # default disk geometries to default disk geometries
 BENCH_GEOMETRIES ?= $(DEFAULT_BENCH_GEOMETRIES)
@@ -28,11 +43,11 @@ BENCH_CASES ?= seq random logging many
 
 # this is a bit of a hack, but we want to make sure the BUILDDIR
 # directory structure is correct before we run any commands
-ifneq ($(WL_RESULTSDIR),.)
+ifneq ($(WL_CMBT_RESULTSDIR),.)
 $(if $(findstring n,$(MAKEFLAGS)),, $(shell mkdir -p \
-		$(WL_RESULTSDIR) \
-		$(WL_PLOTSDIR) \
-		$(WL_TIKZDIR)))
+		$(WL_CMBT_RESULTSDIR) \
+		$(WL_CMBT_PLOTSDIR) \
+		$(WL_CMBT_TIKZDIR)))
 endif
 
 
@@ -41,12 +56,12 @@ endif
 #======================================================================#
 
 ## Run benches
-.PHONY: all bench bench-wl
-all bench bench-wl: \
+.PHONY: all bench bench-wl-cmbt
+all bench bench-wl-cmbt: \
 		$(foreach c, $(BENCH_CASES), \
 			$(foreach fs, $(BENCH_FILESYSTEMS), \
 				$(foreach g, $(BENCH_GEOMETRIES), \
-					$(WL_RESULTSDIR)/bench_wl.$(c).$(fs).$(g).csv)))
+					$(WL_CMBT_RESULTSDIR)/bench_wl_cmbt.$(c).$(fs).$(g).csv)))
 
 # core bench rule
 #
@@ -55,8 +70,9 @@ all bench bench-wl: \
 # $3 - fs type/version
 # $4 - disk geometry
 # $5 - percentiles
+# $6 - compactmeta threshes
 #
-define BENCH_WL_RULE
+define BENCH_WL_CMBT_RULE
 $1: $($(U_$3)_BENCH_RUNNER)
 	$$(strip ./scripts/bench.py -R$$< -B bench_wl_$2 \
 		$(BENCHFLAGS) $($(U_$3)_BENCHFLAGS) \
@@ -65,8 +81,11 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		$(if $(SIM_SIZE),-DSIM_SIZE=$(SIM_SIZE)) \
 		-DFS=$(N_$3) \
 		-DDISK_GEOMETRY=$(N_$4) \
-		$(foreach p, $(subst $(comma),$(space),$(or $5,$(WL_P))),$\
+		$(foreach p, $(subst $(comma),$(space),$(or $5,$(WL_CMBT_P))),$\
 			-Swrite=$(p)) \
+		$(foreach p, $(subst $(comma),$(space),$(or $5,$(WL_CMBT_P))),$\
+			-Sgc=$(p)) \
+		-DGC_COMPACTBTREE_THRESH=$(or $6,$(WL_CMBT_$(4)_COMPACTBTREE_THRESHES)) \
 		-o$$@)
 endef
 
@@ -74,8 +93,8 @@ endef
 $(foreach c, $(BENCH_CASES),$\
 	$(foreach fs, $(BENCH_FILESYSTEMS),$\
 		$(foreach g, $(BENCH_GEOMETRIES),$\
-			$(eval $(call BENCH_WL_RULE,$\
-				$(WL_RESULTSDIR)/bench_wl.$(c).$(fs).$(g).csv,$\
+			$(eval $(call BENCH_WL_CMBT_RULE,$\
+				$(WL_CMBT_RESULTSDIR)/bench_wl_cmbt.$(c).$(fs).$(g).csv,$\
 				$(c),$\
 				$(fs),$\
 				$(g))))))
@@ -86,23 +105,19 @@ $(foreach c, $(BENCH_CASES),$\
 #======================================================================#
 
 ## Plot benchmarks
-.PHONY: all plot plot-wl
-all plot plot-wl: \
-		$(WL_PLOTSDIR)/plots.html \
+.PHONY: all plot plot-wl-cmbt
+all plot plot-wl-cmbt: \
+		$(WL_CMBT_PLOTSDIR)/plots.html \
 		$(foreach g, $(BENCH_GEOMETRIES), \
-			$(WL_PLOTSDIR)/plot_wl.$(g).svg) \
-		$(foreach g, $(BENCH_GEOMETRIES), \
-			$(foreach p, $(subst $(comma),$(space),$(WL_P)), \
-				$(WL_PLOTSDIR)/plot_wl.$(p).$(g).svg))
+			$(foreach p, $(subst $(comma),$(space),$(WL_CMBT_P)), \
+				$(WL_CMBT_PLOTSDIR)/plot_wl_cmbt.$(p).$(g).svg))
 
 ## Create a quick html page for easy viewing
-$(WL_PLOTSDIR)/plots.html:
+$(WL_CMBT_PLOTSDIR)/plots.html:
 	echo -e "$(subst $(nl),\n,$(HTML_HEADER))" >> $@
 	$(foreach g, $(BENCH_GEOMETRIES), \
-		echo -e "<p><img src="plot_wl.$(g).svg"></p>" >> $@ $(nl))
-	$(foreach g, $(BENCH_GEOMETRIES), \
-		$(foreach p, $(subst $(comma),$(space),$(WL_P)), \
-			echo -e "<p><img src="plot_wl.$(p).$(g).svg"></p>" >> $@ $(nl)))
+		$(foreach p, $(subst $(comma),$(space),$(WL_CMBT_P)), \
+			echo -e "<p><img src="plot_wl_cmbt.$(p).$(g).svg"></p>" >> $@ $(nl)))
 	echo -e "$(subst $(nl),\n,$(HTML_FOOTER))" >> $@
 
 # core plot rule
@@ -115,33 +130,55 @@ $(WL_PLOTSDIR)/plots.html:
 # $6 - x-skip
 # $7 - extra plotmpl.py flags
 #
-define PLOT_WL_RULE
+define PLOT_WL_CMBT_RULE
 $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
-			-Si='enumerate()' -bcase -bFS -b$4 \
+			-S$4=$4 -bcase -bFS -b$4 -bprobe -Dprobe='*+$$*' \
 			-flatency='bench_simtime/1.0e9' \
 			-o-) \
 		-W1500 -H350 \
 		--title=$3 \
 		-bFS \
+		-bprobe \
 		--subplot=" \
 				--title='seq' \
-				--ylabel='latency' \
+				--ylabel='latency (write)' \
 				-Dcase=bench_wl_seq \
-				-ylatency --yunits=s" \
+				-Dprobe='write+*' \
+				-ylatency --yunits=s \
+			--subplot-below=\" \
+				--ylabel='latency (gc)' \
+				-Dcase=bench_wl_seq \
+				-Dprobe='gc+*' \
+				-ylatency --yunits=s\"" \
 		--subplot-right=" \
 				--title='random' \
 				-Dcase=bench_wl_random \
-				-ylatency --yunits=s" \
+				-Dprobe='write+*' \
+				-ylatency --yunits=s \
+			--subplot-below=\" \
+				-Dcase=bench_wl_random \
+				-Dprobe='gc+*' \
+				-ylatency --yunits=s\"" \
 		--subplot-right=" \
 				--title='logging' \
 				-Dcase=bench_wl_logging \
-				-ylatency --yunits=s" \
+				-Dprobe='write+*' \
+				-ylatency --yunits=s \
+			--subplot-below=\" \
+				-Dcase=bench_wl_logging \
+				-Dprobe='gc+*' \
+				-ylatency --yunits=s\"" \
 		--subplot-right=" \
 				--title='many' \
 				-Dcase=bench_wl_many \
-				-ylatency --yunits=s" \
+				-Dprobe='write+*' \
+				-ylatency --yunits=s \
+			--subplot-below=\" \
+				-Dcase=bench_wl_many \
+				-Dprobe='gc+*' \
+				-ylatency --yunits=s\"" \
 		--legend \
 		$(foreach fs, $(BENCH_FILESYSTEMS),$\
 			-L'$(N_$(fs))=$(fs)') \
@@ -152,8 +189,8 @@ $1: $2
 		-X"-0.25,$\
 			$$(shell python -c 'b=len("$5".split(","))-1; print(b+1/4)')" \
 		$$(shell python -c '$\
-			for i, p in list(enumerate("$5".split(",")))[::$6]: $\
-				print("--add-xticklabel=%d=\"%s\"" % (i, p))') \
+			for i, fs in list(enumerate("$5".split(",")))[::$6]: $\
+				print("--add-xticklabel=%d=\"%s\"" % (i, fs))') \
 		$7 \
 		$$(PLOTFLAGS) \
 		-o$$@)
@@ -161,76 +198,16 @@ endef
 
 # plot rules
 $(foreach g, $(BENCH_GEOMETRIES), \
-	$(eval $(call PLOT_WL_RULE,$\
-		$(WL_PLOTSDIR)/plot_wl.$(g).svg,$\
+	$(eval $(call PLOT_WL_CMBT_RULE,$\
+		$(WL_CMBT_PLOTSDIR)/plot_wl_cmbt.%.$(g).svg,$\
 		$(foreach c, $(BENCH_CASES),$\
 			$(foreach fs, $(BENCH_FILESYSTEMS),$\
-				$(WL_RESULTSDIR)/bench_wl.$(c).$(fs).$(g).csv)),$\
-		"$(g) - simulated latency",$\
-		probe,$\
-		$(WL_P),$\
-		1,$\
-		--xlabel="percentile")))
-
-# per-percentile plot rule
-#
-# $1 - target
-# $2 - sources
-# $3 - title
-# $4 - x-axis
-# $5 - x-ticks
-# $6 - x-skip
-# $7 - extra plotmpl.py flags
-#
-define PLOT_WL_P_RULE
-$1: $2
-	$$(strip ./scripts/plotmpl.py \
-		<(./scripts/csv.py $$^ \
-			-Si='enumerate()' -bcase -b$4 -Dprobe='write+$$*' \
-			-flatency='bench_simtime/1.0e9' \
-			-o-) \
-		-W1500 -H175 \
-		--title=$3 \
-		--subplot=" \
-				--title='seq' \
-				--ylabel='latency' \
-				-Dcase=bench_wl_seq \
-				-ylatency --yunits=s" \
-		--subplot-right=" \
-				--title='random' \
-				-Dcase=bench_wl_random \
-				-ylatency --yunits=s" \
-		--subplot-right=" \
-				--title='logging' \
-				-Dcase=bench_wl_logging \
-				-ylatency --yunits=s" \
-		--subplot-right=" \
-				--title='many' \
-				-Dcase=bench_wl_many \
-				-ylatency --yunits=s" \
-		-Fo: \
-		-X"-0.25,$\
-			$$(shell python -c 'b=len("$5".split())-1; print(b+1/4)')" \
-		$$(shell python -c '$\
-			for i, fs in list(enumerate("$5".split()))[::$6]: $\
-				print("--add-xticklabel=%d=\"%s\"" % (i, fs))') \
-		$7 \
-		$$(PLOTFLAGS) \
-		-o$$@)
-endef
-
-# per-percentile plot rules
-$(foreach g, $(BENCH_GEOMETRIES), \
-	$(eval $(call PLOT_WL_P_RULE,$\
-		$(WL_PLOTSDIR)/plot_wl.%.$(g).svg,$\
-		$(foreach c, $(BENCH_CASES),$\
-			$(foreach fs, $(BENCH_FILESYSTEMS),$\
-				$(WL_RESULTSDIR)/bench_wl.$(c).$(fs).$(g).csv)),$\
-		"$$* - $(g) - simulated latency",$\
-		FS,$\
-		$(BENCH_FILESYSTEMS),$\
-		1,$\
-		--xlabel="filesystem")))
+				$(WL_CMBT_RESULTSDIR)/bench_wl_cmbt.$(c).$(fs).$(g).csv)),$\
+		"compactmeta threshes - $$* - $(g) - simulated latency",$\
+		GC_COMPACTBTREE_THRESH,$\
+		$(WL_CMBT_$(g)_COMPACTBTREE_THRESHES),$\
+		2,$\
+		--xlabel="compactmeta thresh")))
 
 
 endif

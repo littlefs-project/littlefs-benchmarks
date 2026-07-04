@@ -19,6 +19,7 @@ I_lfs3s = 0
 C_lfs3s = $(C_BLUE)
 F_lfs3s = $$$$s$$$$ # s
 DEFAULT_BENCH_FILESYSTEMS += lfs3s
+DEFAULT_LFS3_FILESYSTEMS  += lfs3s
 
 
 endif

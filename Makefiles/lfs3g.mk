@@ -19,6 +19,7 @@ I_lfs3g = 0
 C_lfs3g = $(C_BLUE)
 F_lfs3g = $$$$g$$$$ # g
 DEFAULT_BENCH_FILESYSTEMS += lfs3g
+DEFAULT_LFS3_FILESYSTEMS  += lfs3g
 
 
 endif

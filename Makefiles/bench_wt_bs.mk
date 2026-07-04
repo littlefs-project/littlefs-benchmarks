@@ -20,16 +20,8 @@ WT_BS_BLOCK_SIZES ?= 4096,8192,16384,32768,65536,131072,$\
 # default bench filesystems to default bench filesystems
 BENCH_FILESYSTEMS ?= $(DEFAULT_BENCH_FILESYSTEMS)
 
-# list of disk geometries to bench on
-BENCH_GEOMETRIES ?= nor nand
-U_nor  = NOR
-U_nand = NAND
-U_emmc = EMMC
-U_fram = FRAM
-N_nor  = 0
-N_nand = 1
-N_emmc = 2
-N_fram = 3
+# default disk geometries to default disk geometries
+BENCH_GEOMETRIES ?= $(DEFAULT_BENCH_GEOMETRIES)
 
 # list of interesting bench cases
 BENCH_CASES ?= seq random logging many

@@ -37,6 +37,7 @@ F_lfs3gb = $$$$gb$$$$ # gb
 DEFAULT_SIZE_FILESYSTEMS  += lfs3gb
 DEFAULT_BUILD_FILESYSTEMS += lfs3gb
 DEFAULT_BENCH_FILESYSTEMS += lfs3gb
+DEFAULT_LFS3_FILESYSTEMS  += lfs3gb
 
 # include compile-time deps
 -include $(LFS3GB_BENCH_DEP)

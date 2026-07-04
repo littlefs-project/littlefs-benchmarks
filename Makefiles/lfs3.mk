@@ -37,6 +37,7 @@ F_lfs3 = o # circle
 DEFAULT_SIZE_FILESYSTEMS  += lfs3
 DEFAULT_BUILD_FILESYSTEMS += lfs3
 DEFAULT_BENCH_FILESYSTEMS += lfs3
+DEFAULT_LFS3_FILESYSTEMS  += lfs3
 
 # include compile-time deps
 -include $(LFS3_BENCH_DEP)

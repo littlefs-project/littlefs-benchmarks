@@ -12,7 +12,7 @@ WL_GC_PLOTSDIR ?= $(PLOTSDIR)/wl_gc
 WL_GC_TIKZDIR ?= $(TIKZDIR)/wl_gc
 
 
-# range of percentiles to test
+# range of percentiles to measure
 WL_GC_P ?= avg,p50,p90,p99,p99.9,p99.99,p99.999,max
 
 # run with gc
@@ -22,16 +22,8 @@ BENCHFLAGS += -DGC=1
 # default bench filesystems to default bench filesystems
 BENCH_FILESYSTEMS ?= $(DEFAULT_BENCH_FILESYSTEMS)
 
-# list of disk geometries to bench on
-BENCH_GEOMETRIES ?= nor nand
-U_nor  = NOR
-U_nand = NAND
-U_emmc = EMMC
-U_fram = FRAM
-N_nor  = 0
-N_nand = 1
-N_emmc = 2
-N_fram = 3
+# default disk geometries to default disk geometries
+BENCH_GEOMETRIES ?= $(DEFAULT_BENCH_GEOMETRIES)
 
 # list of interesting bench cases
 BENCH_CASES ?= seq random logging many
@@ -156,7 +148,7 @@ $1: $2
 				-ylatency --yunits=s \
 			--subplot-below=\" \
 				--ylabel='gc latency' \
-				-Dcase=bench_wl_seq \
+				-Dcase=bench_wl_random \
 				-D$4='gc+*' \
 				-ylatency --yunits=s\"" \
 		--subplot-right=" \
@@ -166,7 +158,7 @@ $1: $2
 				-ylatency --yunits=s \
 			--subplot-below=\" \
 				--ylabel='gc latency' \
-				-Dcase=bench_wl_seq \
+				-Dcase=bench_wl_logging \
 				-D$4='gc+*' \
 				-ylatency --yunits=s\"" \
 		--subplot-right=" \
@@ -176,7 +168,7 @@ $1: $2
 				-ylatency --yunits=s \
 			--subplot-below=\" \
 				--ylabel='gc latency' \
-				-Dcase=bench_wl_seq \
+				-Dcase=bench_wl_many \
 				-D$4='gc+*' \
 				-ylatency --yunits=s\"" \
 		--legend \
@@ -189,7 +181,7 @@ $1: $2
 		-X"-0.25,$\
 			$$(shell python -c 'b=len("$5".split(","))-1; print(b+1/4)')" \
 		$$(shell python -c '$\
-			for i, p in enumerate("$5".split(",")[::$6]): $\
+			for i, p in list(enumerate("$5".split(",")))[::$6]: $\
 				print("--add-xticklabel=%d=\"%s\"" % (i, p))') \
 		$7 \
 		$$(PLOTFLAGS) \
@@ -208,7 +200,6 @@ $(foreach g, $(BENCH_GEOMETRIES), \
 		$(WL_GC_P),$\
 		1,$\
 		--xlabel="percentile")))
-
 
 # per-percentile plot rule
 #
@@ -275,7 +266,7 @@ $1: $2
 		-X"-0.25,$\
 			$$(shell python -c 'b=len("$5".split())-1; print(b+1/4)')" \
 		$$(shell python -c '$\
-			for i, fs in enumerate("$5".split()[::$6]): $\
+			for i, fs in list(enumerate("$5".split()))[::$6]: $\
 				print("--add-xticklabel=%d=\"%s\"" % (i, fs))') \
 		$7 \
 		$$(PLOTFLAGS) \

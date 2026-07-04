@@ -6,9 +6,10 @@ include Makefiles/common.mk
 
 
 # littlefs3 bench-runner and sources
-LFS3GBP_BUILDDIR     ?= $(BUILDDIR)/littlefs3gb
+LFS3GBP_BUILDDIR     ?= $(BUILDDIR)/littlefs3gbp
 LFS3GBP_BENCH_RUNNER ?= $(BUILDDIR)/bench_runner.lfs3gbp
-LFS3GBP_CFLAGS += -Ilittlefs3 -DLFS3=1 -DLFS3_YES_GBMAP=1 -DLFS3_PREERASE=1
+LFS3GBP_CFLAGS += -Ilittlefs3 -DLFS3=1 -DLFS3_YES_GBMAP=1
+LFS3GBP_CFLAGS += -DLFS3_PREERASE=1 -DLFS3_YES_REVPERTURB=1
 LFS3GBP_FILTER ?= sed -n -e'1p' -e'/\<lfs3_.\+bd/d' -e'/\<lfs3/p'
 LFS3GBP_SRC ?= $(filter-out %.t.c %.b.c %.a.c,$(wildcard littlefs3/*.c))
 LFS3GBP_OBJ := $(LFS3GBP_SRC:%.c=$(LFS3GBP_BUILDDIR)/%.o)
@@ -37,6 +38,7 @@ F_lfs3gbp = $$$$gbp$$$$ # gbp
 DEFAULT_SIZE_FILESYSTEMS  += lfs3gbp
 DEFAULT_BUILD_FILESYSTEMS += lfs3gbp
 DEFAULT_BENCH_FILESYSTEMS += lfs3gbp
+DEFAULT_LFS3_FILESYSTEMS  += lfs3gbp
 
 # include compile-time deps
 -include $(LFS3GBP_BENCH_DEP)

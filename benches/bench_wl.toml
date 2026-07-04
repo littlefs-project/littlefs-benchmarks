@@ -29,6 +29,13 @@ code = '''
 # default to no gc, but gc is available to bench here
 defines.GC = false
 
+# gc flags for littlefs3
+defines.GC_FLAGS = '''
+    LFS3_GC_LOOKAHEAD
+        | LFS3_IFDEF_PREERASE(LFS3_GC_PREERASE, 0)
+        | LFS3_GC_COMPACTMETA
+'''
+
 
 # sequential write throughput
 [cases.bench_wl_seq]
@@ -36,7 +43,7 @@ code = '''
     #if defined(LFS3)
     lfs3_t lfs3;
     lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
-    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | LFS3_M_MKCONSISTENT, CFG) => 0;
     #elif defined(LFS2)
     lfs2_t lfs2;
     lfs2_format(&lfs2, CFG_LFS2) => 0;
@@ -157,7 +164,7 @@ code = '''
             BENCH_START("gc");
             #if defined(LFS3)
             lfs3_gc_t gc;
-            lfs3_gc_open(&lfs3, &gc, LFS3_GC_GC) => 0;
+            lfs3_gc_open(&lfs3, &gc, GC_FLAGS) => 0;
             lfs3_sblock_t steps = lfs3_gc_write(&lfs3, &gc, -1);
             assert(steps >= 0);
             lfs3_gc_close(&lfs3, &gc) => 0;
@@ -228,7 +235,7 @@ code = '''
     #if defined(LFS3)
     lfs3_t lfs3;
     lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
-    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | LFS3_M_MKCONSISTENT, CFG) => 0;
     #elif defined(LFS2)
     lfs2_t lfs2;
     lfs2_format(&lfs2, CFG_LFS2) => 0;
@@ -349,7 +356,7 @@ code = '''
             BENCH_START("gc");
             #if defined(LFS3)
             lfs3_gc_t gc;
-            lfs3_gc_open(&lfs3, &gc, LFS3_GC_GC) => 0;
+            lfs3_gc_open(&lfs3, &gc, GC_FLAGS) => 0;
             lfs3_sblock_t steps = lfs3_gc_write(&lfs3, &gc, -1);
             assert(steps >= 0);
             lfs3_gc_close(&lfs3, &gc) => 0;
@@ -422,7 +429,7 @@ code = '''
     #if defined(LFS3)
     lfs3_t lfs3;
     lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
-    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | LFS3_M_MKCONSISTENT, CFG) => 0;
     #elif defined(LFS2)
     lfs2_t lfs2;
     lfs2_format(&lfs2, CFG_LFS2) => 0;
@@ -593,7 +600,7 @@ code = '''
             BENCH_START("gc");
             #if defined(LFS3)
             lfs3_gc_t gc;
-            lfs3_gc_open(&lfs3, &gc, LFS3_GC_GC) => 0;
+            lfs3_gc_open(&lfs3, &gc, GC_FLAGS) => 0;
             lfs3_sblock_t steps = lfs3_gc_write(&lfs3, &gc, -1);
             assert(steps >= 0);
             lfs3_gc_close(&lfs3, &gc) => 0;
@@ -664,7 +671,7 @@ code = '''
     #if defined(LFS3)
     lfs3_t lfs3;
     lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
-    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | LFS3_M_MKCONSISTENT, CFG) => 0;
     #elif defined(LFS2)
     lfs2_t lfs2;
     lfs2_format(&lfs2, CFG_LFS2) => 0;
@@ -786,7 +793,7 @@ code = '''
             BENCH_START("gc");
             #if defined(LFS3)
             lfs3_gc_t gc;
-            lfs3_gc_open(&lfs3, &gc, LFS3_GC_GC) => 0;
+            lfs3_gc_open(&lfs3, &gc, GC_FLAGS) => 0;
             lfs3_sblock_t steps = lfs3_gc_write(&lfs3, &gc, -1);
             assert(steps >= 0);
             lfs3_gc_close(&lfs3, &gc) => 0;

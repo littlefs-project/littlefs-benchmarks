@@ -143,10 +143,10 @@
     BENCH_DEFINE(GC_FLAGS,              LFS3_GC_GC                          )
     BENCH_DEFINE(GC_STEPS,              0                                   )
     BENCH_DEFINE(GC_LOOKAHEAD_THRESH,   -1                                  )
-    BENCH_DEFINE(GC_LOOKGBMAP_THRESH,   -1                                  )
+    BENCH_DEFINE(GC_LOOKGBMAP_THRESH,   BLOCK_COUNT - BLOCK_COUNT/4         )
     // NOTE this matches spiffs, TODO what about yaffs2?
     BENCH_DEFINE(GC_PREERASE_COUNT,     3                                   )
-    BENCH_DEFINE(GC_COMPACTMETA_THRESH, BLOCK_SIZE - BLOCK_SIZE/8           )
+    BENCH_DEFINE(GC_COMPACTMETA_THRESH, BLOCK_SIZE/2                        )
     BENCH_DEFINE(GC_COMPACTBTREE_THRESH,
                                         0                                   )
     BENCH_DEFINE(SHRUB_SIZE,            BLOCK_SIZE/8                        )
