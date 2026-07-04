@@ -268,8 +268,10 @@ endef
 .PHONY: tags-common ctags-common
 tags-common ctags-common:
 	$(strip $(CTAGS) \
-			--totals --fields=+n --c-types=+p \
-			$(shell find -H -name '*.h'))
+		--totals --fields=+n --c-types=+p \
+		$(shell find -H -name '*.h' \
+			-not -path './build*' \
+			-not -path './saved*'))
 
 
 #======================================================================#
