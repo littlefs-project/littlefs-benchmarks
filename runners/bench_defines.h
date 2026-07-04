@@ -208,7 +208,6 @@
                                             2,
                                             (2*CACHE_SIZE)/YPAGE_SIZE)      )
     BENCH_DEFINE(REFRESH_PERIOD,        1000                                )
-    BENCH_DEFINE(GC_CLEAN_COUNT,        1                                   )
     #endif
 
     // bd defines

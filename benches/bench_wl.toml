@@ -165,31 +165,15 @@ code = '''
             #if defined(LFS3)
             lfs3_gc_t gc;
             lfs3_gc_open(&lfs3, &gc, GC_FLAGS) => 0;
-            while (true) {
-                lfs3_sblock_t steps = lfs3_gc_write(&lfs3, &gc, 1);
-                assert(steps >= 0);
-                if (steps == 0) {
-                    break;
-                }
-            }
+            lfs3_sblock_t steps = lfs3_gc_write(&lfs3, &gc, -1);
+            assert(steps >= 0);
             lfs3_gc_close(&lfs3, &gc) => 0;
             #elif defined(LFS2)
             lfs2_fs_gc(&lfs2) => 0;
             #elif defined(SPIFFS)
-            for (lfs3_size_t i = 0;
-                    i < (GC_CLEAN_SIZE+BLOCK_SIZE-1)/BLOCK_SIZE;
-                    i ++) {
-                s32_t err = SPIFFS_gc(&spiffs, GC_CLEAN_SIZE);
-                // this indicates both nospc and incomplete gc
-                assert(!err || err == SPIFFS_ERR_FULL);
-                if (!err) {
-                    break;
-                }
-            }
+            SPIFFS_gc(&spiffs, GC_CLEAN_SIZE) => 0;
             #elif defined(YAFFS2)
-            for (lfs3_size_t i = 0; i < GC_CLEAN_COUNT; i++) {
-                yaffs_do_background_gc("/", 0) => 0;
-            }
+            yaffs_do_background_gc("/", 0) => 0;
             #endif
             BENCH_STOP("gc", written);
         }
@@ -373,31 +357,15 @@ code = '''
             #if defined(LFS3)
             lfs3_gc_t gc;
             lfs3_gc_open(&lfs3, &gc, GC_FLAGS) => 0;
-            while (true) {
-                lfs3_sblock_t steps = lfs3_gc_write(&lfs3, &gc, 1);
-                assert(steps >= 0);
-                if (steps == 0) {
-                    break;
-                }
-            }
+            lfs3_sblock_t steps = lfs3_gc_write(&lfs3, &gc, -1);
+            assert(steps >= 0);
             lfs3_gc_close(&lfs3, &gc) => 0;
             #elif defined(LFS2)
             lfs2_fs_gc(&lfs2) => 0;
             #elif defined(SPIFFS)
-            for (lfs3_size_t i = 0;
-                    i < (GC_CLEAN_SIZE+BLOCK_SIZE-1)/BLOCK_SIZE;
-                    i ++) {
-                s32_t err = SPIFFS_gc(&spiffs, GC_CLEAN_SIZE);
-                // this indicates both nospc and incomplete gc
-                assert(!err || err == SPIFFS_ERR_FULL);
-                if (!err) {
-                    break;
-                }
-            }
+            SPIFFS_gc(&spiffs, GC_CLEAN_SIZE) => 0;
             #elif defined(YAFFS2)
-            for (lfs3_size_t i = 0; i < GC_CLEAN_COUNT; i++) {
-                yaffs_do_background_gc("/", 0) => 0;
-            }
+            yaffs_do_background_gc("/", 0) => 0;
             #endif
             BENCH_STOP("gc", written);
         }
@@ -633,31 +601,15 @@ code = '''
             #if defined(LFS3)
             lfs3_gc_t gc;
             lfs3_gc_open(&lfs3, &gc, GC_FLAGS) => 0;
-            while (true) {
-                lfs3_sblock_t steps = lfs3_gc_write(&lfs3, &gc, 1);
-                assert(steps >= 0);
-                if (steps == 0) {
-                    break;
-                }
-            }
+            lfs3_sblock_t steps = lfs3_gc_write(&lfs3, &gc, -1);
+            assert(steps >= 0);
             lfs3_gc_close(&lfs3, &gc) => 0;
             #elif defined(LFS2)
             lfs2_fs_gc(&lfs2) => 0;
             #elif defined(SPIFFS)
-            for (lfs3_size_t i = 0;
-                    i < (GC_CLEAN_SIZE+BLOCK_SIZE-1)/BLOCK_SIZE;
-                    i ++) {
-                s32_t err = SPIFFS_gc(&spiffs, GC_CLEAN_SIZE);
-                // this indicates both nospc and incomplete gc
-                assert(!err || err == SPIFFS_ERR_FULL);
-                if (!err) {
-                    break;
-                }
-            }
+            SPIFFS_gc(&spiffs, GC_CLEAN_SIZE) => 0;
             #elif defined(YAFFS2)
-            for (lfs3_size_t i = 0; i < GC_CLEAN_COUNT; i++) {
-                yaffs_do_background_gc("/", 0) => 0;
-            }
+            yaffs_do_background_gc("/", 0) => 0;
             #endif
             BENCH_STOP("gc", written);
         }
@@ -842,31 +794,15 @@ code = '''
             #if defined(LFS3)
             lfs3_gc_t gc;
             lfs3_gc_open(&lfs3, &gc, GC_FLAGS) => 0;
-            while (true) {
-                lfs3_sblock_t steps = lfs3_gc_write(&lfs3, &gc, 1);
-                assert(steps >= 0);
-                if (steps == 0) {
-                    break;
-                }
-            }
+            lfs3_sblock_t steps = lfs3_gc_write(&lfs3, &gc, -1);
+            assert(steps >= 0);
             lfs3_gc_close(&lfs3, &gc) => 0;
             #elif defined(LFS2)
             lfs2_fs_gc(&lfs2) => 0;
             #elif defined(SPIFFS)
-            for (lfs3_size_t i = 0;
-                    i < (GC_CLEAN_SIZE+BLOCK_SIZE-1)/BLOCK_SIZE;
-                    i ++) {
-                s32_t err = SPIFFS_gc(&spiffs, GC_CLEAN_SIZE);
-                // this indicates both nospc and incomplete gc
-                assert(!err || err == SPIFFS_ERR_FULL);
-                if (!err) {
-                    break;
-                }
-            }
+            SPIFFS_gc(&spiffs, GC_CLEAN_SIZE) => 0;
             #elif defined(YAFFS2)
-            for (lfs3_size_t i = 0; i < GC_CLEAN_COUNT; i++) {
-                yaffs_do_background_gc("/", 0) => 0;
-            }
+            yaffs_do_background_gc("/", 0) => 0;
             #endif
             BENCH_STOP("gc", written);
         }
