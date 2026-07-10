@@ -80,8 +80,18 @@ build-spiffs: $(SPIFFS_BENCH_RUNNER)
 $(SPIFFS_BENCH_RUNNER): $(SPIFFS_BENCH_OBJ)
 	$(CC) $(CFLAGS) $(SPIFFS_CFLAGS) $^ $(LFLAGS) -o$@
 
+.SECONDEXPANSION:
+$(SPIFFS_BUILDDIR)/%.o $(SPIFFS_BUILDDIR)/%.ci: %.c \
+		$$(if $$(findstring .b,$$*),NO)
+	$(CC) -c -MMD $(CFLAGS) $(SPIFFS_CFLAGS) $< -o$(firstword $@)
+
 $(SPIFFS_BUILDDIR)/%.o $(SPIFFS_BUILDDIR)/%.ci: $(SPIFFS_BUILDDIR)/%.c
 	$(CC) -c -MMD $(CFLAGS) $(SPIFFS_CFLAGS) $< -o$(firstword $@)
+
+.SECONDEXPANSION:
+$(SPIFFS_BUILDDIR)/%.s: %.c \
+		$$(if $$(findstring .b,$$*),NO)
+	$(CC) -S $(CFLAGS) $(SPIFFS_CFLAGS) $< -o$@
 
 $(SPIFFS_BUILDDIR)/%.s: $(SPIFFS_BUILDDIR)/%.c
 	$(CC) -S $(CFLAGS) $(SPIFFS_CFLAGS) $< -o$@

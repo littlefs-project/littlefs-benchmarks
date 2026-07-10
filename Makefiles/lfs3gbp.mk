@@ -76,8 +76,18 @@ build-lfs3gbp: $(LFS3GBP_BENCH_RUNNER)
 $(LFS3GBP_BENCH_RUNNER): $(LFS3GBP_BENCH_OBJ)
 	$(CC) $(CFLAGS) $(LFS3GBP_CFLAGS) $^ $(LFLAGS) -o$@
 
+.SECONDEXPANSION:
+$(LFS3GBP_BUILDDIR)/%.o $(LFS3GBP_BUILDDIR)/%.ci: %.c \
+		$$(if $$(findstring .b,$$*),NO)
+	$(CC) -c -MMD $(CFLAGS) $(LFS3GBP_CFLAGS) $< -o$(firstword $@)
+
 $(LFS3GBP_BUILDDIR)/%.o $(LFS3GBP_BUILDDIR)/%.ci: $(LFS3GBP_BUILDDIR)/%.c
 	$(CC) -c -MMD $(CFLAGS) $(LFS3GBP_CFLAGS) $< -o$(firstword $@)
+
+.SECONDEXPANSION:
+$(LFS3GBP_BUILDDIR)/%.s: %.c \
+		$$(if $$(findstring .b,$$*),NO)
+	$(CC) -S $(CFLAGS) $(LFS3GBP_CFLAGS) $< -o$@
 
 $(LFS3GBP_BUILDDIR)/%.s: $(LFS3GBP_BUILDDIR)/%.c
 	$(CC) -S $(CFLAGS) $(LFS3GBP_CFLAGS) $< -o$@

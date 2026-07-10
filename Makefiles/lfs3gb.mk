@@ -75,8 +75,18 @@ build-lfs3gb: $(LFS3GB_BENCH_RUNNER)
 $(LFS3GB_BENCH_RUNNER): $(LFS3GB_BENCH_OBJ)
 	$(CC) $(CFLAGS) $(LFS3GB_CFLAGS) $^ $(LFLAGS) -o$@
 
+.SECONDEXPANSION:
+$(LFS3GB_BUILDDIR)/%.o $(LFS3GB_BUILDDIR)/%.ci: %.c \
+		$$(if $$(findstring .b,$$*),NO)
+	$(CC) -c -MMD $(CFLAGS) $(LFS3GB_CFLAGS) $< -o$(firstword $@)
+
 $(LFS3GB_BUILDDIR)/%.o $(LFS3GB_BUILDDIR)/%.ci: $(LFS3GB_BUILDDIR)/%.c
 	$(CC) -c -MMD $(CFLAGS) $(LFS3GB_CFLAGS) $< -o$(firstword $@)
+
+.SECONDEXPANSION:
+$(LFS3GB_BUILDDIR)/%.s: %.c \
+		$$(if $$(findstring .b,$$*),NO)
+	$(CC) -S $(CFLAGS) $(LFS3GB_CFLAGS) $< -o$@
 
 $(LFS3GB_BUILDDIR)/%.s: $(LFS3GB_BUILDDIR)/%.c
 	$(CC) -S $(CFLAGS) $(LFS3GB_CFLAGS) $< -o$@

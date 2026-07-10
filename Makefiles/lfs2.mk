@@ -74,13 +74,17 @@ build-lfs2: $(LFS2_BENCH_RUNNER)
 $(LFS2_BENCH_RUNNER): $(LFS2_BENCH_OBJ)
 	$(CC) $(CFLAGS) $(LFS2_CFLAGS) $^ $(LFLAGS) -o$@
 
-$(LFS2_BUILDDIR)/%.o $(LFS2_BUILDDIR)/%.ci: %.c
+.SECONDEXPANSION:
+$(LFS2_BUILDDIR)/%.o $(LFS2_BUILDDIR)/%.ci: %.c \
+		$$(if $$(findstring .b,$$*),NO)
 	$(CC) -c -MMD $(CFLAGS) $(LFS2_CFLAGS) $< -o$(firstword $@)
 
 $(LFS2_BUILDDIR)/%.o $(LFS2_BUILDDIR)/%.ci: $(LFS2_BUILDDIR)/%.c
 	$(CC) -c -MMD $(CFLAGS) $(LFS2_CFLAGS) $< -o$(firstword $@)
 
-$(LFS2_BUILDDIR)/%.s: %.c
+.SECONDEXPANSION:
+$(LFS2_BUILDDIR)/%.s: %.c \
+		$$(if $$(findstring .b,$$*),NO)
 	$(CC) -S $(CFLAGS) $(LFS2_CFLAGS) $< -o$@
 
 $(LFS2_BUILDDIR)/%.s: $(LFS2_BUILDDIR)/%.c
