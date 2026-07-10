@@ -45,6 +45,7 @@ DEFAULT_BUILD_FILESYSTEMS += spiffs
 DEFAULT_BENCH_FILESYSTEMS += spiffs
 
 # include compile-time deps
+-include $(SPIFFS_DEP)
 -include $(SPIFFS_BENCH_DEP)
 
 # this is a bit of a hack, but we want to make sure the BUILDDIR

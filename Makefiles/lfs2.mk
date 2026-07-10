@@ -39,6 +39,7 @@ DEFAULT_BUILD_FILESYSTEMS += lfs2
 DEFAULT_BENCH_FILESYSTEMS += lfs2
 
 # include compile-time deps
+-include $(LFS2_DEP)
 -include $(LFS2_BENCH_DEP)
 
 # this is a bit of a hack, but we want to make sure the BUILDDIR

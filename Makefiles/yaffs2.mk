@@ -92,6 +92,7 @@ DEFAULT_BUILD_FILESYSTEMS += yaffs2
 DEFAULT_BENCH_FILESYSTEMS += yaffs2
 
 # include compile-time deps
+-include $(YAFFS2_DEP)
 -include $(YAFFS2_BENCH_DEP)
 
 # this is a bit of a hack, but we want to make sure the BUILDDIR

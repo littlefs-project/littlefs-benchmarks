@@ -40,6 +40,7 @@ DEFAULT_BENCH_FILESYSTEMS += lfs3
 DEFAULT_LFS3_FILESYSTEMS  += lfs3
 
 # include compile-time deps
+-include $(LFS3_DEP)
 -include $(LFS3_BENCH_DEP)
 
 # this is a bit of a hack, but we want to make sure the BUILDDIR

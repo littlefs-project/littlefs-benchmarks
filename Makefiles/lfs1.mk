@@ -37,6 +37,7 @@ F_lfs1 = D # diamond
 DEFAULT_SIZE_FILESYSTEMS += lfs1
 
 # include compile-time deps
+-include $(LFS1_DEP)
 -include $(LFS1_BENCH_DEP)
 
 # this is a bit of a hack, but we want to make sure the BUILDDIR
