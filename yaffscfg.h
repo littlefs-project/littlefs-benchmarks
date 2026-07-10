@@ -45,8 +45,13 @@
 #define CONFIG_YAFFS_NO_TRACE
 #endif
 
-// 32-bit Y_LOFF_T
-#define Y_LOFF_T int32_t
+// // 32-bit Y_LOFF_T
+// #define Y_LOFF_T int32_t
+
+// map Y_LOFF_T to ssize_t
+//
+// this should end up 32-bits on thumb and 64-bits locally
+#define Y_LOFF_T ssize_t
 
 // number of statically allocated file handles
 // we only need one file for benchmarking
