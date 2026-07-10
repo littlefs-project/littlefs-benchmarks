@@ -18,8 +18,13 @@ defines.SIM_SIZE = 0
 # set this to true to skip bench warmup
 defines.SKIP_WARMUP = false
 
-# spiffs is limited to 32-bit disks
-if = 'BENCH_IFDEF_SPIFFS(DISK_SIZE < 0x100000000ULL, true)'
+if = [
+    # spiffs is limited to 32-bit disks
+    'BENCH_IFDEF_SPIFFS(DISK_SIZE < 0x100000000ULL, true)',
+    # both spiffs/yaffs2 need a spare page for bookkeeping
+    'BENCH_IFDEF_SPIFFS(BLOCK_SIZE > SPAGE_SIZE, true)',
+    'BENCH_IFDEF_YAFFS2(BLOCK_SIZE > YPAGE_SIZE, true)',
+]
 
 # include common bench helpers
 code = '''

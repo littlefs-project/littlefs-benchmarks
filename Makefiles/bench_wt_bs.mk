@@ -13,8 +13,11 @@ WT_BS_TIKZDIR ?= $(TIKZDIR)/wt_bs
 
 
 # range of block sizes to test
-WT_BS_BLOCK_SIZES ?= 4096,8192,16384,32768,65536,131072,$\
-		262144,524288,1048576
+WT_BS_BLOCK_SIZES ?= $\
+		512,1024,2048,$\
+		4096,8192,16384,32768,65536,131072,$\
+		262144,524288,1048576,$\
+		2097152
 
 
 # default bench filesystems to default bench filesystems
