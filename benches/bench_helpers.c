@@ -211,19 +211,25 @@ uintmax_t bench_helpers_usage(const struct lfs3_cfg *cfg, void *fs) {
 
     #elif defined(YAFFS2)
     (void)cfg;
-    (void)fs;
+    struct yaffs_dev *yaffs2 = fs;
 
     // measure disk usage
     //
     // we rely on yaffs2's internal bookkeeping here
     //
-    // watch out for integer overflow!
-    Y_LOFF_T free = yaffs_freespace("/");
+    // Note we need to go behind yaffs2's back a bit here and _not_ use
+    // yaffs_freespace. yaffs_freespace returns total bytes used, but
+    // via a Y_LOFF_T, which is only 32-bits.
+    //
+    // Alternatively, we could define Y_LOFF_T to 64-bits in yaffscfg.h,
+    // but this adds a surprising amount of codesize (+~664), and
+    // yaffs_freespace seems to be the only function that falls over with
+    // 32-bits
+    Y_LOFF_T free = yaffs_get_n_free_chunks(yaffs2);
     assert(free >= 0);
 
-    // note used is already in bytes
-    Y_LOFF_T used = (BLOCK_COUNT*BLOCK_SIZE) - free;
-    return used;
+    return (BLOCK_COUNT*BLOCK_SIZE)
+            - ((uintmax_t)free*(uintmax_t)yaffs2->data_bytes_per_chunk);
     #endif
 }
 

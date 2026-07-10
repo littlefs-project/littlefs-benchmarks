@@ -45,13 +45,11 @@
 #define CONFIG_YAFFS_NO_TRACE
 #endif
 
-// // 32-bit Y_LOFF_T
-// #define Y_LOFF_T int32_t
-
-// map Y_LOFF_T to ssize_t
+// 32-bit Y_LOFF_T
 //
-// this should end up 32-bits on thumb and 64-bits locally
-#define Y_LOFF_T ssize_t
+// note this breaks yaffs_freespace, but the ~internal
+// yaffs_get_n_free_chunks still seems to work
+#define Y_LOFF_T int32_t
 
 // number of statically allocated file handles
 // we only need one file for benchmarking
