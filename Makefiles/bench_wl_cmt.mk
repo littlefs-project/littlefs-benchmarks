@@ -57,7 +57,8 @@ endif
 
 ## Run benches
 .PHONY: all bench bench-wl-cmt
-all bench bench-wl-cmt: \
+all bench: bench-wl-cmt
+bench-wl-cmt: \
 		$(foreach c, $(BENCH_CASES), \
 			$(foreach fs, $(BENCH_FILESYSTEMS), \
 				$(foreach g, $(BENCH_GEOMETRIES), \
@@ -106,7 +107,8 @@ $(foreach c, $(BENCH_CASES),$\
 
 ## Plot benchmarks
 .PHONY: all plot plot-wl-cmt
-all plot plot-wl-cmt: \
+all plot: plot-wl-cmt
+plot-wl-cmt: \
 		$(WL_CMT_PLOTSDIR)/plots.html \
 		$(foreach g, $(BENCH_GEOMETRIES), \
 			$(foreach p, $(subst $(comma),$(space),$(WL_CMT_P)), \
@@ -208,6 +210,70 @@ $(foreach g, $(BENCH_GEOMETRIES), \
 		$(WL_CMT_$(g)_COMPACTMETA_THRESHES),$\
 		2,$\
 		--xlabel="compactmeta thresh")))
+
+
+#======================================================================#
+# save rules, for quickly saving things                                #
+#======================================================================#
+
+## Save bench results
+.PHONY: save save-results save-results-wl-cmt
+save save-results: save-results-wl-cmt
+save-results-wl-cmt:
+	mkdir -p $(SAVEDIR)/$(RESULTSDIR)/
+	cp -ru $(WL_CMT_RESULTSDIR) $(SAVEDIR)/$(RESULTSDIR)/
+
+## Save bench plots
+.PHONY: save save-plots save-plots-wl-cmt
+save save-plots: save-plots-wl-cmt
+save-plots-wl-cmt:
+	mkdir -p $(SAVEDIR)/$(PLOTSDIR)/
+	cp -ru $(WL_CMT_PLOTSDIR) $(SAVEDIR)/$(PLOTSDIR)/
+
+## Save tikz
+.PHONY: save save-tikz save-tikz-wl-cmt
+save save-tikz: save-tikz-wl-cmt
+save-tikz-wl-cmt:
+	mkdir -p $(SAVEDIR)/$(TIKZDIR)/
+	cp -ru $(WL_CMT_TIKZDIR) $(SAVEDIR)/$(TIKZDIR)/
+
+
+#======================================================================#
+# touch rules, to try to force rebenches without cleaning everything   #
+#======================================================================#
+
+## Mark current results as up-to-date to prevent reruns
+.PHONY: reuse-results touch-results reuse-results-wl-cmt touch-results-wl-cmt
+reuse-results touch-results: reuse-results-wl-cmt touch-results-wl-cmt
+reuse-results-wl-cmt touch-results-wl-cmt:
+	find $(WL_CMT_RESULTSDIR) -name '*.csv' -execdir touch '{}' ';'
+	@echo "# note: Make sure you build before plotting!"
+
+
+#======================================================================#
+# cleaning rules, we put everything in build dirs, so this is easy     #
+#======================================================================#
+
+## Clean bench results
+.PHONY: clean clean-results clean-results-wl-cmt
+clean clean-results: clean-results-wl-cmt
+clean-results-wl-cmt:
+	rm -rf $(WL_CMT_RESULTSDIR)
+	@echo "# note: Not cleaning saved output"
+
+## Clean bench plots
+.PHONY: clean clean-plots clean-plots-wl-cmt
+clean clean-plots: clean-plots-wl-cmt
+clean-plots-wl-cmt:
+	rm -rf $(WL_CMT_PLOTSDIR)
+	@echo "# note: Not cleaning saved output"
+
+## Clean tikz
+.PHONY: clean clean-tikz clean-tikz-wl-cmt
+clean clean-tikz: clean-tikz-wl-cmt
+clean-tikz-wl-cmt:
+	rm -rf $(WL_CMT_TIKZDIR)
+	@echo "# note: Not cleaning saved output"
 
 
 endif

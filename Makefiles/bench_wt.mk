@@ -38,7 +38,8 @@ endif
 
 ## Run benches
 .PHONY: all bench bench-wt
-all bench bench-wt: \
+all bench: bench-wt
+bench-wt: \
 		$(foreach c, $(BENCH_CASES), \
 			$(foreach fs, $(BENCH_FILESYSTEMS), \
 				$(foreach g, $(BENCH_GEOMETRIES), \
@@ -133,7 +134,8 @@ marks-wt-%: \
 
 ## Plot benchmarks
 .PHONY: all plot plot-wt
-all plot plot-wt: \
+all plot: plot-wt
+plot-wt: \
 		$(WT_PLOTSDIR)/plots.html \
 		$(foreach g, $(BENCH_GEOMETRIES), \
 			$(WT_PLOTSDIR)/plot_wt.$(g).svg)
@@ -224,6 +226,70 @@ $(foreach g, $(BENCH_GEOMETRIES), \
 		$(BENCH_FILESYSTEMS),$\
 		1,$\
 		--xlabel="filesystem")))
+
+
+#======================================================================#
+# save rules, for quickly saving things                                #
+#======================================================================#
+
+## Save bench results
+.PHONY: save save-results save-results-wt
+save save-results: save-results-wt
+save-results-wt:
+	mkdir -p $(SAVEDIR)/$(RESULTSDIR)/
+	cp -ru $(WT_RESULTSDIR) $(SAVEDIR)/$(RESULTSDIR)/
+
+## Save bench plots
+.PHONY: save save-plots save-plots-wt
+save save-plots: save-plots-wt
+save-plots-wt:
+	mkdir -p $(SAVEDIR)/$(PLOTSDIR)/
+	cp -ru $(WT_PLOTSDIR) $(SAVEDIR)/$(PLOTSDIR)/
+
+## Save tikz
+.PHONY: save save-tikz save-tikz-wt
+save save-tikz: save-tikz-wt
+save-tikz-wt:
+	mkdir -p $(SAVEDIR)/$(TIKZDIR)/
+	cp -ru $(WT_TIKZDIR) $(SAVEDIR)/$(TIKZDIR)/
+
+
+#======================================================================#
+# touch rules, to try to force rebenches without cleaning everything   #
+#======================================================================#
+
+## Mark current results as up-to-date to prevent reruns
+.PHONY: reuse-results touch-results reuse-results-wt touch-results-wt
+reuse-results touch-results: reuse-results-wt touch-results-wt
+reuse-results-wt touch-results-wt:
+	find $(WT_RESULTSDIR) -name '*.csv' -execdir touch '{}' ';'
+	@echo "# note: Make sure you build before plotting!"
+
+
+#======================================================================#
+# cleaning rules, we put everything in build dirs, so this is easy     #
+#======================================================================#
+
+## Clean bench results
+.PHONY: clean clean-results clean-results-wt
+clean clean-results: clean-results-wt
+clean-results-wt:
+	rm -rf $(WT_RESULTSDIR)
+	@echo "# note: Not cleaning saved output"
+
+## Clean bench plots
+.PHONY: clean clean-plots clean-plots-wt
+clean clean-plots: clean-plots-wt
+clean-plots-wt:
+	rm -rf $(WT_PLOTSDIR)
+	@echo "# note: Not cleaning saved output"
+
+## Clean tikz
+.PHONY: clean clean-tikz clean-tikz-wt
+clean clean-tikz: clean-tikz-wt
+clean-tikz-wt:
+	rm -rf $(WT_TIKZDIR)
+	@echo "# note: Not cleaning saved output"
 
 
 endif

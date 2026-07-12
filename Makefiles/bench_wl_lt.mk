@@ -51,7 +51,8 @@ endif
 
 ## Run benches
 .PHONY: all bench bench-wl-lt
-all bench bench-wl-lt: \
+all bench: bench-wl-lt
+bench-wl-lt: \
 		$(foreach c, $(BENCH_CASES), \
 			$(foreach fs, $(BENCH_FILESYSTEMS), \
 				$(foreach g, $(BENCH_GEOMETRIES), \
@@ -102,7 +103,8 @@ $(foreach c, $(BENCH_CASES),$\
 
 ## Plot benchmarks
 .PHONY: all plot plot-wl-lt
-all plot plot-wl-lt: \
+all plot: plot-wl-lt
+plot-wl-lt: \
 		$(WL_LT_PLOTSDIR)/plots.html \
 		$(foreach g, $(BENCH_GEOMETRIES), \
 			$(foreach p, $(subst $(comma),$(space),$(WL_LT_P)), \
@@ -204,6 +206,70 @@ $(foreach g, $(BENCH_GEOMETRIES), \
 		$(WL_LT_LOOKAHEAD_THRESHES),$\
 		1,$\
 		--xlabel="lookahead thresh")))
+
+
+#======================================================================#
+# save rules, for quickly saving things                                #
+#======================================================================#
+
+## Save bench results
+.PHONY: save save-results save-results-wl-lt
+save save-results: save-results-wl-lt
+save-results-wl-lt:
+	mkdir -p $(SAVEDIR)/$(RESULTSDIR)/
+	cp -ru $(WL_LT_RESULTSDIR) $(SAVEDIR)/$(RESULTSDIR)/
+
+## Save bench plots
+.PHONY: save save-plots save-plots-wl-lt
+save save-plots: save-plots-wl-lt
+save-plots-wl-lt:
+	mkdir -p $(SAVEDIR)/$(PLOTSDIR)/
+	cp -ru $(WL_LT_PLOTSDIR) $(SAVEDIR)/$(PLOTSDIR)/
+
+## Save tikz
+.PHONY: save save-tikz save-tikz-wl-lt
+save save-tikz: save-tikz-wl-lt
+save-tikz-wl-lt:
+	mkdir -p $(SAVEDIR)/$(TIKZDIR)/
+	cp -ru $(WL_LT_TIKZDIR) $(SAVEDIR)/$(TIKZDIR)/
+
+
+#======================================================================#
+# touch rules, to try to force rebenches without cleaning everything   #
+#======================================================================#
+
+## Mark current results as up-to-date to prevent reruns
+.PHONY: reuse-results touch-results reuse-results-wl-lt touch-results-wl-lt
+reuse-results touch-results: reuse-results-wl-lt touch-results-wl-lt
+reuse-results-wl-lt touch-results-wl-lt:
+	find $(WL_LT_RESULTSDIR) -name '*.csv' -execdir touch '{}' ';'
+	@echo "# note: Make sure you build before plotting!"
+
+
+#======================================================================#
+# cleaning rules, we put everything in build dirs, so this is easy     #
+#======================================================================#
+
+## Clean bench results
+.PHONY: clean clean-results clean-results-wl-lt
+clean clean-results: clean-results-wl-lt
+clean-results-wl-lt:
+	rm -rf $(WL_LT_RESULTSDIR)
+	@echo "# note: Not cleaning saved output"
+
+## Clean bench plots
+.PHONY: clean clean-plots clean-plots-wl-lt
+clean clean-plots: clean-plots-wl-lt
+clean-plots-wl-lt:
+	rm -rf $(WL_LT_PLOTSDIR)
+	@echo "# note: Not cleaning saved output"
+
+## Clean tikz
+.PHONY: clean clean-tikz clean-tikz-wl-lt
+clean clean-tikz: clean-tikz-wl-lt
+clean-tikz-wl-lt:
+	rm -rf $(WL_LT_TIKZDIR)
+	@echo "# note: Not cleaning saved output"
 
 
 endif

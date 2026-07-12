@@ -30,7 +30,8 @@ CODEMAP_COLORS += -C'lfs*_bd=$(C_GRAY)'
 #======================================================================#
 
 ## Generate codemaps
-.PHONY: codemap codemaps
+.PHONY: all codemap codemaps
+all: codemap codemaps
 codemap codemaps: \
 		$(CODEMAPSDIR)/codemaps.html \
 		$(CODEMAPSDIR)/codemaps_tiny.html \
@@ -100,6 +101,30 @@ $(foreach fs, $(SIZE_FILESYSTEMS),$\
 			$(CODEMAPSDIR)/codemap_$(fs)_tiny.svg,$\
 			$($(U_$(fs))_OBJ) $($(U_$(fs))_CI),$\
 			$(fs))))
+
+
+#======================================================================#
+# save rules, for quickly saving things                                #
+#======================================================================#
+
+## Save codemaps
+.PHONY: save save-codemaps
+save: save-codemaps
+save-codemaps:
+	mkdir -p $(SAVEDIR)/
+	cp -ru $(CODEMAPSDIR) $(SAVEDIR)/
+
+
+#======================================================================#
+# cleaning rules, we put everything in build dirs, so this is easy     #
+#======================================================================#
+
+## Clean codemaps
+.PHONY: clean clean-codemaps
+clean: clean-codemaps
+clean-codemaps:
+	rm -rf $(CODEMAPSDIR)
+	@echo "# note: Not cleaning saved output"
 
 
 endif

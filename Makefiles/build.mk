@@ -18,13 +18,27 @@ SIZE_FILESYSTEMS  ?= $(DEFAULT_SIZE_FILESYSTEMS)
 BUILD_FILESYSTEMS ?= $(DEFAULT_BUILD_FILESYSTEMS)
 
 
+#======================================================================#
+# ctags rules                                                          #
+#======================================================================#
+
 ## Generate ctags for everything
 .PHONY: tags ctags
 tags ctags: $(foreach fs, $(BUILD_FILESYSTEMS), ctags-$(fs))
 
+
+#======================================================================#
+# build rules                                                          #
+#======================================================================#
+
 ## Build everything
 .PHONY: all build
 all build: $(foreach fs, $(BUILD_FILESYSTEMS), build-$(fs))
+
+
+#======================================================================#
+# size rules                                                           #
+#======================================================================#
 
 ## Find compile-time sizes _before_ link-time gc
 .PHONY: sizes sizes-prelink
@@ -90,6 +104,41 @@ sizes-postlink bench-sizes: \
 		-fstack='max((code_size) ? stack_limit : 0)' \
 		-fctx='max(ctx_size)' \
 		--no-total)
+
+
+#======================================================================#
+# save rules, for quickly saving things								   #
+#======================================================================#
+
+## Save bench-runner things
+.PHONY: save save-build
+save: save-build
+save-build:
+	mkdir -p $(SAVEDIR)/
+	cp -ru $(BUILDDIR) $(SAVEDIR)/
+
+
+#======================================================================#
+# touch rules, to try to force rebenches without cleaning everything   #
+#======================================================================#
+
+## Touch benches, triggering a rebuild/rebench, but don't clean
+.PHONY: touch touch-benches
+touch: touch-benches
+touch-benches:
+	touch $(BENCHES)
+
+
+#======================================================================#
+# cleaning rules, we put everything in build dirs, so this is easy     #
+#======================================================================#
+
+## Clean bench-runner things
+.PHONY: clean clean-build
+clean: clean-build
+clean-build:
+	rm -rf $(BUILDDIR)
+	@echo "# note: Not cleaning saved output"
 
 
 endif

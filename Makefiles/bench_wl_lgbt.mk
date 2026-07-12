@@ -53,7 +53,8 @@ endif
 
 ## Run benches
 .PHONY: all bench bench-wl-lgbt
-all bench bench-wl-lgbt: \
+all bench: bench-wl-lgbt
+bench-wl-lgbt: \
 		$(foreach c, $(BENCH_CASES), \
 			$(foreach fs, $(BENCH_FILESYSTEMS), \
 				$(foreach g, $(BENCH_GEOMETRIES), \
@@ -104,7 +105,8 @@ $(foreach c, $(BENCH_CASES),$\
 
 ## Plot benchmarks
 .PHONY: all plot plot-wl-lgbt
-all plot plot-wl-lgbt: \
+all plot: plot-wl-lgbt
+plot-wl-lgbt: \
 		$(WL_LGBT_PLOTSDIR)/plots.html \
 		$(foreach g, $(BENCH_GEOMETRIES), \
 			$(foreach p, $(subst $(comma),$(space),$(WL_LGBT_P)), \
@@ -206,6 +208,70 @@ $(foreach g, $(BENCH_GEOMETRIES), \
 		$(WL_LGBT_LOOKGBMAP_THRESHES),$\
 		2,$\
 		--xlabel="lookgbmap thresh")))
+
+
+#======================================================================#
+# save rules, for quickly saving things                                #
+#======================================================================#
+
+## Save bench results
+.PHONY: save save-results save-results-wl-lgbt
+save save-results: save-results-wl-lgbt
+save-results-wl-lgbt:
+	mkdir -p $(SAVEDIR)/$(RESULTSDIR)/
+	cp -ru $(WL_LGBT_RESULTSDIR) $(SAVEDIR)/$(RESULTSDIR)/
+
+## Save bench plots
+.PHONY: save save-plots save-plots-wl-lgbt
+save save-plots: save-plots-wl-lgbt
+save-plots-wl-lgbt:
+	mkdir -p $(SAVEDIR)/$(PLOTSDIR)/
+	cp -ru $(WL_LGBT_PLOTSDIR) $(SAVEDIR)/$(PLOTSDIR)/
+
+## Save tikz
+.PHONY: save save-tikz save-tikz-wl-lgbt
+save save-tikz: save-tikz-wl-lgbt
+save-tikz-wl-lgbt:
+	mkdir -p $(SAVEDIR)/$(TIKZDIR)/
+	cp -ru $(WL_LGBT_TIKZDIR) $(SAVEDIR)/$(TIKZDIR)/
+
+
+#======================================================================#
+# touch rules, to try to force rebenches without cleaning everything   #
+#======================================================================#
+
+## Mark current results as up-to-date to prevent reruns
+.PHONY: reuse-results touch-results reuse-results-wl-lgbt touch-results-wl-lgbt
+reuse-results touch-results: reuse-results-wl-lgbt touch-results-wl-lgbt
+reuse-results-wl-lgbt touch-results-wl-lgbt:
+	find $(WL_LGBT_RESULTSDIR) -name '*.csv' -execdir touch '{}' ';'
+	@echo "# note: Make sure you build before plotting!"
+
+
+#======================================================================#
+# cleaning rules, we put everything in build dirs, so this is easy     #
+#======================================================================#
+
+## Clean bench results
+.PHONY: clean clean-results clean-results-wl-lgbt
+clean clean-results: clean-results-wl-lgbt
+clean-results-wl-lgbt:
+	rm -rf $(WL_LGBT_RESULTSDIR)
+	@echo "# note: Not cleaning saved output"
+
+## Clean bench plots
+.PHONY: clean clean-plots clean-plots-wl-lgbt
+clean clean-plots: clean-plots-wl-lgbt
+clean-plots-wl-lgbt:
+	rm -rf $(WL_LGBT_PLOTSDIR)
+	@echo "# note: Not cleaning saved output"
+
+## Clean tikz
+.PHONY: clean clean-tikz clean-tikz-wl-lgbt
+clean clean-tikz: clean-tikz-wl-lgbt
+clean-tikz-wl-lgbt:
+	rm -rf $(WL_LGBT_TIKZDIR)
+	@echo "# note: Not cleaning saved output"
 
 
 endif

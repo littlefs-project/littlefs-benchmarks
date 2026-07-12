@@ -45,7 +45,8 @@ endif
 
 ## Run benches
 .PHONY: all bench bench-wl-gc
-all bench bench-wl-gc: \
+all bench: bench-wl-gc
+bench-wl-gc: \
 		$(foreach c, $(BENCH_CASES), \
 			$(foreach fs, $(BENCH_FILESYSTEMS), \
 				$(foreach g, $(BENCH_GEOMETRIES), \
@@ -92,7 +93,8 @@ $(foreach c, $(BENCH_CASES),$\
 
 ## Plot benchmarks
 .PHONY: all plot plot-wl-gc
-all plot plot-wl-gc: \
+all plot: plot-wl-gc
+plot-wl-gc: \
 		$(WL_GC_PLOTSDIR)/plots.html \
 		$(foreach g, $(BENCH_GEOMETRIES), \
 			$(WL_GC_PLOTSDIR)/plot_wl_gc.$(g).svg) \
@@ -285,6 +287,70 @@ $(foreach g, $(BENCH_GEOMETRIES), \
 		$(BENCH_FILESYSTEMS),$\
 		1,$\
 		--xlabel="filesystem")))
+
+
+#======================================================================#
+# save rules, for quickly saving things                                #
+#======================================================================#
+
+## Save bench results
+.PHONY: save save-results save-results-wl-gc
+save save-results: save-results-wl-gc
+save-results-wl-gc:
+	mkdir -p $(SAVEDIR)/$(RESULTSDIR)/
+	cp -ru $(WL_GC_RESULTSDIR) $(SAVEDIR)/$(RESULTSDIR)/
+
+## Save bench plots
+.PHONY: save save-plots save-plots-wl-gc
+save save-plots: save-plots-wl-gc
+save-plots-wl-gc:
+	mkdir -p $(SAVEDIR)/$(PLOTSDIR)/
+	cp -ru $(WL_GC_PLOTSDIR) $(SAVEDIR)/$(PLOTSDIR)/
+
+## Save tikz
+.PHONY: save save-tikz save-tikz-wl-gc
+save save-tikz: save-tikz-wl-gc
+save-tikz-wl-gc:
+	mkdir -p $(SAVEDIR)/$(TIKZDIR)/
+	cp -ru $(WL_GC_TIKZDIR) $(SAVEDIR)/$(TIKZDIR)/
+
+
+#======================================================================#
+# touch rules, to try to force rebenches without cleaning everything   #
+#======================================================================#
+
+## Mark current results as up-to-date to prevent reruns
+.PHONY: reuse-results touch-results reuse-results-wl-gc touch-results-wl-gc
+reuse-results touch-results: reuse-results-wl-gc touch-results-wl-gc
+reuse-results-wl-gc touch-results-wl-gc:
+	find $(WL_GC_RESULTSDIR) -name '*.csv' -execdir touch '{}' ';'
+	@echo "# note: Make sure you build before plotting!"
+
+
+#======================================================================#
+# cleaning rules, we put everything in build dirs, so this is easy     #
+#======================================================================#
+
+## Clean bench results
+.PHONY: clean clean-results clean-results-wl-gc
+clean clean-results: clean-results-wl-gc
+clean-results-wl-gc:
+	rm -rf $(WL_GC_RESULTSDIR)
+	@echo "# note: Not cleaning saved output"
+
+## Clean bench plots
+.PHONY: clean clean-plots clean-plots-wl-gc
+clean clean-plots: clean-plots-wl-gc
+clean-plots-wl-gc:
+	rm -rf $(WL_GC_PLOTSDIR)
+	@echo "# note: Not cleaning saved output"
+
+## Clean tikz
+.PHONY: clean clean-tikz clean-tikz-wl-gc
+clean clean-tikz: clean-tikz-wl-gc
+clean-tikz-wl-gc:
+	rm -rf $(WL_GC_TIKZDIR)
+	@echo "# note: Not cleaning saved output"
 
 
 endif
