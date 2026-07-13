@@ -221,7 +221,7 @@ $1: $2
 			-b$3 -Dprobe=heap,stack \
 			-fram=bench_simtime \
 			-o-) \
-		-S$3=$3 -b$3 \
+		-Si=$3 -b$3 \
 		-fthroughput -fram \
 		-o$$@)
 endef
