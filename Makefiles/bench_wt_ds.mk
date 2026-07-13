@@ -197,6 +197,50 @@ $(foreach g, $(BENCH_GEOMETRIES), \
 
 
 #======================================================================#
+# tikz rules                                                           #
+#======================================================================#
+
+## Generate tikz results
+.PHONY: all tikz tikz-wt-ds
+all tikz tikz-wt-ds: \
+		$(foreach c, $(BENCH_CASES), \
+			$(foreach fs, $(BENCH_FILESYSTEMS), \
+				$(foreach g, $(BENCH_GEOMETRIES), \
+					$(WT_DS_TIKZDIR)/tikz_wt_ds.$(c).$(fs).$(g).csv)))
+
+# core tikz rule
+#
+# $1 - target
+# $2 - source
+# $3 - x-axis
+#
+define TIKZ_WT_DS_RULE
+$1: $2
+	$$(strip ./scripts/csv.py \
+		<(./scripts/csv.py $$^ \
+			-b$3 -Dprobe=write \
+			-fthroughput='float(n)/max(float(bench_simtime)/1.0e9,1.0e-9)' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$3 -Dprobe=heap,stack \
+			-fram=bench_simtime \
+			-o-) \
+		-S$3=$3 -b$3 \
+		-fthroughput -fram \
+		-o$$@)
+endef
+
+# tikz rules
+$(foreach c, $(BENCH_CASES), \
+	$(foreach fs, $(BENCH_FILESYSTEMS), \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(eval $(call TIKZ_WT_DS_RULE,$\
+				$(WT_DS_TIKZDIR)/tikz_wt_ds.$(c).$(fs).$(g).csv,$\
+				$(WT_DS_RESULTSDIR)/bench_wt_ds.$(c).$(fs).$(g).csv,$\
+				DISK_SIZE)))))
+
+
+#======================================================================#
 # save rules, for quickly saving things                                #
 #======================================================================#
 

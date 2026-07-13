@@ -605,8 +605,12 @@ code = '''
 # many small file write throughput
 [cases.bench_wt_many]
 defines.SET = false
-# littlefs2 scales poorly with many + big blocks
-if = 'BENCH_IFDEF_LFS2(BLOCK_SIZE <= 128*1024, true)'
+if = [
+    # many needs a bit more wiggle room than the other benches
+    'DISK_SIZE >= 16*SIZE',
+    # littlefs2 scales poorly with many + big blocks
+    'BENCH_IFDEF_LFS2(BLOCK_SIZE <= 128*1024, true)',
+]
 code = '''
     #if defined(LFS3)
     lfs3_t lfs3;
