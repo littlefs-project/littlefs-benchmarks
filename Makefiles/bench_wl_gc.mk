@@ -340,7 +340,11 @@ all tikz tikz-wl-gc: \
         $(foreach c, $(BENCH_CASES), \
             $(foreach fs, $(BENCH_FILESYSTEMS), \
                 $(foreach g, $(BENCH_GEOMETRIES), \
-                    $(WL_GC_TIKZDIR)/tikz_wl_gc.$(c).$(fs).$(g).csv)))
+                    $(WL_GC_TIKZDIR)/tikz_wl_gc.$(c).$(fs).$(g).csv))) \
+        $(foreach c, $(BENCH_CASES), \
+            $(foreach fs, $(BENCH_FILESYSTEMS), \
+                $(foreach g, $(BENCH_GEOMETRIES), \
+                    $(WL_GC_TIKZDIR)/tikz_wl_gc_ops.$(c).$(fs).$(g).csv)))
 
 # core tikz rule
 #
@@ -373,6 +377,70 @@ $(foreach c, $(BENCH_CASES), \
 				$(WL_GC_TIKZDIR)/tikz_wl_gc.$(c).$(fs).$(g).csv,$\
 				$(WL_GC_RESULTSDIR)/bench_wl_gc.$(c).$(fs).$(g).csv,$\
 				$(WL_GC_P))))))
+
+# ops tikz rule
+#
+# $1 - target
+# $2 - source
+# $3 - fs type/version
+# $4 - disk geometry
+#
+define TIKZ_WL_GC_OPS_RULE
+$1: $2
+	$$(strip ./scripts/csv.py \
+		$(foreach probe, write gc, \
+			<(./scripts/csv.py $$^ \
+				-bGC -Dprobe='$(probe)+avg' \
+				-f$(if $(filter gc,$(probe)),gc_)read_time="$\
+					float($$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QREAD_TIMING)*bench_reads \
+						+ $$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QREAD_WTIMING)*bench_wreads \
+						+ $$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QREAD_UTIMING)*bench_readed) \
+						/ float(hits) \
+						/ 1.0e9" \
+				-f$(if $(filter gc,$(probe)),gc_)prog_time="$\
+					float($$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QPROG_TIMING)*bench_progs \
+						+ $$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QPROG_WTIMING)*bench_wprogs \
+						+ $$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QPROG_UTIMING)*bench_progged) \
+						/ float(hits) \
+						/ 1.0e9" \
+				-f$(if $(filter gc,$(probe)),gc_)erase_time="$\
+					float($$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QERASE_TIMING)*bench_erases \
+						+ $$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QERASE_WTIMING)*bench_werases \
+						+ $$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QERASE_UTIMING)*bench_erased) \
+						/ float(hits) \
+						/ 1.0e9" \
+				-o-)) \
+		-bGC \
+		-o$$@)
+endef
+
+# ops tikz rules
+$(foreach c, $(BENCH_CASES), \
+	$(foreach fs, $(BENCH_FILESYSTEMS), \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(eval $(call TIKZ_WL_GC_OPS_RULE,$\
+				$(WL_GC_TIKZDIR)/tikz_wl_gc_ops.$(c).$(fs).$(g).csv,$\
+				$(WL_GC_RESULTSDIR)/bench_wl_gc.$(c).$(fs).$(g).csv,$\
+				$(fs),$\
+				$(g))))))
 
 
 #======================================================================#
