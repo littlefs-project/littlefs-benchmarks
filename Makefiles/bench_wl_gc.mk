@@ -16,7 +16,7 @@ WL_GC_TIKZDIR ?= $(TIKZDIR)/wl_gc
 WL_GC_P ?= avg,p50,p90,p99,p99.9,p99.99,p99.999,max
 
 # run with gc
-BENCHFLAGS += -DGC=1
+WL_GC_GC ?= 0,1
 
 
 # default bench filesystems to default bench filesystems
@@ -59,6 +59,7 @@ bench-wl-gc: \
 # $3 - fs type/version
 # $4 - disk geometry
 # $5 - percentiles
+# $6 - gc
 #
 define BENCH_WL_GC_RULE
 $1: $($(U_$3)_BENCH_RUNNER)
@@ -73,6 +74,7 @@ $1: $($(U_$3)_BENCH_RUNNER)
 			-Swrite=$(p)) \
 		$(foreach p, $(subst $(comma),$(space),$(or $5,$(WL_GC_P))),$\
 			-Sgc=$(p)) \
+		-DGC=$(or $6,$(WL_GC_GC)) \
 		-o$$@)
 endef
 
@@ -126,52 +128,66 @@ define PLOT_WL_GC_RULE
 $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
-			-Si='enumerate()' -bcase -bFS -b$4 \
+			-Si='enumerate()' -bcase -bGC -bFS -b$4 \
 			-flatency='bench_simtime/1.0e9' \
 			-o-) \
-		-W1500 -H350 \
+		-W1500 $(if, -H350) -H525 \
 		--title=$3 \
 		-bFS \
 		--subplot=" \
 				--title='seq' \
-				--ylabel='write latency' \
+				--ylabel='write latency (no gc)' \
 				-Dcase=bench_wl_seq \
-				-D$4='write+*' \
+				-DGC=0 -D$4='write+*' \
 				-ylatency --yunits=s \
+			--subplot-below=\" \
+				--ylabel='write latency (gc)' \
+				-Dcase=bench_wl_seq \
+				-DGC=1 -D$4='write+*' \
+				-ylatency --yunits=s\" \
 			--subplot-below=\" \
 				--ylabel='gc latency' \
 				-Dcase=bench_wl_seq \
-				-D$4='gc+*' \
+				-DGC=1 -D$4='gc+*' \
 				-ylatency --yunits=s\"" \
 		--subplot-right=" \
 				--title='random' \
 				-Dcase=bench_wl_random \
-				-D$4='write+*' \
+				-DGC=0 -D$4='write+*' \
 				-ylatency --yunits=s \
 			--subplot-below=\" \
-				--ylabel='gc latency' \
 				-Dcase=bench_wl_random \
-				-D$4='gc+*' \
+				-DGC=1 -D$4='write+*' \
+				-ylatency --yunits=s\" \
+			--subplot-below=\" \
+				-Dcase=bench_wl_random \
+				-DGC=1 -D$4='gc+*' \
 				-ylatency --yunits=s\"" \
 		--subplot-right=" \
 				--title='logging' \
 				-Dcase=bench_wl_logging \
-				-D$4='write+*' \
+				-DGC=0 -D$4='write+*' \
 				-ylatency --yunits=s \
 			--subplot-below=\" \
-				--ylabel='gc latency' \
 				-Dcase=bench_wl_logging \
-				-D$4='gc+*' \
+				-DGC=1 -D$4='write+*' \
+				-ylatency --yunits=s\" \
+			--subplot-below=\" \
+				-Dcase=bench_wl_logging \
+				-DGC=1 -D$4='gc+*' \
 				-ylatency --yunits=s\"" \
 		--subplot-right=" \
 				--title='many' \
 				-Dcase=bench_wl_many \
-				-D$4='write+*' \
+				-DGC=0 -D$4='write+*' \
 				-ylatency --yunits=s \
 			--subplot-below=\" \
-				--ylabel='gc latency' \
 				-Dcase=bench_wl_many \
-				-D$4='gc+*' \
+				-DGC=1 -D$4='write+*' \
+				-ylatency --yunits=s\" \
+			--subplot-below=\" \
+				-Dcase=bench_wl_many \
+				-DGC=1 -D$4='gc+*' \
 				-ylatency --yunits=s\"" \
 		--legend \
 		$(foreach fs, $(BENCH_FILESYSTEMS),$\
@@ -217,53 +233,78 @@ define PLOT_WL_GC_P_RULE
 $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
-			-Si='enumerate()' -bcase -b$4 -bprobe -Dprobe='*+$$*' \
+			-Si='enumerate()' -bcase -bGC -b$4 -bprobe -Dprobe='*+$$*' \
 			-flatency='bench_simtime/1.0e9' \
 			-o-) \
-		-W1500 -H175 \
+		-W1500 -H350 \
 		--title=$3 \
 		-bprobe \
 		--subplot=" \
 				--title='seq (write)' \
-				--ylabel='latency' \
+				--ylabel='latency (no gc)' \
 				-Dcase=bench_wl_seq \
-				-Dprobe='write+*' \
-				-ylatency --yunits=s" \
-		--subplot-right=" \
+				-DGC=0 -Dprobe='write+*' \
+				-ylatency --yunits=s \
+			--subplot-below=\" \
+				--title='seq (write)' \
+				--ylabel='latency (gc)' \
+				-Dcase=bench_wl_seq \
+				-DGC=1 -Dprobe='gc+*' \
+				-ylatency --yunits=s \
+			--subplot-right=\\\" \
+				-W0.5 \
 				--title='seq (gc)' \
 				-Dcase=bench_wl_seq \
-				-Dprobe='gc+*' \
-				-ylatency --yunits=s" \
+				-DGC=1 -Dprobe='gc+*' \
+				-ylatency --yunits=s\\\"\"" \
 		--subplot-right=" \
 				--title='random (write)' \
 				-Dcase=bench_wl_random \
-				-Dprobe='write+*' \
-				-ylatency --yunits=s" \
-		--subplot-right=" \
+				-DGC=0 -Dprobe='write+*' \
+				-ylatency --yunits=s \
+			--subplot-below=\" \
+				--title='random (write)' \
+				-Dcase=bench_wl_random \
+				-DGC=1 -Dprobe='write+*' \
+				-ylatency --yunits=s \
+			--subplot-right=\\\" \
+				-W0.5 \
 				--title='random (gc)' \
 				-Dcase=bench_wl_random \
-				-Dprobe='gc+*' \
-				-ylatency --yunits=s" \
+				-DGC=1 -Dprobe='gc+*' \
+				-ylatency --yunits=s\\\"\"" \
 		--subplot-right=" \
 				--title='logging (write)' \
 				-Dcase=bench_wl_logging \
-				-Dprobe='write+*' \
-				-ylatency --yunits=s" \
-		--subplot-right=" \
+				-DGC=0 -Dprobe='write+*' \
+				-ylatency --yunits=s \
+			--subplot-below=\" \
+				--title='logging (write)' \
+				-Dcase=bench_wl_logging \
+				-DGC=1 -Dprobe='write+*' \
+				-ylatency --yunits=s \
+			--subplot-right=\\\" \
+				-W0.5 \
 				--title='logging (gc)' \
 				-Dcase=bench_wl_logging \
-				-Dprobe='gc+*' \
-				-ylatency --yunits=s" \
+				-DGC=1 -Dprobe='gc+*' \
+				-ylatency --yunits=s\\\"\"" \
 		--subplot-right=" \
 				--title='many (write)' \
 				-Dcase=bench_wl_many \
-				-Dprobe='write+*' \
-				-ylatency --yunits=s" \
-		--subplot-right=" \
+				-DGC=0 -Dprobe='write+*' \
+				-ylatency --yunits=s \
+			--subplot-below=\" \
+				--title='many (write)' \
+				-Dcase=bench_wl_many \
+				-DGC=1 -Dprobe='write+*' \
+				-ylatency --yunits=s \
+			--subplot-right=\\\" \
+				-W0.5 \
 				--title='many (gc)' \
 				-Dcase=bench_wl_many \
-				-Dprobe='gc+*' \
-				-ylatency --yunits=s" \
+				-DGC=1 -Dprobe='gc+*' \
+				-ylatency --yunits=s\\\"\"" \
 		-Fo: -C'write+*=$(C_BLUE)' -C'gc+*=$(C_ORANGE)' \
 		-X"-0.25,$\
 			$$(shell python -c 'b=len("$5".split())-1; print(b+1/4)')" \
@@ -312,15 +353,15 @@ $1: $2
 	$$(strip ./scripts/csv.py \
 		$(foreach p, $(subst $(comma),$(space),$3), \
 			<(./scripts/csv.py $$^ \
-				-bi=0 -Dprobe='write+$(p)' \
+				-bGC -Dprobe='write+$(p)' \
 				-flatency_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
 				-o-)) \
 		$(foreach p, $(subst $(comma),$(space),$3), \
 			<(./scripts/csv.py $$^ \
-				-bi=0 -Dprobe='gc+$(p)' \
+				-bGC -Dprobe='gc+$(p)' \
 				-fgc_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
 				-o-)) \
-		-bi \
+		-bGC \
 		-o$$@)
 endef
 
