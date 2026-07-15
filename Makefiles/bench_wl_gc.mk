@@ -290,6 +290,51 @@ $(foreach g, $(BENCH_GEOMETRIES), \
 
 
 #======================================================================#
+# tikz rules                                                           #
+#======================================================================#
+
+## Generate tikz results
+.PHONY: all tikz tikz-wl-gc
+all tikz tikz-wl-gc: \
+        $(foreach c, $(BENCH_CASES), \
+            $(foreach fs, $(BENCH_FILESYSTEMS), \
+                $(foreach g, $(BENCH_GEOMETRIES), \
+                    $(WL_GC_TIKZDIR)/tikz_wl_gc.$(c).$(fs).$(g).csv)))
+
+# core tikz rule
+#
+# $1 - target
+# $2 - source
+# $3 - percentiles
+#
+define TIKZ_WL_GC_RULE
+$1: $2
+	$$(strip ./scripts/csv.py \
+		$(foreach p, $(subst $(comma),$(space),$3), \
+			<(./scripts/csv.py $$^ \
+				-bi=0 -Dprobe='write+$(p)' \
+				-flatency_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
+				-o-)) \
+		$(foreach p, $(subst $(comma),$(space),$3), \
+			<(./scripts/csv.py $$^ \
+				-bi=0 -Dprobe='gc+$(p)' \
+				-fgc_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
+				-o-)) \
+		-bi \
+		-o$$@)
+endef
+
+# tikz rules
+$(foreach c, $(BENCH_CASES), \
+	$(foreach fs, $(BENCH_FILESYSTEMS), \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(eval $(call TIKZ_WL_GC_RULE,$\
+				$(WL_GC_TIKZDIR)/tikz_wl_gc.$(c).$(fs).$(g).csv,$\
+				$(WL_GC_RESULTSDIR)/bench_wl_gc.$(c).$(fs).$(g).csv,$\
+				$(WL_GC_P))))))
+
+
+#======================================================================#
 # save rules, for quickly saving things                                #
 #======================================================================#
 

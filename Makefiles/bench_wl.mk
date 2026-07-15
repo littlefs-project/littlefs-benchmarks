@@ -236,6 +236,46 @@ $(foreach g, $(BENCH_GEOMETRIES), \
 
 
 #======================================================================#
+# tikz rules                                                           #
+#======================================================================#
+
+## Generate tikz results
+.PHONY: all tikz tikz-wl
+all tikz tikz-wl: \
+        $(foreach c, $(BENCH_CASES), \
+            $(foreach fs, $(BENCH_FILESYSTEMS), \
+                $(foreach g, $(BENCH_GEOMETRIES), \
+                    $(WL_TIKZDIR)/tikz_wl.$(c).$(fs).$(g).csv)))
+
+# core tikz rule
+#
+# $1 - target
+# $2 - source
+# $3 - percentiles
+#
+define TIKZ_WL_RULE
+$1: $2
+	$$(strip ./scripts/csv.py \
+		$(foreach p, $(subst $(comma),$(space),$3), \
+			<(./scripts/csv.py $$^ \
+				-bi=0 -Dprobe='write+$(p)' \
+				-flatency_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
+				-o-)) \
+		-bi \
+		-o$$@)
+endef
+
+# tikz rules
+$(foreach c, $(BENCH_CASES), \
+	$(foreach fs, $(BENCH_FILESYSTEMS), \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(eval $(call TIKZ_WL_RULE,$\
+				$(WL_TIKZDIR)/tikz_wl.$(c).$(fs).$(g).csv,$\
+				$(WL_RESULTSDIR)/bench_wl.$(c).$(fs).$(g).csv,$\
+				$(WL_P))))))
+
+
+#======================================================================#
 # save rules, for quickly saving things                                #
 #======================================================================#
 
