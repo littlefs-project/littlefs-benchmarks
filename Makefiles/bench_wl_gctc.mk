@@ -220,15 +220,11 @@ $1: $2
 					-bcase -bFS -b$4 -Dprobe='write+$$*' \
 					-fwrite_p=bench_simtime \
 					-o-) \
-				<(./scripts/csv.py $$^ \
-					-bcase -bFS -b$4 -Dprobe='gc+$$*' \
-					-fgc_p=bench_simtime \
-					-o-) \
 				-bcase -bFS -b$4 \
 				-o-) \
 			-bcase -bFS -b$4 \
 			-ffreq='1.0e9/max(gc_avg+write_avg, 1.0)' \
-			-flatency='max((gc_p+write_p)-gc_avg, write_p) / 1.0e9' \
+			-flatency='write_p/1.0e9' \
 			-o-) \
 		-W1500 -H350 \
 		--title=$3 \
@@ -260,7 +256,7 @@ $1: $2
 		-o$$@)
 endef
 
-# per-percentile plot rules
+# per-percentile freq plot rules
 $(foreach g, $(BENCH_GEOMETRIES), \
 	$(eval $(call PLOT_WL_GCTC_FREQ_RULE,$\
 		$(WL_GCTC_PLOTSDIR)/plot_wl_gctc_freq.%.$(g).svg,$\
