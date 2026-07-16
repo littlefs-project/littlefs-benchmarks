@@ -189,7 +189,6 @@ code = '''
     BENCH_SIMRESET();
 
     // open a file
-    BENCH_START("write");
     #if defined(LFS3)
     lfs3_file_t file;
     lfs3_file_open(&lfs3, &file, "bench_seq",
@@ -208,7 +207,6 @@ code = '''
     #endif
     lfs3_off_t size = 0;
     uint64_t written = 0;
-    BENCH_STOP("write", written);
     // ok, one of these needs to be non-zero
     LFS3_ASSERT(SIM_TIME > 0 || SIM_SIZE > 0);
     while (!(SIM_SIZE && written >= (uint64_t)SIM_SIZE)
@@ -284,7 +282,6 @@ code = '''
             BENCH_STOP("gc", written);
         }
     }
-    BENCH_START("write");
     #if defined(LFS3)
     lfs3_file_close(&lfs3, &file) => 0;
     #elif defined(LFS2)
@@ -294,8 +291,6 @@ code = '''
     #elif defined(YAFFS2)
     yaffs_close(fd) => 0;
     #endif
-    // report the amount we managed to write
-    BENCH_STOP("write", written);
 
     // report the total stack/heap usage after the benchmark
     #ifdef BENCH_STACK
@@ -393,7 +388,6 @@ code = '''
     BENCH_SIMRESET();
 
     // open a file
-    BENCH_START("write");
     #if defined(LFS3)
     lfs3_file_t file;
     lfs3_file_open(&lfs3, &file, "bench_random",
@@ -413,7 +407,6 @@ code = '''
     #endif
     lfs3_off_t size = 0;
     uint64_t written = 0;
-    BENCH_STOP("write", written);
     // ok, one of these needs to be non-zero
     LFS3_ASSERT(SIM_TIME > 0 || SIM_SIZE > 0);
     while (!(SIM_SIZE && written >= (uint64_t)SIM_SIZE)
@@ -488,7 +481,6 @@ code = '''
             BENCH_STOP("gc", written);
         }
     }
-    BENCH_START("write");
     #if defined(LFS3)
     lfs3_file_close(&lfs3, &file) => 0;
     #elif defined(LFS2)
@@ -498,8 +490,6 @@ code = '''
     #elif defined(YAFFS2)
     yaffs_close(fd) => 0;
     #endif
-    // report the amount we managed to write
-    BENCH_STOP("write", written);
 
     // report the total stack/heap usage after the benchmark
     #ifdef BENCH_STACK
@@ -599,7 +589,6 @@ code = '''
     BENCH_SIMRESET();
 
     // open a file
-    BENCH_START("write");
     #if defined(LFS3)
     lfs3_file_t file;
     lfs3_file_open(&lfs3, &file, "bench_log",
@@ -618,42 +607,16 @@ code = '''
     assert(fd >= 0);
     #endif
     uint64_t written = 0;
-    BENCH_STOP("write", written);
     // ok, one of these needs to be non-zero
     LFS3_ASSERT(SIM_TIME > 0 || SIM_SIZE > 0);
     while (!(SIM_SIZE && written >= (uint64_t)SIM_SIZE)
             && !(SIM_TIME && BENCH_SIMTIME() >= SIM_TIME)) {
         BENCH_START("write");
-        // append to log
-        uint8_t wbuf[CHUNK];
-        for (lfs3_size_t j = 0; j < CHUNK; j++) {
-            wbuf[j] = 'a' + (BENCH_PRNG(&prng) % 26);
-        }
-        #if defined(LFS3)
-        lfs3_file_write(&lfs3, &file, wbuf, CHUNK) => CHUNK;
-        #elif defined(LFS2)
-        lfs2_file_write(&lfs2, &file, wbuf, CHUNK) => CHUNK;
-        #elif defined(SPIFFS)
-        SPIFFS_write(&spiffs, fd, wbuf, CHUNK) => CHUNK;
-        #elif defined(YAFFS2)
-        yaffs_write(fd, wbuf, CHUNK) => CHUNK;
-        #endif
-
-        // sync
-        #if defined(LFS3)
-        lfs3_file_sync(&lfs3, &file) => 0;
-        #elif defined(LFS2)
-        lfs2_file_sync(&lfs2, &file) => 0;
-        #elif defined(SPIFFS)
-        s32_t d = SPIFFS_fflush(&spiffs, fd);
-        assert(d >= 0);
-        #elif defined(YAFFS2)
-        yaffs_fsync(fd) => 0;
-        #endif
-
-        // for v3, fruncate, for v2, rotate if full
+        // fruncate/rotate logs if needed
         //
-        // unlike litmus benchmarks we just use SIZE here
+        // note we fruncate/rotate first here, which is backwards from
+        // the wt benches, the reason is this is just fallback from if
+        // gc failed to rotate in time
         #if defined(LFS3)
         lfs3_soff_t size = lfs3_file_size(&lfs3, &file);
         assert(size >= 0);
@@ -712,12 +675,102 @@ code = '''
         }
         #endif
 
+        // append to log
+        uint8_t wbuf[CHUNK];
+        for (lfs3_size_t j = 0; j < CHUNK; j++) {
+            wbuf[j] = 'a' + (BENCH_PRNG(&prng) % 26);
+        }
+        #if defined(LFS3)
+        lfs3_file_write(&lfs3, &file, wbuf, CHUNK) => CHUNK;
+        #elif defined(LFS2)
+        lfs2_file_write(&lfs2, &file, wbuf, CHUNK) => CHUNK;
+        #elif defined(SPIFFS)
+        SPIFFS_write(&spiffs, fd, wbuf, CHUNK) => CHUNK;
+        #elif defined(YAFFS2)
+        yaffs_write(fd, wbuf, CHUNK) => CHUNK;
+        #endif
+
+        // sync
+        #if defined(LFS3)
+        lfs3_file_sync(&lfs3, &file) => 0;
+        #elif defined(LFS2)
+        lfs2_file_sync(&lfs2, &file) => 0;
+        #elif defined(SPIFFS)
+        s32_t d = SPIFFS_fflush(&spiffs, fd);
+        assert(d >= 0);
+        #elif defined(YAFFS2)
+        yaffs_fsync(fd) => 0;
+        #endif
+
         written += CHUNK;
         BENCH_STOP("write", written);
 
         // run gc
         if (GC) {
             BENCH_START("gc");
+            // try to include log-rotation in gc work
+            //
+            // in theory you don't need to rotate logs during critical
+            // work, and spiffs is very slow at opening files.
+            #if defined(LFS3)
+            lfs3_soff_t size = lfs3_file_size(&lfs3, &file);
+            assert(size >= 0);
+            if (FRUNCATE) {
+                if (size > SIZE) {
+                    lfs3_file_fruncate(&lfs3, &file, SIZE) => 0;
+                }
+            } else {
+                if (size >= SIZE) {
+                    lfs3_file_close(&lfs3, &file) => 0;
+                    lfs3_rename(&lfs3, "bench_log", "bench_log.1") => 0;
+                    lfs3_file_open(&lfs3, &file, "bench_log",
+                            LFS3_O_WRONLY
+                                | LFS3_O_CREAT
+                                | LFS3_O_EXCL
+                                | LFS3_O_APPEND) => 0;
+                }
+            }
+            #elif defined(LFS2)
+            lfs3_soff_t size = lfs2_file_size(&lfs2, &file);
+            assert(size >= 0);
+            if (size >= SIZE) {
+                lfs2_file_close(&lfs2, &file) => 0;
+                lfs2_rename(&lfs2, "bench_log", "bench_log.1") => 0;
+                lfs2_file_open(&lfs2, &file, "bench_log",
+                        LFS2_O_WRONLY
+                            | LFS2_O_CREAT
+                            | LFS2_O_EXCL
+                            | LFS2_O_APPEND) => 0;
+            }
+            #elif defined(SPIFFS)
+            spiffs_stat stat;
+            SPIFFS_fstat(&spiffs, fd, &stat) => 0;
+            assert(stat.size >= 0);
+            if (stat.size >= SIZE) {
+                SPIFFS_close(&spiffs, fd) => 0;
+                int err = SPIFFS_remove(&spiffs, "bench_log.1");
+                assert(!err || err == SPIFFS_ERR_NOT_FOUND);
+                SPIFFS_rename(&spiffs, "bench_log", "bench_log.1") => 0;
+                fd = SPIFFS_open(&spiffs, "bench_log",
+                        SPIFFS_WRONLY
+                            | SPIFFS_CREAT
+                            | SPIFFS_EXCL
+                            | SPIFFS_APPEND, 0777);
+                assert(fd >= 0);
+            }
+            #elif defined(YAFFS2)
+            struct yaffs_stat stat;
+            yaffs_fstat(fd, &stat) => 0;
+            if (stat.st_size >= SIZE) {
+                yaffs_close(fd) => 0;
+                yaffs_rename("bench_log", "bench_log.1") => 0;
+                fd = yaffs_open("bench_log",
+                        O_WRONLY | O_CREAT | O_EXCL | O_APPEND, 0777);
+                assert(fd >= 0);
+            }
+            #endif
+
+            // run normal gc
             #if defined(LFS3)
             lfs3_gc_t gc;
             lfs3_gc_open(&lfs3, &gc, GC_FLAGS) => 0;
@@ -746,7 +799,6 @@ code = '''
             BENCH_STOP("gc", written);
         }
     }
-    BENCH_START("write");
     #if defined(LFS3)
     lfs3_file_close(&lfs3, &file) => 0;
     #elif defined(LFS2)
@@ -756,8 +808,6 @@ code = '''
     #elif defined(YAFFS2)
     yaffs_close(fd) => 0;
     #endif
-    // report the amount we managed to write
-    BENCH_STOP("write", written);
 
     // report the total stack/heap usage after the benchmark
     #ifdef BENCH_STACK
@@ -854,9 +904,7 @@ code = '''
     // reset our timer
     BENCH_SIMRESET();
 
-    BENCH_START("write");
     uint64_t written = 0;
-    BENCH_STOP("write", written);
     // ok, one of these needs to be non-zero
     LFS3_ASSERT(SIM_TIME > 0 || SIM_SIZE > 0);
     while (!(SIM_SIZE && written >= (uint64_t)SIM_SIZE)
@@ -951,9 +999,6 @@ code = '''
             BENCH_STOP("gc", written);
         }
     }
-    BENCH_START("write");
-    // report the amount we managed to write
-    BENCH_STOP("write", written);
 
     // report the total stack/heap usage after the benchmark
     #ifdef BENCH_STACK
