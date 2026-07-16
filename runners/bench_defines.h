@@ -189,6 +189,12 @@
                                                     + SPAGE_SIZE)           )
     // how many bytes to try to clean during gc
     BENCH_DEFINE(GC_CLEAN_SIZE,         3*BLOCK_SIZE                        )
+    // how many times to call gc
+    //
+    // this number looks pretty sketch, but spiffs has internal checks
+    // to prevent disk access if not needed, and we only count io cost
+    // sooo...
+    BENCH_DEFINE(GC_RETRY_COUNT,        BLOCK_COUNT                         )
 
     // yaffs2 specific defines
     #elif defined(YAFFS2)

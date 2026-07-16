@@ -269,8 +269,10 @@ code = '''
             bench_wl_gc_stop();
             #elif defined(SPIFFS)
             bench_wl_gc_start();
-            int err = SPIFFS_gc(&spiffs, GC_CLEAN_SIZE);
-            assert(!err || err == LFS3_ERR_IO);
+            for (lfs3_block_t i = 0; i < GC_RETRY_COUNT; i++) {
+                int err = SPIFFS_gc(&spiffs, GC_CLEAN_SIZE);
+                assert(!err || err == LFS3_ERR_IO);
+            }
             bench_wl_gc_stop();
             #elif defined(YAFFS2)
             bench_wl_gc_start();
@@ -468,8 +470,10 @@ code = '''
             bench_wl_gc_stop();
             #elif defined(SPIFFS)
             bench_wl_gc_start();
-            int err = SPIFFS_gc(&spiffs, GC_CLEAN_SIZE);
-            assert(!err || err == LFS3_ERR_IO);
+            for (lfs3_block_t i = 0; i < GC_RETRY_COUNT; i++) {
+                int err = SPIFFS_gc(&spiffs, GC_CLEAN_SIZE);
+                assert(!err || err == LFS3_ERR_IO);
+            }
             bench_wl_gc_stop();
             #elif defined(YAFFS2)
             bench_wl_gc_start();
@@ -786,8 +790,10 @@ code = '''
             bench_wl_gc_stop();
             #elif defined(SPIFFS)
             bench_wl_gc_start();
-            int err = SPIFFS_gc(&spiffs, GC_CLEAN_SIZE);
-            assert(!err || err == LFS3_ERR_IO);
+            for (lfs3_block_t i = 0; i < GC_RETRY_COUNT; i++) {
+                int err = SPIFFS_gc(&spiffs, GC_CLEAN_SIZE);
+                assert(!err || err == LFS3_ERR_IO);
+            }
             bench_wl_gc_stop();
             #elif defined(YAFFS2)
             bench_wl_gc_start();
@@ -986,8 +992,10 @@ code = '''
             bench_wl_gc_stop();
             #elif defined(SPIFFS)
             bench_wl_gc_start();
-            int err = SPIFFS_gc(&spiffs, GC_CLEAN_SIZE);
-            assert(!err || err == LFS3_ERR_IO);
+            for (lfs3_block_t i = 0; i < GC_RETRY_COUNT; i++) {
+                int err = SPIFFS_gc(&spiffs, GC_CLEAN_SIZE);
+                assert(!err || err == LFS3_ERR_IO);
+            }
             bench_wl_gc_stop();
             #elif defined(YAFFS2)
             bench_wl_gc_start();
