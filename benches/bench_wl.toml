@@ -31,6 +31,9 @@ defines.GC_FLAGS = '''
 # optional gc time limit, only really makes sense if gcing, but you know
 defines.GC_TIME = 0
 
+# should we force ongoing gc work to abort?
+defines.GC_INTERRUPT = false
+
 # spiffs is limited to 32-bit disks
 if = 'BENCH_IFDEF_SPIFFS(DISK_SIZE < 0x100000000ULL, true)'
 
@@ -62,7 +65,7 @@ code = '''
     int bench_wl_bd_read(const struct lfs3_cfg *cfg, lfs3_block_t block,
             lfs3_off_t off, void *buffer, lfs3_size_t size) {
         // gc time limit?
-        if (GC_TIME && bench_wl_gc_start_time != -1) {
+        if (GC_TIME && GC_INTERRUPT && bench_wl_gc_start_time != -1) {
             // predict how long this operation would take
             bench_ns_t optime = READ_TIMING
                     + ((lfs3_alignup(off + size, lfs3_max(READ_WIDTH, 1))
@@ -86,7 +89,7 @@ code = '''
     int bench_wl_bd_prog(const struct lfs3_cfg *cfg, lfs3_block_t block,
             lfs3_off_t off, const void *buffer, lfs3_size_t size) {
         // gc time limit?
-        if (GC_TIME && bench_wl_gc_start_time != -1) {
+        if (GC_TIME && GC_INTERRUPT && bench_wl_gc_start_time != -1) {
             // predict how long this operation would take
             bench_ns_t optime = PROG_TIMING
                     + ((lfs3_alignup(off + size, lfs3_max(PROG_WIDTH, 1))
@@ -109,7 +112,7 @@ code = '''
 
     int bench_wl_bd_erase(const struct lfs3_cfg *cfg, lfs3_block_t block) {
         // gc time limit?
-        if (GC_TIME && bench_wl_gc_start_time != -1) {
+        if (GC_TIME && GC_INTERRUPT && bench_wl_gc_start_time != -1) {
             // predict how long this operation would take
             bench_ns_t optime = ERASE_TIMING
                     + (lfs3_alignup(BLOCK_SIZE, lfs3_max(ERASE_WIDTH, 1))
@@ -254,30 +257,48 @@ code = '''
         // run gc
         if (GC) {
             BENCH_START("gc");
+            bench_ns_t gc_start = BENCH_SIMTIME();
             #if defined(LFS3)
             lfs3_gc_t gc;
             lfs3_gc_open(&lfs3, &gc, GC_FLAGS) => 0;
             bench_wl_gc_start();
-            lfs3_sblock_t steps = lfs3_gc_write(&lfs3, &gc, -1);
-            assert(steps >= 0 || steps == LFS3_ERR_IO);
+            while (!GC_TIME
+                    || BENCH_SIMTIME() - gc_start < (bench_ns_t)GC_TIME) {
+                lfs3_sblock_t steps = lfs3_gc_write(&lfs3, &gc, 1);
+                assert(steps >= 0 || steps == LFS3_ERR_IO);
+                if (steps == 0) {
+                    break;
+                }
+            }
             bench_wl_gc_stop();
             lfs3_gc_close(&lfs3, &gc) => 0;
             #elif defined(LFS2)
             bench_wl_gc_start();
-            int err = lfs2_fs_gc(&lfs2);
-            assert(!err || err == LFS3_ERR_IO);
+            if (!GC_TIME
+                    || BENCH_SIMTIME() - gc_start < (bench_ns_t)GC_TIME) {
+                int err = lfs2_fs_gc(&lfs2);
+                assert(!err || err == LFS3_ERR_IO);
+            }
             bench_wl_gc_stop();
             #elif defined(SPIFFS)
             bench_wl_gc_start();
-            for (lfs3_block_t i = 0; i < GC_RETRY_COUNT; i++) {
+            for (lfs3_block_t i = 0;
+                    i < GC_RETRY_COUNT
+                        && (!GC_TIME
+                            || BENCH_SIMTIME() - gc_start
+                                < (bench_ns_t)GC_TIME);
+                    i++) {
                 int err = SPIFFS_gc(&spiffs, GC_CLEAN_SIZE);
                 assert(!err || err == LFS3_ERR_IO);
             }
             bench_wl_gc_stop();
             #elif defined(YAFFS2)
             bench_wl_gc_start();
-            if (!setjmp(bench_wl_gc_jmp)) {
-                yaffs_do_background_gc("/", 0);
+            if (!GC_TIME
+                    || BENCH_SIMTIME() - gc_start < (bench_ns_t)GC_TIME) {
+                if (!setjmp(bench_wl_gc_jmp)) {
+                    yaffs_do_background_gc("/", 0);
+                }
             }
             bench_wl_gc_stop();
             #endif
@@ -455,30 +476,48 @@ code = '''
         // run gc
         if (GC) {
             BENCH_START("gc");
+            bench_ns_t gc_start = BENCH_SIMTIME();
             #if defined(LFS3)
             lfs3_gc_t gc;
             lfs3_gc_open(&lfs3, &gc, GC_FLAGS) => 0;
             bench_wl_gc_start();
-            lfs3_sblock_t steps = lfs3_gc_write(&lfs3, &gc, -1);
-            assert(steps >= 0 || steps == LFS3_ERR_IO);
+            while (!GC_TIME
+                    || BENCH_SIMTIME() - gc_start < (bench_ns_t)GC_TIME) {
+                lfs3_sblock_t steps = lfs3_gc_write(&lfs3, &gc, 1);
+                assert(steps >= 0 || steps == LFS3_ERR_IO);
+                if (steps == 0) {
+                    break;
+                }
+            }
             bench_wl_gc_stop();
             lfs3_gc_close(&lfs3, &gc) => 0;
             #elif defined(LFS2)
             bench_wl_gc_start();
-            int err = lfs2_fs_gc(&lfs2);
-            assert(!err || err == LFS3_ERR_IO);
+            if (!GC_TIME
+                    || BENCH_SIMTIME() - gc_start < (bench_ns_t)GC_TIME) {
+                int err = lfs2_fs_gc(&lfs2);
+                assert(!err || err == LFS3_ERR_IO);
+            }
             bench_wl_gc_stop();
             #elif defined(SPIFFS)
             bench_wl_gc_start();
-            for (lfs3_block_t i = 0; i < GC_RETRY_COUNT; i++) {
+            for (lfs3_block_t i = 0;
+                    i < GC_RETRY_COUNT
+                        && (!GC_TIME
+                            || BENCH_SIMTIME() - gc_start
+                                < (bench_ns_t)GC_TIME);
+                    i++) {
                 int err = SPIFFS_gc(&spiffs, GC_CLEAN_SIZE);
                 assert(!err || err == LFS3_ERR_IO);
             }
             bench_wl_gc_stop();
             #elif defined(YAFFS2)
             bench_wl_gc_start();
-            if (!setjmp(bench_wl_gc_jmp)) {
-                yaffs_do_background_gc("/", 0);
+            if (!GC_TIME
+                    || BENCH_SIMTIME() - gc_start < (bench_ns_t)GC_TIME) {
+                if (!setjmp(bench_wl_gc_jmp)) {
+                    yaffs_do_background_gc("/", 0);
+                }
             }
             bench_wl_gc_stop();
             #endif
@@ -712,6 +751,7 @@ code = '''
         // run gc
         if (GC) {
             BENCH_START("gc");
+            bench_ns_t gc_start = BENCH_SIMTIME();
             // try to include log-rotation in gc work
             //
             // in theory you don't need to rotate logs during critical
@@ -779,26 +819,43 @@ code = '''
             lfs3_gc_t gc;
             lfs3_gc_open(&lfs3, &gc, GC_FLAGS) => 0;
             bench_wl_gc_start();
-            lfs3_sblock_t steps = lfs3_gc_write(&lfs3, &gc, -1);
-            assert(steps >= 0 || steps == LFS3_ERR_IO);
+            while (!GC_TIME
+                    || BENCH_SIMTIME() - gc_start < (bench_ns_t)GC_TIME) {
+                lfs3_sblock_t steps = lfs3_gc_write(&lfs3, &gc, 1);
+                assert(steps >= 0 || steps == LFS3_ERR_IO);
+                if (steps == 0) {
+                    break;
+                }
+            }
             bench_wl_gc_stop();
             lfs3_gc_close(&lfs3, &gc) => 0;
             #elif defined(LFS2)
             bench_wl_gc_start();
-            int err = lfs2_fs_gc(&lfs2);
-            assert(!err || err == LFS3_ERR_IO);
+            if (!GC_TIME
+                    || BENCH_SIMTIME() - gc_start < (bench_ns_t)GC_TIME) {
+                int err = lfs2_fs_gc(&lfs2);
+                assert(!err || err == LFS3_ERR_IO);
+            }
             bench_wl_gc_stop();
             #elif defined(SPIFFS)
             bench_wl_gc_start();
-            for (lfs3_block_t i = 0; i < GC_RETRY_COUNT; i++) {
+            for (lfs3_block_t i = 0;
+                    i < GC_RETRY_COUNT
+                        && (!GC_TIME
+                            || BENCH_SIMTIME() - gc_start
+                                < (bench_ns_t)GC_TIME);
+                    i++) {
                 int err = SPIFFS_gc(&spiffs, GC_CLEAN_SIZE);
                 assert(!err || err == LFS3_ERR_IO);
             }
             bench_wl_gc_stop();
             #elif defined(YAFFS2)
             bench_wl_gc_start();
-            if (!setjmp(bench_wl_gc_jmp)) {
-                yaffs_do_background_gc("/", 0);
+            if (!GC_TIME
+                    || BENCH_SIMTIME() - gc_start < (bench_ns_t)GC_TIME) {
+                if (!setjmp(bench_wl_gc_jmp)) {
+                    yaffs_do_background_gc("/", 0);
+                }
             }
             bench_wl_gc_stop();
             #endif
@@ -977,30 +1034,48 @@ code = '''
         // run gc
         if (GC) {
             BENCH_START("gc");
+            bench_ns_t gc_start = BENCH_SIMTIME();
             #if defined(LFS3)
             lfs3_gc_t gc;
             lfs3_gc_open(&lfs3, &gc, GC_FLAGS) => 0;
             bench_wl_gc_start();
-            lfs3_sblock_t steps = lfs3_gc_write(&lfs3, &gc, -1);
-            assert(steps >= 0 || steps == LFS3_ERR_IO);
+            while (!GC_TIME
+                    || BENCH_SIMTIME() - gc_start < (bench_ns_t)GC_TIME) {
+                lfs3_sblock_t steps = lfs3_gc_write(&lfs3, &gc, 1);
+                assert(steps >= 0 || steps == LFS3_ERR_IO);
+                if (steps == 0) {
+                    break;
+                }
+            }
             bench_wl_gc_stop();
             lfs3_gc_close(&lfs3, &gc) => 0;
             #elif defined(LFS2)
             bench_wl_gc_start();
-            int err = lfs2_fs_gc(&lfs2);
-            assert(!err || err == LFS3_ERR_IO);
+            if (!GC_TIME
+                    || BENCH_SIMTIME() - gc_start < (bench_ns_t)GC_TIME) {
+                int err = lfs2_fs_gc(&lfs2);
+                assert(!err || err == LFS3_ERR_IO);
+            }
             bench_wl_gc_stop();
             #elif defined(SPIFFS)
             bench_wl_gc_start();
-            for (lfs3_block_t i = 0; i < GC_RETRY_COUNT; i++) {
+            for (lfs3_block_t i = 0;
+                    i < GC_RETRY_COUNT
+                        && (!GC_TIME
+                            || BENCH_SIMTIME() - gc_start
+                                < (bench_ns_t)GC_TIME);
+                    i++) {
                 int err = SPIFFS_gc(&spiffs, GC_CLEAN_SIZE);
                 assert(!err || err == LFS3_ERR_IO);
             }
             bench_wl_gc_stop();
             #elif defined(YAFFS2)
             bench_wl_gc_start();
-            if (!setjmp(bench_wl_gc_jmp)) {
-                yaffs_do_background_gc("/", 0);
+            if (!GC_TIME
+                    || BENCH_SIMTIME() - gc_start < (bench_ns_t)GC_TIME) {
+                if (!setjmp(bench_wl_gc_jmp)) {
+                    yaffs_do_background_gc("/", 0);
+                }
             }
             bench_wl_gc_stop();
             #endif

@@ -1,28 +1,30 @@
-ifndef BENCH_WL_GCT_MK
-BENCH_WL_GCT_MK := 1
+ifndef BENCH_WL_GCTC_MK
+BENCH_WL_GCTC_MK := 1
 
 # include build rules + filesystems
 include Makefiles/build.mk
 
 # overrideable results dir
-WL_GCT_RESULTSDIR ?= $(RESULTSDIR)/wl_gct
+WL_GCTC_RESULTSDIR ?= $(RESULTSDIR)/wl_gctc
 # overrideable plots dir
-WL_GCT_PLOTSDIR ?= $(PLOTSDIR)/wl_gct
+WL_GCTC_PLOTSDIR ?= $(PLOTSDIR)/wl_gctc
 # overrideable tikz dir
-WL_GCT_TIKZDIR ?= $(TIKZDIR)/wl_gct
+WL_GCTC_TIKZDIR ?= $(TIKZDIR)/wl_gctc
 
 
 # range of percentiles to measure
-WL_GCT_P ?= avg,p50,p90,p99,p99.9,p99.99,p99.999,max
+WL_GCTC_P ?= avg,p50,p90,p99,p99.9,p99.99,p99.999,max
 
 # range of gc times to measure
-WL_GCT_GC_TIMES ?= $\
+WL_GCTC_GC_TIMES ?= $\
 		1,10,100,$\
 		1000,10000,100000,$\
 		1000000,10000000,100000000,$\
 		1000000000,10000000000,100000000000,$\
 		1000000000000,10000000000000
 
+# run with gc
+BENCHFLAGS += -DGC=1
 
 
 # default bench filesystems to default bench filesystems
@@ -37,11 +39,11 @@ BENCH_CASES ?= seq random logging many
 
 # this is a bit of a hack, but we want to make sure the BUILDDIR
 # directory structure is correct before we run any commands
-ifneq ($(WL_GCT_RESULTSDIR),.)
+ifneq ($(WL_GCTC_RESULTSDIR),.)
 $(if $(findstring n,$(MAKEFLAGS)),, $(shell mkdir -p \
-		$(WL_GCT_RESULTSDIR) \
-		$(WL_GCT_PLOTSDIR) \
-		$(WL_GCT_TIKZDIR)))
+		$(WL_GCTC_RESULTSDIR) \
+		$(WL_GCTC_PLOTSDIR) \
+		$(WL_GCTC_TIKZDIR)))
 endif
 
 
@@ -50,13 +52,13 @@ endif
 #======================================================================#
 
 ## Run benches
-.PHONY: all bench bench-wl-gct
-all bench: bench-wl-gct
-bench-wl-gct: \
+.PHONY: all bench bench-wl-gctc
+all bench: bench-wl-gctc
+bench-wl-gctc: \
 		$(foreach c, $(BENCH_CASES), \
 			$(foreach fs, $(BENCH_FILESYSTEMS), \
 				$(foreach g, $(BENCH_GEOMETRIES), \
-					$(WL_GCT_RESULTSDIR)/bench_wl_gct.$(c).$(fs).$(g).csv)))
+					$(WL_GCTC_RESULTSDIR)/bench_wl_gctc.$(c).$(fs).$(g).csv)))
 
 # core bench rule
 #
@@ -67,7 +69,7 @@ bench-wl-gct: \
 # $5 - percentiles
 # $6 - gc times
 #
-define BENCH_WL_GCT_RULE
+define BENCH_WL_GCTC_RULE
 $1: $($(U_$3)_BENCH_RUNNER)
 	$$(strip ./scripts/bench.py -R$$< -B bench_wl_$2 \
 		$(BENCHFLAGS) $($(U_$3)_BENCHFLAGS) \
@@ -76,12 +78,11 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		$(if $(SIM_SIZE),-DSIM_SIZE=$(SIM_SIZE)) \
 		-DFS=$(N_$3) \
 		-DDISK_GEOMETRY=$(N_$4) \
-		$(foreach p, $(subst $(comma),$(space),$(or $5,$(WL_GCT_P))),$\
+		$(foreach p, $(subst $(comma),$(space),$(or $5,$(WL_GCTC_P))),$\
 			-Swrite=$(p)) \
-		$(foreach p, $(subst $(comma),$(space),$(or $5,$(WL_GCT_P))),$\
+		$(foreach p, $(subst $(comma),$(space),$(or $5,$(WL_GCTC_P))),$\
 			-Sgc=$(p)) \
-		-DGC=1 \
-		-DGC_TIME=$(or $6,$(WL_GCT_GC_TIMES)) \
+		-DGC_TIME=$(or $6,$(WL_GCTC_GC_TIMES)) \
 		-o$$@)
 endef
 
@@ -89,8 +90,8 @@ endef
 $(foreach c, $(BENCH_CASES),$\
 	$(foreach fs, $(BENCH_FILESYSTEMS),$\
 		$(foreach g, $(BENCH_GEOMETRIES),$\
-			$(eval $(call BENCH_WL_GCT_RULE,$\
-				$(WL_GCT_RESULTSDIR)/bench_wl_gct.$(c).$(fs).$(g).csv,$\
+			$(eval $(call BENCH_WL_GCTC_RULE,$\
+				$(WL_GCTC_RESULTSDIR)/bench_wl_gctc.$(c).$(fs).$(g).csv,$\
 				$(c),$\
 				$(fs),$\
 				$(g))))))
@@ -101,20 +102,20 @@ $(foreach c, $(BENCH_CASES),$\
 #======================================================================#
 
 ## Plot benchmarks
-.PHONY: all plot plot-wl-gct
-all plot: plot-wl-gct
-plot-wl-gct: \
-		$(WL_GCT_PLOTSDIR)/plots.html \
+.PHONY: all plot plot-wl-gctc
+all plot: plot-wl-gctc
+plot-wl-gctc: \
+		$(WL_GCTC_PLOTSDIR)/plots.html \
 		$(foreach g, $(BENCH_GEOMETRIES), \
-			$(foreach p, $(subst $(comma),$(space),$(WL_GCT_P)), \
-				$(WL_GCT_PLOTSDIR)/plot_wl_gct.$(p).$(g).svg))
+			$(foreach p, $(subst $(comma),$(space),$(WL_GCTC_P)), \
+				$(WL_GCTC_PLOTSDIR)/plot_wl_gctc.$(p).$(g).svg))
 
 ## Create a quick html page for easy viewing
-$(WL_GCT_PLOTSDIR)/plots.html:
+$(WL_GCTC_PLOTSDIR)/plots.html:
 	echo -e "$(subst $(nl),\n,$(HTML_HEADER))" >> $@
 	$(foreach g, $(BENCH_GEOMETRIES), \
-		$(foreach p, $(subst $(comma),$(space),$(WL_GCT_P)), \
-			echo -e "<p><img src="plot_wl_gct.$(p).$(g).svg"></p>" >> $@ $(nl)))
+		$(foreach p, $(subst $(comma),$(space),$(WL_GCTC_P)), \
+			echo -e "<p><img src="plot_wl_gctc.$(p).$(g).svg"></p>" >> $@ $(nl)))
 	echo -e "$(subst $(nl),\n,$(HTML_FOOTER))" >> $@
 
 # per-percentile plot rule
@@ -127,7 +128,7 @@ $(WL_GCT_PLOTSDIR)/plots.html:
 # $6 - x-skip
 # $7 - extra plotmpl.py flags
 #
-define PLOT_WL_GCT_P_RULE
+define PLOT_WL_GCTC_P_RULE
 $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
@@ -175,14 +176,14 @@ endef
 
 # per-percentile plot rules
 $(foreach g, $(BENCH_GEOMETRIES), \
-	$(eval $(call PLOT_WL_GCT_P_RULE,$\
-		$(WL_GCT_PLOTSDIR)/plot_wl_gct.%.$(g).svg,$\
+	$(eval $(call PLOT_WL_GCTC_P_RULE,$\
+		$(WL_GCTC_PLOTSDIR)/plot_wl_gctc.%.$(g).svg,$\
 		$(foreach c, $(BENCH_CASES),$\
 			$(foreach fs, $(BENCH_FILESYSTEMS),$\
-				$(WL_GCT_RESULTSDIR)/bench_wl_gct.$(c).$(fs).$(g).csv)),$\
+				$(WL_GCTC_RESULTSDIR)/bench_wl_gctc.$(c).$(fs).$(g).csv)),$\
 		"gc times - $$* - $(g) - simulated latency",$\
 		GC_TIME,$\
-		$(WL_GCT_GC_TIMES),$\
+		$(WL_GCTC_GC_TIMES),$\
 		1,$\
 		--xlabel="gc time")))
 
@@ -192,25 +193,25 @@ $(foreach g, $(BENCH_GEOMETRIES), \
 #======================================================================#
 
 ## Save bench results
-.PHONY: save save-results save-results-wl-gct
-save save-results: save-results-wl-gct
-save-results-wl-gct:
+.PHONY: save save-results save-results-wl-gctc
+save save-results: save-results-wl-gctc
+save-results-wl-gctc:
 	mkdir -p $(SAVEDIR)/$(RESULTSDIR)/
-	cp -ru $(WL_GCT_RESULTSDIR) $(SAVEDIR)/$(RESULTSDIR)/
+	cp -ru $(WL_GCTC_RESULTSDIR) $(SAVEDIR)/$(RESULTSDIR)/
 
 ## Save bench plots
-.PHONY: save save-plots save-plots-wl-gct
-save save-plots: save-plots-wl-gct
-save-plots-wl-gct:
+.PHONY: save save-plots save-plots-wl-gctc
+save save-plots: save-plots-wl-gctc
+save-plots-wl-gctc:
 	mkdir -p $(SAVEDIR)/$(PLOTSDIR)/
-	cp -ru $(WL_GCT_PLOTSDIR) $(SAVEDIR)/$(PLOTSDIR)/
+	cp -ru $(WL_GCTC_PLOTSDIR) $(SAVEDIR)/$(PLOTSDIR)/
 
 ## Save tikz
-.PHONY: save save-tikz save-tikz-wl-gct
-save save-tikz: save-tikz-wl-gct
-save-tikz-wl-gct:
+.PHONY: save save-tikz save-tikz-wl-gctc
+save save-tikz: save-tikz-wl-gctc
+save-tikz-wl-gctc:
 	mkdir -p $(SAVEDIR)/$(TIKZDIR)/
-	cp -ru $(WL_GCT_TIKZDIR) $(SAVEDIR)/$(TIKZDIR)/
+	cp -ru $(WL_GCTC_TIKZDIR) $(SAVEDIR)/$(TIKZDIR)/
 
 
 #======================================================================#
@@ -218,10 +219,10 @@ save-tikz-wl-gct:
 #======================================================================#
 
 ## Mark current results as up-to-date to prevent reruns
-.PHONY: reuse-results touch-results reuse-results-wl-gct touch-results-wl-gct
-reuse-results touch-results: reuse-results-wl-gct touch-results-wl-gct
-reuse-results-wl-gct touch-results-wl-gct:
-	find $(WL_GCT_RESULTSDIR) -name '*.csv' -execdir touch '{}' ';'
+.PHONY: reuse-results touch-results reuse-results-wl-gctc touch-results-wl-gctc
+reuse-results touch-results: reuse-results-wl-gctc touch-results-wl-gctc
+reuse-results-wl-gctc touch-results-wl-gctc:
+	find $(WL_GCTC_RESULTSDIR) -name '*.csv' -execdir touch '{}' ';'
 	@echo "# note: Make sure you build before plotting!"
 
 
@@ -230,24 +231,24 @@ reuse-results-wl-gct touch-results-wl-gct:
 #======================================================================#
 
 ## Clean bench results
-.PHONY: clean clean-results clean-results-wl-gct
-clean clean-results: clean-results-wl-gct
-clean-results-wl-gct:
-	rm -rf $(WL_GCT_RESULTSDIR)
+.PHONY: clean clean-results clean-results-wl-gctc
+clean clean-results: clean-results-wl-gctc
+clean-results-wl-gctc:
+	rm -rf $(WL_GCTC_RESULTSDIR)
 	@echo "# note: Not cleaning saved output"
 
 ## Clean bench plots
-.PHONY: clean clean-plots clean-plots-wl-gct
-clean clean-plots: clean-plots-wl-gct
-clean-plots-wl-gct:
-	rm -rf $(WL_GCT_PLOTSDIR)
+.PHONY: clean clean-plots clean-plots-wl-gctc
+clean clean-plots: clean-plots-wl-gctc
+clean-plots-wl-gctc:
+	rm -rf $(WL_GCTC_PLOTSDIR)
 	@echo "# note: Not cleaning saved output"
 
 ## Clean tikz
-.PHONY: clean clean-tikz clean-tikz-wl-gct
-clean clean-tikz: clean-tikz-wl-gct
-clean-tikz-wl-gct:
-	rm -rf $(WL_GCT_TIKZDIR)
+.PHONY: clean clean-tikz clean-tikz-wl-gctc
+clean clean-tikz: clean-tikz-wl-gctc
+clean-tikz-wl-gctc:
+	rm -rf $(WL_GCTC_TIKZDIR)
 	@echo "# note: Not cleaning saved output"
 
 
