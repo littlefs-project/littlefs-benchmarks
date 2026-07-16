@@ -131,7 +131,7 @@ $(WL_GCTI_PLOTSDIR)/plots.html:
 # $6 - x-skip
 # $7 - extra plotmpl.py flags
 #
-define PLOT_WL_GCTI_P_RULE
+define PLOT_WL_GCTI_RULE
 $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
@@ -179,7 +179,7 @@ endef
 
 # per-percentile plot rules
 $(foreach g, $(BENCH_GEOMETRIES), \
-	$(eval $(call PLOT_WL_GCTI_P_RULE,$\
+	$(eval $(call PLOT_WL_GCTI_RULE,$\
 		$(WL_GCTI_PLOTSDIR)/plot_wl_gcti.%.$(g).svg,$\
 		$(foreach c, $(BENCH_CASES),$\
 			$(foreach fs, $(BENCH_FILESYSTEMS),$\

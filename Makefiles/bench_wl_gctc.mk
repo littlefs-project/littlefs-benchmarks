@@ -108,14 +108,22 @@ plot-wl-gctc: \
 		$(WL_GCTC_PLOTSDIR)/plots.html \
 		$(foreach g, $(BENCH_GEOMETRIES), \
 			$(foreach p, $(subst $(comma),$(space),$(WL_GCTC_P)), \
-				$(WL_GCTC_PLOTSDIR)/plot_wl_gctc.$(p).$(g).svg))
+				$(WL_GCTC_PLOTSDIR)/plot_wl_gctc.$(p).$(g).svg)) \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(foreach p, $(subst $(comma),$(space),$(WL_GCTC_P)), \
+				$(WL_GCTC_PLOTSDIR)/plot_wl_gctc_freq.$(p).$(g).svg))
 
 ## Create a quick html page for easy viewing
 $(WL_GCTC_PLOTSDIR)/plots.html:
 	echo -e "$(subst $(nl),\n,$(HTML_HEADER))" >> $@
 	$(foreach g, $(BENCH_GEOMETRIES), \
 		$(foreach p, $(subst $(comma),$(space),$(WL_GCTC_P)), \
-			echo -e "<p><img src="plot_wl_gctc.$(p).$(g).svg"></p>" >> $@ $(nl)))
+			echo -e "<p><img src="plot_wl_gctc.$(p).$(g).svg"></p>" \
+				>> $@ $(nl)))
+	$(foreach g, $(BENCH_GEOMETRIES), \
+		$(foreach p, $(subst $(comma),$(space),$(WL_GCTC_P)), \
+			echo -e "<p><img src="plot_wl_gctc_freq.$(p).$(g).svg"></p>" \
+				>> $@ $(nl)))
 	echo -e "$(subst $(nl),\n,$(HTML_FOOTER))" >> $@
 
 # per-percentile plot rule
@@ -128,7 +136,7 @@ $(WL_GCTC_PLOTSDIR)/plots.html:
 # $6 - x-skip
 # $7 - extra plotmpl.py flags
 #
-define PLOT_WL_GCTC_P_RULE
+define PLOT_WL_GCTC_RULE
 $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
@@ -176,7 +184,7 @@ endef
 
 # per-percentile plot rules
 $(foreach g, $(BENCH_GEOMETRIES), \
-	$(eval $(call PLOT_WL_GCTC_P_RULE,$\
+	$(eval $(call PLOT_WL_GCTC_RULE,$\
 		$(WL_GCTC_PLOTSDIR)/plot_wl_gctc.%.$(g).svg,$\
 		$(foreach c, $(BENCH_CASES),$\
 			$(foreach fs, $(BENCH_FILESYSTEMS),$\
@@ -185,6 +193,82 @@ $(foreach g, $(BENCH_GEOMETRIES), \
 		GC_TIME,$\
 		$(WL_GCTC_GC_TIMES),$\
 		1,$\
+		--xlabel="gc time")))
+
+# per-percentile freq plot rule
+#
+# $1 - target
+# $2 - sources
+# $3 - title
+# $4 - orig x-axis
+# $5 - extra plotmpl.py flags
+#
+define PLOT_WL_GCTC_FREQ_RULE
+$1: $2
+	$$(strip ./scripts/plotmpl.py \
+		<(./scripts/csv.py \
+			<(./scripts/csv.py \
+				<(./scripts/csv.py $$^ \
+					-bcase -bFS -b$4 -Dprobe='write+avg' \
+					-fwrite_avg=bench_simtime \
+					-o-) \
+				<(./scripts/csv.py $$^ \
+					-bcase -bFS -b$4 -Dprobe='gc+avg' \
+					-fgc_avg=bench_simtime \
+					-o-) \
+				<(./scripts/csv.py $$^ \
+					-bcase -bFS -b$4 -Dprobe='write+$$*' \
+					-fwrite_p=bench_simtime \
+					-o-) \
+				<(./scripts/csv.py $$^ \
+					-bcase -bFS -b$4 -Dprobe='gc+$$*' \
+					-fgc_p=bench_simtime \
+					-o-) \
+				-bcase -bFS -b$4 \
+				-o-) \
+			-bcase -bFS -b$4 \
+			-ffreq='1.0e9/max(gc_avg+write_avg, 1.0)' \
+			-flatency='max((gc_p+write_p)-gc_avg, write_p) / 1.0e9' \
+			-o-) \
+		-W1500 -H350 \
+		--title=$3 \
+		-bFS \
+		-xfreq --xunits=Hz --xzoom \
+		-ylatency --yunits=s \
+		--subplot=" \
+				--title='seq' \
+				--ylabel='latency' \
+				-Dcase=bench_wl_seq" \
+		--subplot-right=" \
+				--title='random' \
+				-Dcase=bench_wl_random" \
+		--subplot-right=" \
+				--title='logging' \
+				-Dcase=bench_wl_logging" \
+		--subplot-right=" \
+				--title='many' \
+				-Dcase=bench_wl_many" \
+		--legend \
+		$(foreach fs, $(BENCH_FILESYSTEMS),$\
+			-L'$(N_$(fs))=$(fs)') \
+		$(foreach fs, $(BENCH_FILESYSTEMS),$\
+			-C'$(N_$(fs))=$(C_$(fs))') \
+		$(foreach fs, $(BENCH_FILESYSTEMS),$\
+			-F'$(N_$(fs))=$(addsuffix -,$(F_$(fs)))') \
+		$5 \
+		$$(PLOTFLAGS) \
+		-o$$@)
+endef
+
+# per-percentile plot rules
+$(foreach g, $(BENCH_GEOMETRIES), \
+	$(eval $(call PLOT_WL_GCTC_FREQ_RULE,$\
+		$(WL_GCTC_PLOTSDIR)/plot_wl_gctc_freq.%.$(g).svg,$\
+		$(foreach c, $(BENCH_CASES),$\
+			$(foreach fs, $(BENCH_FILESYSTEMS),$\
+				$(WL_GCTC_RESULTSDIR)/bench_wl_gctc.$(c).$(fs).$(g).csv)),$\
+		"gc freqs - $$* - $(g) - simulated latency",$\
+		GC_TIME,$\
 		--xlabel="gc time")))
 
 
