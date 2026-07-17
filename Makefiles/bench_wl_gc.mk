@@ -344,7 +344,11 @@ all tikz tikz-wl-gc: \
         $(foreach c, $(BENCH_CASES), \
             $(foreach fs, $(BENCH_FILESYSTEMS), \
                 $(foreach g, $(BENCH_GEOMETRIES), \
-                    $(WL_GC_TIKZDIR)/tikz_wl_gc_ops.$(c).$(fs).$(g).csv)))
+                    $(WL_GC_TIKZDIR)/tikz_wl_gc_ops.$(c).$(fs).$(g).csv))) \
+        $(foreach c, $(BENCH_CASES), \
+            $(foreach fs, $(BENCH_FILESYSTEMS), \
+                $(foreach g, $(BENCH_GEOMETRIES), \
+                    $(WL_GC_TIKZDIR)/tikz_wl_gc_freq.$(c).$(fs).$(g).csv)))
 
 # core tikz rule
 #
@@ -441,6 +445,66 @@ $(foreach c, $(BENCH_CASES), \
 				$(WL_GC_RESULTSDIR)/bench_wl_gc.$(c).$(fs).$(g).csv,$\
 				$(fs),$\
 				$(g))))))
+
+# freq tikz rule
+#
+# $1 - target
+# $2 - source
+# $3 - percentiles
+#
+# note multiple probes are implicitly summed when calculating periods
+#
+define TIKZ_WL_GC_FREQ_RULE
+$1: $2
+	$$(strip ./scripts/csv.py \
+		<(./scripts/csv.py \
+			<(./scripts/csv.py $$^ \
+				-bi=0 -DGC=1 -Dprobe='gc+avg,write+avg' \
+				-fperiod='bench_simtime/1.0e9' \
+				-o-) \
+			-ffreq='1.0/max(period,1.0e-9)' \
+			-o-) \
+		$(foreach p, $(subst $(comma),$(space),$3), \
+			<(./scripts/csv.py $$^ \
+				-bi=0 -DGC=1 -Dprobe='write+$(p)' \
+				-flatency_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
+				-o-)) \
+		<(./scripts/csv.py \
+			<(./scripts/csv.py $$^ \
+				-bi=1 -DGC=1 -Dprobe='gc+avg,write+avg' \
+				-fperiod='bench_simtime/1.0e9' \
+				-o-) \
+			-ffreq='1.0/max(period,1.0e-9)' \
+			-o-) \
+		$(foreach p, $(subst $(comma),$(space),$3), \
+			<(./scripts/csv.py $$^ \
+				-bi=1 -DGC=0 -Dprobe='write+$(p)' \
+				-flatency_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
+				-o-)) \
+		<(./scripts/csv.py \
+			<(./scripts/csv.py $$^ \
+				-bi=2 -DGC=0 -Dprobe='write+avg' \
+				-fperiod='bench_simtime/1.0e9' \
+				-o-) \
+			-ffreq='1.0/max(period,1.0e-9)' \
+			-o-) \
+		$(foreach p, $(subst $(comma),$(space),$3), \
+			<(./scripts/csv.py $$^ \
+				-bi=2 -DGC=0 -Dprobe='write+$(p)' \
+				-flatency_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
+				-o-)) \
+		-bi \
+		-o$$@)
+endef
+
+# freq tikz rules
+$(foreach c, $(BENCH_CASES), \
+	$(foreach fs, $(BENCH_FILESYSTEMS), \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(eval $(call TIKZ_WL_GC_FREQ_RULE,$\
+				$(WL_GC_TIKZDIR)/tikz_wl_gc_freq.$(c).$(fs).$(g).csv,$\
+				$(WL_GC_RESULTSDIR)/bench_wl_gc.$(c).$(fs).$(g).csv,$\
+				$(WL_GC_P))))))
 
 
 #======================================================================#
