@@ -38,11 +38,12 @@ code = '''
     #if defined(LFS3)
     lfs3_t lfs3;
     lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
-    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | LFS3_M_MKCONSISTENT, CFG) => 0;
     #elif defined(LFS2)
     lfs2_t lfs2;
     lfs2_format(&lfs2, CFG_LFS2) => 0;
     lfs2_mount(&lfs2, CFG_LFS2) => 0;
+    lfs2_fs_mkconsistent(&lfs2) => 0;
     #elif defined(SPIFFS)
     spiffs spiffs;
     spiffs.user_data = CFG;
@@ -206,11 +207,12 @@ code = '''
     #if defined(LFS3)
     lfs3_t lfs3;
     lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
-    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | LFS3_M_MKCONSISTENT, CFG) => 0;
     #elif defined(LFS2)
     lfs2_t lfs2;
     lfs2_format(&lfs2, CFG_LFS2) => 0;
     lfs2_mount(&lfs2, CFG_LFS2) => 0;
+    lfs2_fs_mkconsistent(&lfs2) => 0;
     #elif defined(SPIFFS)
     spiffs spiffs;
     spiffs.user_data = CFG;
@@ -376,11 +378,12 @@ code = '''
     #if defined(LFS3)
     lfs3_t lfs3;
     lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
-    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | LFS3_M_MKCONSISTENT, CFG) => 0;
     #elif defined(LFS2)
     lfs2_t lfs2;
     lfs2_format(&lfs2, CFG_LFS2) => 0;
     lfs2_mount(&lfs2, CFG_LFS2) => 0;
+    lfs2_fs_mkconsistent(&lfs2) => 0;
     #elif defined(SPIFFS)
     spiffs spiffs;
     spiffs.user_data = CFG;
@@ -600,11 +603,12 @@ code = '''
     #if defined(LFS3)
     lfs3_t lfs3;
     lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;
-    lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
+    lfs3_mount(&lfs3, LFS3_M_RDWR | LFS3_M_MKCONSISTENT, CFG) => 0;
     #elif defined(LFS2)
     lfs2_t lfs2;
     lfs2_format(&lfs2, CFG_LFS2) => 0;
     lfs2_mount(&lfs2, CFG_LFS2) => 0;
+    lfs2_fs_mkconsistent(&lfs2) => 0;
     #elif defined(SPIFFS)
     spiffs spiffs;
     spiffs.user_data = CFG;

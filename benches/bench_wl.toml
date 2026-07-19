@@ -145,6 +145,7 @@ code = '''
     lfs2_t lfs2;
     lfs2_format(&lfs2, CFG_LFS2) => 0;
     lfs2_mount(&lfs2, CFG_LFS2) => 0;
+    lfs2_fs_mkconsistent(&lfs2) => 0;
     #elif defined(SPIFFS)
     spiffs spiffs;
     spiffs.user_data = CFG;
@@ -364,6 +365,7 @@ code = '''
     lfs2_t lfs2;
     lfs2_format(&lfs2, CFG_LFS2) => 0;
     lfs2_mount(&lfs2, CFG_LFS2) => 0;
+    lfs2_fs_mkconsistent(&lfs2) => 0;
     #elif defined(SPIFFS)
     spiffs spiffs;
     spiffs.user_data = CFG;
@@ -585,6 +587,7 @@ code = '''
     lfs2_t lfs2;
     lfs2_format(&lfs2, CFG_LFS2) => 0;
     lfs2_mount(&lfs2, CFG_LFS2) => 0;
+    lfs2_fs_mkconsistent(&lfs2) => 0;
     #elif defined(SPIFFS)
     spiffs spiffs;
     spiffs.user_data = CFG;
@@ -921,6 +924,7 @@ code = '''
     lfs2_t lfs2;
     lfs2_format(&lfs2, CFG_LFS2) => 0;
     lfs2_mount(&lfs2, CFG_LFS2) => 0;
+    lfs2_fs_mkconsistent(&lfs2) => 0;
     #elif defined(SPIFFS)
     spiffs spiffs;
     spiffs.user_data = CFG;
