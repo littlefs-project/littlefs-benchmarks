@@ -12,6 +12,7 @@ include Makefiles/lfs2.mk
 include Makefiles/lfs1.mk
 include Makefiles/spiffs.mk
 include Makefiles/yaffs2.mk
+include Makefiles/yaffs2nckp.mk
 
 # default size/build filesystems to default size/build filesystems
 SIZE_FILESYSTEMS  ?= $(DEFAULT_SIZE_FILESYSTEMS)

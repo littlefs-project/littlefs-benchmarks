@@ -214,6 +214,7 @@
                                             2,
                                             (2*CACHE_SIZE)/YPAGE_SIZE)      )
     BENCH_DEFINE(REFRESH_PERIOD,        1000                                )
+    BENCH_DEFINE(SKIP_CKPOINT,          false                               )
     #endif
 
     // bd defines
@@ -498,6 +499,7 @@
             .metadata_max               = METADATA_MAX,
             .inline_max                 = INLINE_MAX,
         },
+        // spiffs specific config
         #elif defined(SPIFFS)
         .cfg_spiffs = {
             .hal_read_f                 = bench_spiffs_bd_read,
@@ -509,6 +511,7 @@
             .log_block_size             = BLOCK_SIZE,
             .log_page_size              = SPAGE_SIZE,
         },
+        // yaffs2 specific config
         #elif defined(YAFFS2)
         .cfg_yaffs2 = {
             .drv = {
@@ -535,8 +538,8 @@
                 .is_yaffs2              = true,
                 .empty_lost_n_found     = false,
                 .refresh_period         = REFRESH_PERIOD,
-                .skip_checkpt_rd        = false,
-                .skip_checkpt_wr        = false,
+                .skip_checkpt_rd        = SKIP_CKPOINT,
+                .skip_checkpt_wr        = SKIP_CKPOINT,
                 .enable_xattr           = false,
                 .max_objects            = 0, // unbounded
                 .hide_lost_n_found      = false,
