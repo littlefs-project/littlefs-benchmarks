@@ -109,9 +109,11 @@ static inline int yaffsfs_CheckMemRegion(const void *addr, size_t size,
     return 0;
 }
 
-// YAFFS_TRACE_ALWAYS + YAFFS_TRACE_CHECKPT
+// YAFFS_TRACE_ALWAYS (0xf0000000)
+// // + YAFFS_TRACE_MOUNT (0x00800000)
+// // + YAFFS_TRACE_CHECKPT (0x00008000)
 __attribute__((weak))
-unsigned int yaffs_trace_mask = 0xf0008000;
+unsigned int yaffs_trace_mask = 0xf0000000;
 //unsigned int yaffs_trace_mask = -1; // all trace flags
 //unsigned int yaffs_trace_mask = 0;  // no trace flags
 

@@ -135,10 +135,18 @@ $(MOUNT_PLOTSDIR)/plots.html:
 define PLOT_MOUNT_RULE
 $1: $2
 	$$(strip ./scripts/plotmpl.py \
-		<(./scripts/csv.py $$^ \
-			-Si='enumerate()' -bcase -bPOWERLOSS -bFS -b$4 \
-			-flatency='bench_simtime/1.0e9' \
-			-o-) \
+		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_P))), \
+			<(./scripts/csv.py $$^ \
+				-Si='enumerate()' -bcase -bPOWERLOSS -bFS \
+				-b$4='mount+$(p)' -D$4='mount+$(p),mkconsistent+$(p)' \
+				-flatency='bench_simtime/1.0e9' \
+				-o-)) \
+		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_P))), \
+			<(./scripts/csv.py $$^ \
+				-Si='enumerate()' -bcase -bPOWERLOSS -bFS \
+				-b$4='open+$(p)' -D$4='open+$(p)' \
+				-flatency='bench_simtime/1.0e9' \
+				-o-)) \
 		-W1500 $(if, -H350) -H700 \
 		--title=$3 \
 		-bFS \
