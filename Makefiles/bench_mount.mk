@@ -66,11 +66,13 @@ $1: $($(U_$3)_BENCH_RUNNER)
 	$$(strip ./scripts/bench.py -R$$< -B bench_mount_$2 \
 		$(BENCHFLAGS) $($(U_$3)_BENCHFLAGS) \
 		$(if $(SKIP_WARMUP),-DSKIP_WARMUP=$(SKIP_WARMUP)) \
-		$(if $(SIM_COUNT),-DSIM_COUNT=$(SIM_COUNT)) \
+		$(if $(SIM_MOUNTS),-DSIM_MOUNTS=$(SIM_MOUNTS)) \
+		$(if $(SIM_ROTATES),-DSIM_ROTATES=$(SIM_ROTATES)) \
 		$(if $(SIM_TIME),-DSIM_TIME=$(SIM_TIME)) \
 		$(if $(SIM_SIZE),-DSIM_SIZE=$(SIM_SIZE)) \
 		-DFS=$(N_$3) \
 		-DDISK_GEOMETRY=$(N_$4) \
+		-Srotates \
 		-Sgrms \
 		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_P))),$\
 			-Smount=$(p)) \

@@ -10,8 +10,9 @@ defines.SIZE = '1024*1024' # 1 MiB
 defines.CHUNK = 64
 defines.SEED = 42
 
-# simulate this number of mounts
-defines.SIM_COUNT = 10000
+# simulate this number of mounts or interuppted log-rotations
+defines.SIM_MOUNTS = 10000
+defines.SIM_ROTATES = 10 # ignored if not POWERLOSS
 # simulated time, in nanoseconds, to run the test
 defines.SIM_TIME = 0 # '60ULL*60ULL*1000ULL*1000ULL*1000ULL' # 1 hour
 # simulation size in bytes
@@ -21,13 +22,12 @@ defines.SIM_SIZE = 0
 defines.SKIP_WARMUP = false
 
 # also bench read-only mount?
-defines.ROMOUNT = true
+#
+# TODO this isn't implemented yet
+# defines.ROMOUNT = true
 
 # run with simulated powerloss? defaults to a nice shutdown
 defines.POWERLOSS = false
-
-# force powerloss to occur during rename?
-defines.POWERLOSS_RENAME = false
 
 # emulate failed progs by adding noise?
 defines.POWERLOSS_NOISE = false
@@ -231,10 +231,15 @@ code = '''
     BENCH_SIMRESET();
 
     // ok, one of these needs to be non-zero
-    LFS3_ASSERT(SIM_COUNT > 0 || SIM_TIME > 0 || SIM_SIZE > 0);
+    LFS3_ASSERT(SIM_MOUNTS > 0
+            || (SIM_ROTATES > 0 && !POWERLOSS)
+            || SIM_TIME > 0
+            || SIM_SIZE > 0);
     uint64_t mounts = 0;
     uint64_t written = 0;
     uint64_t grms = 0;
+    uint64_t rotates = 0;
+    bool in_rotation = false;
     int mkconsistented = -1;
     // this is where we end up after powerloss
     setjmp(bench_mount_jmp);
@@ -244,6 +249,11 @@ code = '''
     BENCH_ABORT("write");
     BENCH_ABORT("close");
     BENCH_ABORT("unmount");
+    // did we interrupt a log-rotation?
+    if (in_rotation) {
+        rotates += 1;
+        in_rotation = false;
+    }
     // if we didn't need mkconsistent, report 0 so percentile
     // measurements make sense
     if (mkconsistented == 0) {
@@ -251,7 +261,9 @@ code = '''
         BENCH_STOP("mkconsistent", mounts);
     }
     mkconsistented = 0;
-    while (!(SIM_COUNT && mounts >= (uint64_t)SIM_COUNT)
+    while (!((SIM_MOUNTS || (SIM_ROTATES && !POWERLOSS))
+                && mounts >= (uint64_t)SIM_MOUNTS
+                && (!POWERLOSS || rotates >= (uint64_t)SIM_ROTATES))
             && !(SIM_SIZE && written >= (uint64_t)SIM_SIZE)
             && !(SIM_TIME && BENCH_SIMTIME() >= SIM_TIME)) {
         // reset progs
@@ -352,7 +364,9 @@ code = '''
         assert(fd >= 0);
         #endif
         BENCH_STOP("open", mounts);
-        while (!(SIM_COUNT && mounts >= (uint64_t)SIM_COUNT)
+        while (!((SIM_MOUNTS || (SIM_ROTATES && !POWERLOSS))
+                    && mounts >= (uint64_t)SIM_MOUNTS
+                    && (!POWERLOSS || rotates >= (uint64_t)SIM_ROTATES))
                 && !(SIM_SIZE && written >= (uint64_t)SIM_SIZE)
                 && !(SIM_TIME && BENCH_SIMTIME() >= SIM_TIME)
                 // time to reboot?
@@ -412,6 +426,7 @@ code = '''
             // for v3, fruncate, for v2, rotate if full
             //
             // unlike litmus benchmarks we just use SIZE here
+            in_rotation = true;
             #if defined(LFS3)
             lfs3_soff_t size = lfs3_file_size(&lfs3, &file);
             assert(size >= 0);
@@ -469,6 +484,7 @@ code = '''
                 assert(fd >= 0);
             }
             #endif
+            in_rotation = false;
 
             written += CHUNK;
             BENCH_STOP("write", written);
@@ -501,6 +517,9 @@ code = '''
         BENCH_STOP("unmount", mounts);
     }
 
+    // report the number of interrupted log-rotations, note this may be
+    // different from grms
+    BENCH_RESULT("rotates", mounts, rotates);
     // report the number of grms
     #ifdef LFS3
     BENCH_RESULT("grms", mounts, grms);
