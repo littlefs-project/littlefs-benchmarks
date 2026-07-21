@@ -245,12 +245,14 @@ code = '''
     int mkconsistented = -1;
     // this is where we end up after powerloss
     setjmp(bench_mount_jmp);
+    BENCH_ABORT("mountwrite");
     BENCH_ABORT("mount");
     BENCH_ABORT("mkconsistent");
     BENCH_ABORT("open");
     BENCH_ABORT("write");
     BENCH_ABORT("close");
     BENCH_ABORT("unmount");
+    BENCH_ABORT("closeunmount");
     // did we interrupt a log-rotation?
     if (in_rotation) {
         rotates += 1;
@@ -287,6 +289,8 @@ code = '''
         // TODO readonly mount?
 
         // measure mount time
+        BENCH_START("mountwrite");
+        bool mountwriting = true;
         BENCH_START("mount");
         mounts += 1;
         #if defined(LFS3)
@@ -373,6 +377,7 @@ code = '''
                 && !(SIM_TIME && BENCH_SIMTIME() >= SIM_TIME)
                 // time to reboot?
                 && (POWERLOSS
+                    || mountwriting
                     || !((bench_mount_stop_time != -1
                             && BENCH_SIMTIME() >= bench_mount_stop_time)
                         || (bench_mount_stop_progs != -1
@@ -494,8 +499,13 @@ code = '''
 
             written += CHUNK;
             BENCH_STOP("write", written);
+            if (mountwriting) {
+                BENCH_STOP("mountwrite", mounts);
+                mountwriting = false;
+            }
         }
         // close
+        BENCH_START("closeunmount");
         BENCH_START("close");
         #if defined(LFS3)
         lfs3_file_close(&lfs3, &file) => 0;
@@ -521,6 +531,7 @@ code = '''
         yaffs_remove_device(&yaffs2);
         #endif
         BENCH_STOP("unmount", mounts);
+        BENCH_STOP("closeunmount", mounts);
     }
 
     // report the number of interrupted log-rotations, note this may be

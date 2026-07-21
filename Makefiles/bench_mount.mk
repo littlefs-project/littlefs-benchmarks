@@ -75,15 +75,9 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		-Srotates \
 		-Sgrms \
 		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_P))),$\
-			-Smount=$(p)) \
+			-Smountwrite=$(p)) \
 		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_P))),$\
-			-Smkconsistent=$(p)) \
-		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_P))),$\
-			-Sopen=$(p)) \
-		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_P))),$\
-			-Sclose=$(p)) \
-		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_P))),$\
-			-Sunmount=$(p)) \
+			-Scloseunmount=$(p)) \
 		-DPOWERLOSS=$(or $6,$(MOUNT_POWERLOSS)) \
 		-o$$@)
 endef
@@ -137,92 +131,49 @@ $(MOUNT_PLOTSDIR)/plots.html:
 define PLOT_MOUNT_RULE
 $1: $2
 	$$(strip ./scripts/plotmpl.py \
-		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_P))), \
-			<(./scripts/csv.py $$^ \
-				-Si='enumerate()' -bcase -bPOWERLOSS -bFS \
-				-b$4='mount+$(p)' -D$4='mount+$(p),mkconsistent+$(p)' \
-				-flatency='bench_simtime/1.0e9' \
-				-o-)) \
-		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_P))), \
-			<(./scripts/csv.py $$^ \
-				-Si='enumerate()' -bcase -bPOWERLOSS -bFS \
-				-b$4='open+$(p)' -D$4='open+$(p)' \
-				-flatency='bench_simtime/1.0e9' \
-				-o-)) \
-		-W1500 $(if, -H350) -H700 \
+		<(./scripts/csv.py $$^ \
+			-Si='enumerate()' -bcase -bPOWERLOSS -bFS -b$4 \
+			-flatency='bench_simtime/1.0e9' \
+			-o-) \
+		-W1500 $(if, -H350) -H525 \
 		--title=$3 \
 		-bFS \
 		--subplot=" \
 				--title='seq' \
 				--ylabel='mount latency (no pl)' \
 				-Dcase=bench_mount_seq \
-				-DPOWERLOSS=0 -D$4='mount+*' \
-				-ylatency --yunits=s \
+				-DPOWERLOSS=0 -D$4='mountwrite+*' \
 			--subplot-below=\" \
-				--ylabel='open latency (no pl)' \
+				--ylabel='mount latency (yes pl)' \
 				-Dcase=bench_mount_seq \
-				-DPOWERLOSS=0 -D$4='open+*' \
-				-ylatency --yunits=s\" \
-			--subplot-below=\" \
-				--ylabel='mount latency (pl)' \
-				-Dcase=bench_mount_seq \
-				-DPOWERLOSS=1 -D$4='mount+*' \
-				-ylatency --yunits=s\" \
-			--subplot-below=\" \
-				--ylabel='open latency (pl)' \
-				-Dcase=bench_mount_seq \
-				-DPOWERLOSS=1 -D$4='open+*' \
+				-DPOWERLOSS=1 -D$4='mountwrite+*' \
 				-ylatency --yunits=s\"" \
 		--subplot-right=" \
 				--title='random' \
 				-Dcase=bench_mount_random \
-				-DPOWERLOSS=0 -D$4='mount+*' \
+				-DPOWERLOSS=0 -D$4='mountwrite+*' \
 				-ylatency --yunits=s \
 			--subplot-below=\" \
 				-Dcase=bench_mount_random \
-				-DPOWERLOSS=0 -D$4='open+*' \
-				-ylatency --yunits=s\" \
-			--subplot-below=\" \
-				-Dcase=bench_mount_random \
-				-DPOWERLOSS=1 -D$4='mount+*' \
-				-ylatency --yunits=s\" \
-			--subplot-below=\" \
-				-Dcase=bench_mount_random \
-				-DPOWERLOSS=1 -D$4='open+*' \
+				-DPOWERLOSS=1 -D$4='mountwrite+*' \
 				-ylatency --yunits=s\"" \
 		--subplot-right=" \
 				--title='logging' \
 				-Dcase=bench_mount_logging \
-				-DPOWERLOSS=0 -D$4='mount+*' \
+				-DPOWERLOSS=0 -D$4='mountwrite+*' \
 				-ylatency --yunits=s \
 			--subplot-below=\" \
 				-Dcase=bench_mount_logging \
-				-DPOWERLOSS=0 -D$4='open+*' \
-				-ylatency --yunits=s\" \
-			--subplot-below=\" \
-				-Dcase=bench_mount_logging \
-				-DPOWERLOSS=1 -D$4='mount+*' \
-				-ylatency --yunits=s\" \
-			--subplot-below=\" \
-				-Dcase=bench_mount_logging \
-				-DPOWERLOSS=1 -D$4='open+*' \
+				-DPOWERLOSS=1 -D$4='mountwrite+*' \
 				-ylatency --yunits=s\"" \
 		--subplot-right=" \
 				--title='many' \
 				-Dcase=bench_mount_many \
-				-DPOWERLOSS=0 -D$4='mount+*' \
+				-DPOWERLOSS=0 -D$4='mountwrite+*' \
 				-ylatency --yunits=s \
 			--subplot-below=\" \
 				-Dcase=bench_mount_many \
-				-DPOWERLOSS=0 -D$4='open+*' \
-				-ylatency --yunits=s\" \
-			--subplot-below=\" \
-				-Dcase=bench_mount_many \
-				-DPOWERLOSS=1 -D$4='mount+*' \
-				-ylatency --yunits=s\" \
-			--subplot-below=\" \
-				-Dcase=bench_mount_many \
-				-DPOWERLOSS=1 -D$4='open+*' \
+				-DPOWERLOSS=1 -D$4='mountwrite+*' \
 				-ylatency --yunits=s\"" \
 		--legend \
 		$(foreach fs, $(BENCH_FILESYSTEMS),$\
@@ -278,89 +229,44 @@ $1: $2
 				--title='seq (mount)' \
 				--ylabel='latency (no pl)' \
 				-Dcase=bench_mount_seq \
-				-DPOWERLOSS=0 -Dprobe='mount+*' \
+				-DPOWERLOSS=0 -Dprobe='mountwrite+*' \
 				-ylatency --yunits=s \
-			--subplot-right=\" \
-				-W0.5 \
-				--title='seq (open)' \
-				-Dcase=bench_mount_seq \
-				-DPOWERLOSS=0 -Dprobe='open+*' \
-				-ylatency --yunits=s\" \
 			--subplot-below=\" \
-				-W0.5 \
-				--ylabel='latency (pl)' \
+				--ylabel='latency (yes pl)' \
 				-Dcase=bench_mount_seq \
-				-DPOWERLOSS=1 -Dprobe='mount+*' \
-				-ylatency --yunits=s \
-			--subplot-right=\\\" \
-				-W0.5 \
-				-Dcase=bench_mount_seq \
-				-DPOWERLOSS=1 -Dprobe='open+*' \
-				-ylatency --yunits=s\\\"\"" \
+				-DPOWERLOSS=1 -Dprobe='mountwrite+*' \
+				-ylatency --yunits=s\"" \
 		--subplot-right=" \
 				--title='random (mount)' \
 				-Dcase=bench_mount_random \
-				-DPOWERLOSS=0 -Dprobe='mount+*' \
+				-DPOWERLOSS=0 -Dprobe='mountwrite+*' \
 				-ylatency --yunits=s \
-			--subplot-right=\" \
-				-W0.5 \
-				--title='random (open)' \
-				-Dcase=bench_mount_random \
-				-DPOWERLOSS=0 -Dprobe='open+*' \
-				-ylatency --yunits=s\" \
 			--subplot-below=\" \
 				-W0.5 \
 				-Dcase=bench_mount_random \
-				-DPOWERLOSS=1 -Dprobe='mount+*' \
-				-ylatency --yunits=s \
-			--subplot-right=\\\" \
-				-W0.5 \
-				-Dcase=bench_mount_random \
-				-DPOWERLOSS=1 -Dprobe='open+*' \
-				-ylatency --yunits=s\\\"\"" \
+				-DPOWERLOSS=1 -Dprobe='mountwrite+*' \
+				-ylatency --yunits=s\"" \
 		--subplot-right=" \
 				--title='logging (mount)' \
 				-Dcase=bench_mount_logging \
-				-DPOWERLOSS=0 -Dprobe='mount+*' \
+				-DPOWERLOSS=0 -Dprobe='mountwrite+*' \
 				-ylatency --yunits=s \
-			--subplot-right=\" \
-				-W0.5 \
-				--title='logging (open)' \
-				-Dcase=bench_mount_logging \
-				-DPOWERLOSS=0 -Dprobe='open+*' \
-				-ylatency --yunits=s\" \
 			--subplot-below=\" \
 				-W0.5 \
 				-Dcase=bench_mount_logging \
-				-DPOWERLOSS=1 -Dprobe='mount+*' \
-				-ylatency --yunits=s \
-			--subplot-right=\\\" \
-				-W0.5 \
-				-Dcase=bench_mount_logging \
-				-DPOWERLOSS=1 -Dprobe='open+*' \
-				-ylatency --yunits=s\\\"\"" \
+				-DPOWERLOSS=1 -Dprobe='mountwrite+*' \
+				-ylatency --yunits=s\"" \
 		--subplot-right=" \
 				--title='many (mount)' \
 				-Dcase=bench_mount_many \
-				-DPOWERLOSS=0 -Dprobe='mount+*' \
+				-DPOWERLOSS=0 -Dprobe='mountwrite+*' \
 				-ylatency --yunits=s \
-			--subplot-right=\" \
-				-W0.5 \
-				--title='many (open)' \
-				-Dcase=bench_mount_many \
-				-DPOWERLOSS=0 -Dprobe='open+*' \
-				-ylatency --yunits=s\" \
 			--subplot-below=\" \
 				-W0.5 \
 				-Dcase=bench_mount_many \
-				-DPOWERLOSS=1 -Dprobe='mount+*' \
-				-ylatency --yunits=s \
-			--subplot-right=\\\" \
-				-W0.5 \
-				-Dcase=bench_mount_many \
-				-DPOWERLOSS=1 -Dprobe='open+*' \
-				-ylatency --yunits=s\\\"\"" \
-		-Fo: -C'mount+*=$(C_BLUE)' -C'open+*=$(C_ORANGE)' \
+				-DPOWERLOSS=1 -Dprobe='mountwrite+*' \
+				-ylatency --yunits=s\"" \
+		-Fo: -C'mountwrite+*=$(C_BLUE)' \
 		-X"-0.25,$\
 			$$(shell python -c 'b=len("$5".split())-1; print(b+1/4)')" \
 		$$(shell python -c '$\
