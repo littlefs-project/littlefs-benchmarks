@@ -370,10 +370,11 @@ code = '''
                 && !(SIM_SIZE && written >= (uint64_t)SIM_SIZE)
                 && !(SIM_TIME && BENCH_SIMTIME() >= SIM_TIME)
                 // time to reboot?
-                && !((bench_mount_stop_time != -1
+                && (POWERLOSS
+                    || !((bench_mount_stop_time != -1
                             && BENCH_SIMTIME() >= bench_mount_stop_time)
                         || (bench_mount_stop_progs != -1
-                            && bench_mount_progs > bench_mount_stop_progs))) {
+                            && bench_mount_progs > bench_mount_stop_progs)))) {
             BENCH_START("write");
             // append to log
             uint8_t wbuf[CHUNK];
