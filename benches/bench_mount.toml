@@ -62,7 +62,9 @@ defines.POWERLOSS_NOISE = false
 # 0 => no pl check
 # 1 => check after mount
 # 2 => check after error
-defines.POWERLOSS_CHECK = false
+# 3 => at least force a log-rotate, this avoids corrupt logs getting
+#      stuck without losing data
+defines.POWERLOSS_CHECK = 3
 
 # how long before powerloss/shutdown, we choose a uniform number of
 # nanoseconds between these
@@ -398,7 +400,11 @@ code = '''
             lfs2_file_sync(&lfs2, &file) => 0;
             #elif defined(SPIFFS)
             s32_t d = SPIFFS_fflush(&spiffs, fd);
+            assert(d >= 0 || POWERLOSS);
+            bool forcelogrotate = false;
             if (POWERLOSS_CHECK == 1) {
+                // if running SPIFFS_check, we should never find an
+                // error here
                 assert(d >= 0);
             } else if (POWERLOSS_CHECK == 2) {
                 // uh oh, need to run spiffs check to fix things? this is
@@ -413,12 +419,11 @@ code = '''
                     d = SPIFFS_fflush(&spiffs, fd);
                     assert(d >= 0);
                 }
+            } else if (POWERLOSS_CHECK == 3) {
+                // at least force a log rotate
+                forcelogrotate = true;
             } else {
-                // these are the known errors we can encounter after
-                // powerloss
-                assert(d >= 0
-                        || d == SPIFFS_ERR_DELETED
-                        || d == SPIFFS_ERR_INDEX_REF_FREE);
+                // do nothing
             }
             #elif defined(YAFFS2)
             yaffs_fsync(fd) => 0;
@@ -462,7 +467,7 @@ code = '''
             spiffs_stat stat;
             SPIFFS_fstat(&spiffs, fd, &stat) => 0;
             assert(stat.size >= 0);
-            if (stat.size >= SIZE) {
+            if (stat.size >= SIZE || forcelogrotate) {
                 SPIFFS_close(&spiffs, fd) => 0;
                 int err = SPIFFS_remove(&spiffs, "bench_log.1");
                 assert(!err || err == SPIFFS_ERR_NOT_FOUND);
