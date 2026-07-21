@@ -292,6 +292,51 @@ $(foreach g, $(BENCH_GEOMETRIES), \
 
 
 #======================================================================#
+# tikz rules                                                           #
+#======================================================================#
+
+## Generate tikz results
+.PHONY: all tikz tikz-mount
+all tikz tikz-mount: \
+        $(foreach c, $(BENCH_CASES), \
+            $(foreach fs, $(BENCH_FILESYSTEMS), \
+                $(foreach g, $(BENCH_GEOMETRIES), \
+                    $(MOUNT_TIKZDIR)/tikz_mount.$(c).$(fs).$(g).csv)))
+
+# core tikz rule
+#
+# $1 - target
+# $2 - source
+# $3 - percentiles
+#
+define TIKZ_MOUNT_RULE
+$1: $2
+	$$(strip ./scripts/csv.py \
+		$(foreach p, $(subst $(comma),$(space),$3), \
+			<(./scripts/csv.py $$^ \
+				-bPOWERLOSS -Dprobe='mountwrite+$(p)' \
+				-fmountwrite_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
+				-o-)) \
+		$(foreach p, $(subst $(comma),$(space),$3), \
+			<(./scripts/csv.py $$^ \
+				-bPOWERLOSS -Dprobe='closeunmount+$(p)' \
+				-fcloseunmount_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
+				-o-)) \
+		-bPOWERLOSS \
+		-o$$@)
+endef
+
+# tikz rules
+$(foreach c, $(BENCH_CASES), \
+	$(foreach fs, $(BENCH_FILESYSTEMS), \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(eval $(call TIKZ_MOUNT_RULE,$\
+				$(MOUNT_TIKZDIR)/tikz_mount.$(c).$(fs).$(g).csv,$\
+				$(MOUNT_RESULTSDIR)/bench_mount.$(c).$(fs).$(g).csv,$\
+				$(MOUNT_P))))))
+
+
+#======================================================================#
 # save rules, for quickly saving things                                #
 #======================================================================#
 
