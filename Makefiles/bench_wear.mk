@@ -13,7 +13,7 @@ WEAR_TIKZDIR ?= $(TIKZDIR)/wear
 
 
 # block recycles to bench? these only make sense for littlefs
-WEAR_RECYCLES ?= 0,1,10,100,1000
+WEAR_BLOCK_RECYCLES ?= 0,1,10,100,1000
 
 
 # default bench filesystems to default bench filesystems
@@ -71,7 +71,7 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		$(if $(filter $3,$\
 				$(DEFAULT_LFS3_FILESYSTEMS) $\
 				$(DEFAULT_LFS2_FILESYSTEMS)),$\
-			-DBLOCK_RECYCLES=$(or $5,$(WEAR_RECYCLES))) \
+			-DBLOCK_RECYCLES=$(or $5,$(WEAR_BLOCK_RECYCLES))) \
 		-o$$@)
 endef
 
@@ -304,117 +304,104 @@ $(foreach g, $(BENCH_GEOMETRIES), \
 		$(g))))
 
 
-# #======================================================================#
-# # tikz rules                                                           #
-# #======================================================================#
-# 
-# ## Generate tikz results
-# .PHONY: all tikz tikz-wear
-# all tikz tikz-wear: \
-#         $(foreach c, $(BENCH_CASES), \
-#             $(foreach fs, $(BENCH_FILESYSTEMS), \
-#                 $(foreach g, $(BENCH_GEOMETRIES), \
-#                     $(WEAR_TIKZDIR)/tikz_wear.$(c).$(fs).$(g).csv))) \
-#         $(foreach c, $(BENCH_CASES), \
-#             $(foreach fs, $(BENCH_FILESYSTEMS), \
-#                 $(foreach g, $(BENCH_GEOMETRIES), \
-#                     $(WEAR_TIKZDIR)/tikz_wear_ops.$(c).$(fs).$(g).csv)))
-# 
-# # core tikz rule
-# #
-# # $1 - target
-# # $2 - source
-# # $3 - percentiles
-# #
-# define TIKZ_WEAR_RULE
-# $1: $2
-# 	$$(strip ./scripts/csv.py \
-# 		$(foreach p, $(subst $(comma),$(space),$3), \
-# 			<(./scripts/csv.py $$^ \
-# 				-bGC -Dprobe='write+$(p)' \
-# 				-flatency_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
-# 				-o-)) \
-# 		$(foreach p, $(subst $(comma),$(space),$3), \
-# 			<(./scripts/csv.py $$^ \
-# 				-bGC -Dprobe='gc+$(p)' \
-# 				-fgc_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
-# 				-o-)) \
-# 		-bGC \
-# 		-o$$@)
-# endef
-# 
-# # tikz rules
-# $(foreach c, $(BENCH_CASES), \
-# 	$(foreach fs, $(BENCH_FILESYSTEMS), \
-# 		$(foreach g, $(BENCH_GEOMETRIES), \
-# 			$(eval $(call TIKZ_WEAR_RULE,$\
-# 				$(WEAR_TIKZDIR)/tikz_wear.$(c).$(fs).$(g).csv,$\
-# 				$(WEAR_RESULTSDIR)/bench_wear.$(c).$(fs).$(g).csv,$\
-# 				$(WEAR_P))))))
-# 
-# # ops tikz rule
-# #
-# # $1 - target
-# # $2 - source
-# # $3 - fs type/version
-# # $4 - disk geometry
-# #
-# define TIKZ_WEAR_OPS_RULE
-# $1: $2
-# 	$$(strip ./scripts/csv.py \
-# 		$(foreach probe, write gc, \
-# 			<(./scripts/csv.py $$^ \
-# 				-bGC -Dprobe='$(probe)+avg' \
-# 				-f$(if $(filter gc,$(probe)),gc_)read_time="$\
-# 					float($$$$($($(U_$3)_BENCH_RUNNER) \
-# 							-DDISK_GEOMETRY=$(N_$4) \
-# 							-QREAD_TIMING)*bench_reads \
-# 						+ $$$$($($(U_$3)_BENCH_RUNNER) \
-# 							-DDISK_GEOMETRY=$(N_$4) \
-# 							-QREAD_WTIMING)*bench_wreads \
-# 						+ $$$$($($(U_$3)_BENCH_RUNNER) \
-# 							-DDISK_GEOMETRY=$(N_$4) \
-# 							-QREAD_UTIMING)*bench_readed) \
-# 						/ float(hits) \
-# 						/ 1.0e9" \
-# 				-f$(if $(filter gc,$(probe)),gc_)prog_time="$\
-# 					float($$$$($($(U_$3)_BENCH_RUNNER) \
-# 							-DDISK_GEOMETRY=$(N_$4) \
-# 							-QPROG_TIMING)*bench_progs \
-# 						+ $$$$($($(U_$3)_BENCH_RUNNER) \
-# 							-DDISK_GEOMETRY=$(N_$4) \
-# 							-QPROG_WTIMING)*bench_wprogs \
-# 						+ $$$$($($(U_$3)_BENCH_RUNNER) \
-# 							-DDISK_GEOMETRY=$(N_$4) \
-# 							-QPROG_UTIMING)*bench_progged) \
-# 						/ float(hits) \
-# 						/ 1.0e9" \
-# 				-f$(if $(filter gc,$(probe)),gc_)erase_time="$\
-# 					float($$$$($($(U_$3)_BENCH_RUNNER) \
-# 							-DDISK_GEOMETRY=$(N_$4) \
-# 							-QERASE_TIMING)*bench_erases \
-# 						+ $$$$($($(U_$3)_BENCH_RUNNER) \
-# 							-DDISK_GEOMETRY=$(N_$4) \
-# 							-QERASE_WTIMING)*bench_werases \
-# 						+ $$$$($($(U_$3)_BENCH_RUNNER) \
-# 							-DDISK_GEOMETRY=$(N_$4) \
-# 							-QERASE_UTIMING)*bench_erased) \
-# 						/ float(hits) \
-# 						/ 1.0e9" \
-# 				-o-)) \
-# 		-bGC \
-# 		-o$$@)
-# endef
-# 
-# # ops tikz rules
-# $(foreach c, $(BENCH_CASES), \
-# 	$(foreach fs, $(BENCH_FILESYSTEMS), \
-# 		$(foreach g, $(BENCH_GEOMETRIES), \
-# 			$(eval $(call TIKZ_WEAR_OPS_RULE,$\
-# 				$(WEAR_TIKZDIR)/tikz_wear_ops.$(c).$(fs).$(g).csv,$\
-# 				$(WEAR_RESULTSDIR)/bench_wear.$(c).$(fs).$(g).csv,$\
-# 				$(fs),$\
-# 				$(g))))))
+#======================================================================#
+# tikz rules                                                           #
+#======================================================================#
+
+## Generate tikz results
+.PHONY: all tikz tikz-wear
+all tikz tikz-wear: \
+        $(foreach c, $(BENCH_CASES), \
+            $(foreach fs, $(BENCH_FILESYSTEMS), \
+                $(foreach g, $(BENCH_GEOMETRIES), \
+                    $(WEAR_TIKZDIR)/tikz_wear.$(c).$(fs).$(g).csv))) \
+        $(foreach c, $(BENCH_CASES), \
+            $(foreach fs, $(BENCH_FILESYSTEMS), \
+                $(foreach g, $(BENCH_GEOMETRIES), \
+                    $(WEAR_TIKZDIR)/tikz_wear_sorted.$(c).$(fs).$(g).csv))) \
+        $(foreach c, $(BENCH_CASES), \
+            $(foreach fs, $(BENCH_FILESYSTEMS), \
+                $(foreach g, $(BENCH_GEOMETRIES), \
+                    $(WEAR_TIKZDIR)/tikz_wear_wa.$(c).$(fs).$(g).csv)))
+
+# wear tikz rule
+#
+# $1 - target
+# $2 - source
+# $3 - block recycles
+# $4 - sort by wear
+#
+define TIKZ_WEAR_RULE
+$1: $2
+	$$(strip ./scripts/csv.py \
+		$(foreach r, $(subst $(comma),$(space),$3), \
+			<(./scripts/csv.py \
+				<(./scripts/csv.py $$^ \
+					-bblock -Fblock=n -DBLOCK_RECYCLES='$(r),' \
+					-Dprobe=wear -fwear_r$(r)=bench_simtime \
+					$(if $4,-Swear_r$(r)) \
+					-o-) \
+				-i -Dblock='*' \
+				-o-)) \
+		-bi -Fi \
+		-o$$@)
+endef
+
+# wear tikz rules
+$(foreach c, $(BENCH_CASES), \
+	$(foreach fs, $(BENCH_FILESYSTEMS), \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(eval $(call TIKZ_WEAR_RULE,$\
+				$(WEAR_TIKZDIR)/tikz_wear.$(c).$(fs).$(g).csv,$\
+				$(WEAR_RESULTSDIR)/bench_wear.$(c).$(fs).$(g).csv,$\
+				$(WEAR_BLOCK_RECYCLES))))))
+
+# sorted wear tikz rules
+$(foreach c, $(BENCH_CASES), \
+	$(foreach fs, $(BENCH_FILESYSTEMS), \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(eval $(call TIKZ_WEAR_RULE,$\
+				$(WEAR_TIKZDIR)/tikz_wear_sorted.$(c).$(fs).$(g).csv,$\
+				$(WEAR_RESULTSDIR)/bench_wear.$(c).$(fs).$(g).csv,$\
+				$(WEAR_BLOCK_RECYCLES),$\
+				1)))))
+
+# extra wear stats tikz rule
+#
+# $1 - target
+# $2 - source
+# $3 - block recycles
+#
+define TIKZ_WEAR_WA_RULE
+$1: $2
+	$$(strip ./scripts/csv.py \
+		$(foreach r, $(subst $(comma),$(space),$3), \
+			<(./scripts/csv.py $$^ \
+				-bi=0 -DBLOCK_RECYCLES='$(r),' \
+				-Dprobe=waf -fwaf_r$(r)='max(bench_simtime)' \
+				-o-)) \
+		$(foreach r, $(subst $(comma),$(space),$3), \
+			<(./scripts/csv.py $$^ \
+				-bi=0 -DBLOCK_RECYCLES='$(r),' \
+				-Dprobe=cwaf -fcwaf_r$(r)='max(bench_simtime)' \
+				-o-)) \
+		$(foreach r, $(subst $(comma),$(space),$3), \
+			<(./scripts/csv.py $$^ \
+				-bi=0 -DBLOCK_RECYCLES='$(r),' \
+				-Dprobe=wcv -fwcv_r$(r)='max(bench_simtime)' \
+				-o-)) \
+		-bi -Fi \
+		-o$$@)
+endef
+
+# extra wear stats tikz rules
+$(foreach c, $(BENCH_CASES), \
+	$(foreach fs, $(BENCH_FILESYSTEMS), \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(eval $(call TIKZ_WEAR_WA_RULE,$\
+				$(WEAR_TIKZDIR)/tikz_wear_wa.$(c).$(fs).$(g).csv,$\
+				$(WEAR_RESULTSDIR)/bench_wear.$(c).$(fs).$(g).csv,$\
+				$(WEAR_BLOCK_RECYCLES))))))
 
 
 #======================================================================#
