@@ -40,9 +40,10 @@ N_spiffs = 4
 I_spiffs = 4
 C_spiffs = $(C_RED)
 F_spiffs = X # big x
-DEFAULT_SIZE_FILESYSTEMS  += spiffs
-DEFAULT_BUILD_FILESYSTEMS += spiffs
-DEFAULT_BENCH_FILESYSTEMS += spiffs
+DEFAULT_SIZE_FILESYSTEMS   += spiffs
+DEFAULT_BUILD_FILESYSTEMS  += spiffs
+DEFAULT_BENCH_FILESYSTEMS  += spiffs
+DEFAULT_SPIFFS_FILESYSTEMS += spiffs
 
 # include compile-time deps
 -include $(SPIFFS_DEP)

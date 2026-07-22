@@ -18,7 +18,8 @@ N_yaffs2nckp = 51
 I_yaffs2nckp = 5
 C_yaffs2nckp = $(C_PURPLE)
 F_yaffs2nckp = $$$$nckp$$$$ # nckp
-DEFAULT_BENCH_FILESYSTEMS += yaffs2nckp
+DEFAULT_BENCH_FILESYSTEMS  += yaffs2nckp
+DEFAULT_YAFFS2_FILESYSTEMS += yaffs2nckp
 
 
 endif

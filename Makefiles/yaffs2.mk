@@ -87,9 +87,10 @@ N_yaffs2 = 5
 I_yaffs2 = 5
 C_yaffs2 = $(C_PURPLE)
 F_yaffs2 = P # big plus
-DEFAULT_SIZE_FILESYSTEMS  += yaffs2
-DEFAULT_BUILD_FILESYSTEMS += yaffs2
-DEFAULT_BENCH_FILESYSTEMS += yaffs2
+DEFAULT_SIZE_FILESYSTEMS   += yaffs2
+DEFAULT_BUILD_FILESYSTEMS  += yaffs2
+DEFAULT_BENCH_FILESYSTEMS  += yaffs2
+DEFAULT_YAFFS2_FILESYSTEMS += yaffs2
 
 # include compile-time deps
 -include $(YAFFS2_DEP)

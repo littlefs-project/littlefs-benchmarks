@@ -155,7 +155,10 @@
 
     // littlefs2 specific defines
     #elif defined(LFS2)
-    BENCH_DEFINE(BLOCK_CYCLES,          100                                 )
+    // this is called block_cycles in littlefs2, but is renamed here
+    // to match littlefs3 and make parameterization easier
+    BENCH_DEFINE(BLOCK_CYCLES,          BLOCK_RECYCLES                      )
+    BENCH_DEFINE(BLOCK_RECYCLES,        100                                 )
     BENCH_DEFINE(LCACHE_SIZE,           LFS3_MIN(
                                             LFS3_MAX(
                                                 CACHE_SIZE,

@@ -26,7 +26,7 @@ BENCH_FILESYSTEMS ?= $(DEFAULT_BENCH_FILESYSTEMS)
 BENCH_GEOMETRIES ?= $(DEFAULT_BENCH_GEOMETRIES)
 
 # list of interesting bench cases
-BENCH_CASES ?= seq random logging many
+BENCH_CASES ?= logging # seq random logging many
 
 
 # this is a bit of a hack, but we want to make sure the BUILDDIR

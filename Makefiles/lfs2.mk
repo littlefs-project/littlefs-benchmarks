@@ -37,6 +37,7 @@ F_lfs2 = ^ # triangle up
 DEFAULT_SIZE_FILESYSTEMS  += lfs2
 DEFAULT_BUILD_FILESYSTEMS += lfs2
 DEFAULT_BENCH_FILESYSTEMS += lfs2
+DEFAULT_LFS2_FILESYSTEMS  += lfs2
 
 # include compile-time deps
 -include $(LFS2_DEP)
