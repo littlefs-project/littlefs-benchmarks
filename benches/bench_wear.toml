@@ -36,6 +36,9 @@ code = '''
     // include common bench helpers
     #include "benches/bench_helpers.h"
 
+    // needed for sqrt
+    #include <math.h>
+
     // measure wear
     bench_io_t *bench_wear_erasemap = NULL;
 
@@ -44,6 +47,61 @@ code = '''
             bench_wear_erasemap[block] += 1;
         }
         return BENCH_BD_ERASENOHOOKS(cfg, block);
+    }
+
+    // some interesting stats
+
+    // conservative wear-amplification factor, i.e.
+    // (max(erases)*BLOCK_COUNT*BLOCK_SIZE)/written
+    double bench_wear_cwaf(bench_io_t written) {
+        if (!bench_wear_erasemap) {
+            return 0.0;
+        }
+
+        bench_io_t wear_max = 0;
+        for (lfs3_block_t i = 0; i < BLOCK_COUNT; i++) {
+            if (bench_wear_erasemap[i] > wear_max) {
+                wear_max = bench_wear_erasemap[i];
+            }
+        }
+        return ((double)wear_max*(double)BLOCK_COUNT*(double)BLOCK_SIZE)
+                / (double)((written) ? written : 1);
+    }
+
+    // wear-amplification factor, i.e.
+    // sum(erases)*BLOCK_SIZE/written
+    double bench_wear_waf(bench_io_t written) {
+        if (!bench_wear_erasemap) {
+            return 0.0;
+        }
+
+        bench_io_t wear_sum = 0;
+        for (lfs3_block_t i = 0; i < BLOCK_COUNT; i++) {
+            wear_sum += bench_wear_erasemap[i];
+        }
+        return ((double)wear_sum*(double)BLOCK_SIZE)
+                / (double)((written) ? written : 1);
+    }
+
+    // wear coefficient of variation, i.e. stddev/mean
+    double bench_wear_cv(void) {
+        if (!bench_wear_erasemap) {
+            return 0.0;
+        }
+
+        bench_io_t wear_sum = 0;
+        for (lfs3_block_t i = 0; i < BLOCK_COUNT; i++) {
+            wear_sum += bench_wear_erasemap[i];
+        }
+        double wear_avg = (double)wear_sum / (double)BLOCK_COUNT;
+
+        double wear_var = 0.0;
+        for (lfs3_block_t i = 0; i < BLOCK_COUNT; i++) {
+            wear_var += ((double)bench_wear_erasemap[i] - wear_avg)
+                    * ((double)bench_wear_erasemap[i] - wear_avg);
+        }
+        return sqrt(wear_var / (double)BLOCK_COUNT)
+                / wear_avg;
     }
 '''
 
@@ -252,25 +310,19 @@ code = '''
         BENCH_RESULT("wear", i, bench_wear_erasemap[i]);
     }
 
-    // report the total stack/heap usage after the benchmark
-    #ifdef BENCH_STACK
-    BENCH_RESULT("stack", written, BENCH_STACK_WATERMARK());
-    #endif
-    #ifdef BENCH_HEAP
-    BENCH_RESULT("heap", written, BENCH_HEAP_WATERMARK());
-    #endif
+    // calculate a few other interesting stats
 
-    // find the total disk usage after the benchmark
-    #if defined(LFS3)
-    uintmax_t usage = bench_helpers_usage(CFG, &lfs3);
-    #elif defined(LFS2)
-    uintmax_t usage = bench_helpers_usage(CFG, &lfs2);
-    #elif defined(SPIFFS)
-    uintmax_t usage = bench_helpers_usage(CFG, &spiffs);
-    #elif defined(YAFFS2)
-    uintmax_t usage = bench_helpers_usage(CFG, &yaffs2);
-    #endif
-    BENCH_RESULT("usage", written, usage);
+    // conservative wear-amplification factor, i.e.
+    // (max(erases)*BLOCK_COUNT*BLOCK_SIZE)/written
+    BENCH_FRESULT("wcwaf", BLOCK_COUNT, bench_wear_cwaf(written));
+    // wear-amplification factor, i.e.
+    // sum(erases)*BLOCK_SIZE/written
+    BENCH_FRESULT("wwaf", BLOCK_COUNT, bench_wear_waf(written));
+    // wear coefficient of variation, i.e. stddev/mean
+    BENCH_FRESULT("wcv", BLOCK_COUNT, bench_wear_cv());
+
+    // clean up erase map
+    free(bench_wear_erasemap);
 
     #if defined(LFS3)
     lfs3_unmount(&lfs3) => 0;

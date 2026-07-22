@@ -66,8 +66,8 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		$(if $(SIM_SIZE),-DSIM_SIZE=$(SIM_SIZE)) \
 		-DFS=$(N_$3) \
 		-DDISK_GEOMETRY=$(N_$4) \
-		-Swrite \
 		-Swear=1 \
+		-Swcwaf -Swwaf -Swcv \
 		$(if $(filter $3,$\
 				$(DEFAULT_LFS3_FILESYSTEMS) $\
 				$(DEFAULT_LFS2_FILESYSTEMS)),$\
@@ -219,62 +219,65 @@ define PLOT_WEAR_WA_RULE
 $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py \
-			<(./scripts/csv.py \
-				<(./scripts/csv.py $$^ \
-					-bcase -bFS -bBLOCK_RECYCLES -FBLOCK_RECYCLES \
-					-Dprobe=wear \
-					-fwear_sum='sum(bench_simtime)' \
-					-fwear_max='max(bench_simtime)' \
-					-o-) \
-				<(./scripts/csv.py $$^ \
-					-bcase -bFS -bBLOCK_RECYCLES -FBLOCK_RECYCLES \
-					-Dprobe=write \
-					-fwritten='max(n)' \
-					-o-) \
+			<(./scripts/csv.py $$^ \
 				-bcase -bFS -bBLOCK_RECYCLES -FBLOCK_RECYCLES \
+				-Dprobe=wcwaf -fwcwaf=bench_simtime \
+				-o-) \
+			<(./scripts/csv.py $$^ \
+				-bcase -bFS -bBLOCK_RECYCLES -FBLOCK_RECYCLES \
+				-Dprobe=wwaf -fwwaf=bench_simtime \
+				-o-) \
+			<(./scripts/csv.py $$^ \
+				-bcase -bFS -bBLOCK_RECYCLES -FBLOCK_RECYCLES \
+				-Dprobe=wcv -fwcv=bench_simtime \
 				-o-) \
 			-bcase -bFS -bBLOCK_RECYCLES -FBLOCK_RECYCLES \
-			-fwear_max \
-			-fwear_af="$\
-				float(wear_sum)$\
-					*float($$$$($($($\
-						U_$(firstword $(BENCH_FILESYSTEMS)))_BENCH_RUNNER) \
-						-DDISK_GEOMETRY=$(N_$8) \
-						-QBLOCK_SIZE))$\
-				/float(written)" \
 			-o-) \
-		-W1500 -H350 \
+		-W1500 $(if,-H350) -H525 \
 		--title=$3 \
 		--subplot=" \
 				--title='seq' \
-				--ylabel='max wear' \
+				--ylabel='cwaf' \
 				-Dcase=bench_wear_seq \
-				-ywear_max \
+				-ywcwaf \
 			--subplot-below=\" \
 				--ylabel='waf' \
 				-Dcase=bench_wear_seq \
-				-ywear_af\"" \
+				-ywwaf\" \
+			--subplot-below=\" \
+				--ylabel='wear cv' \
+				-Dcase=bench_wear_seq \
+				-ywcv\"" \
 		--subplot-right=" \
 				--title='random' \
 				-Dcase=bench_wear_random \
-				-ywear_max \
+				-ywcwaf\
 			--subplot-below=\" \
 				-Dcase=bench_wear_random \
-				-ywear_af\"" \
+				-ywwaf\" \
+			--subplot-below=\" \
+				-Dcase=bench_wear_random \
+				-ywcv\"" \
 		--subplot-right=" \
 				--title='logging' \
 				-Dcase=bench_wear_logging \
-				-ywear_max \
+				-ywcwaf\
 			--subplot-below=\" \
 				-Dcase=bench_wear_logging \
-				-ywear_af\"" \
+				-ywwaf\" \
+			--subplot-below=\" \
+				-Dcase=bench_wear_logging \
+				-ywcv\"" \
 		--subplot-right=" \
 				--title='many' \
 				-Dcase=bench_wear_many \
-				-ywear_max\
+				-ywcwaf\
 			--subplot-below=\" \
 				-Dcase=bench_wear_many \
-				-ywear_af\"" \
+				-ywwaf\" \
+			--subplot-below=\" \
+				-Dcase=bench_wear_many \
+				-ywcv\"" \
 		-Fo: \
 		$(if, -X"-0.25,$\
 			$$(shell python -c 'b=len("$5".split())-1; print(b+1/4)')") \

@@ -542,26 +542,6 @@ code = '''
     BENCH_RESULT("grms", mounts, grms);
     #endif
 
-    // report the total stack/heap usage after the benchmark
-    #ifdef BENCH_STACK
-    BENCH_RESULT("stack", written, BENCH_STACK_WATERMARK());
-    #endif
-    #ifdef BENCH_HEAP
-    BENCH_RESULT("heap", written, BENCH_HEAP_WATERMARK());
-    #endif
-
-    // find the total disk usage after the benchmark
-    #if defined(LFS3)
-    uintmax_t usage = bench_helpers_usage(CFG, &lfs3);
-    #elif defined(LFS2)
-    uintmax_t usage = bench_helpers_usage(CFG, &lfs2);
-    #elif defined(SPIFFS)
-    uintmax_t usage = bench_helpers_usage(CFG, &spiffs);
-    #elif defined(YAFFS2)
-    uintmax_t usage = bench_helpers_usage(CFG, &yaffs2);
-    #endif
-    BENCH_RESULT("usage", written, usage);
-
     // other cleanup?
     #if defined(LFS3)
     #elif defined(LFS2)
