@@ -51,6 +51,21 @@ code = '''
 
     // some interesting stats
 
+    // wear-amplification factor, i.e.
+    // sum(erases)*BLOCK_SIZE/written
+    double bench_wear_waf(bench_io_t written) {
+        if (!bench_wear_erasemap) {
+            return 0.0;
+        }
+
+        bench_io_t wear_sum = 0;
+        for (lfs3_block_t i = 0; i < BLOCK_COUNT; i++) {
+            wear_sum += bench_wear_erasemap[i];
+        }
+        return ((double)wear_sum*(double)BLOCK_SIZE)
+                / (double)((written) ? written : 1);
+    }
+
     // conservative wear-amplification factor, i.e.
     // (max(erases)*BLOCK_COUNT*BLOCK_SIZE)/written
     double bench_wear_cwaf(bench_io_t written) {
@@ -68,23 +83,8 @@ code = '''
                 / (double)((written) ? written : 1);
     }
 
-    // wear-amplification factor, i.e.
-    // sum(erases)*BLOCK_SIZE/written
-    double bench_wear_waf(bench_io_t written) {
-        if (!bench_wear_erasemap) {
-            return 0.0;
-        }
-
-        bench_io_t wear_sum = 0;
-        for (lfs3_block_t i = 0; i < BLOCK_COUNT; i++) {
-            wear_sum += bench_wear_erasemap[i];
-        }
-        return ((double)wear_sum*(double)BLOCK_SIZE)
-                / (double)((written) ? written : 1);
-    }
-
     // wear coefficient of variation, i.e. stddev/mean
-    double bench_wear_cv(void) {
+    double bench_wear_wcv(void) {
         if (!bench_wear_erasemap) {
             return 0.0;
         }
@@ -312,14 +312,14 @@ code = '''
 
     // calculate a few other interesting stats
 
-    // conservative wear-amplification factor, i.e.
-    // (max(erases)*BLOCK_COUNT*BLOCK_SIZE)/written
-    BENCH_FRESULT("wcwaf", BLOCK_COUNT, bench_wear_cwaf(written));
     // wear-amplification factor, i.e.
     // sum(erases)*BLOCK_SIZE/written
-    BENCH_FRESULT("wwaf", BLOCK_COUNT, bench_wear_waf(written));
+    BENCH_FRESULT("waf", BLOCK_COUNT, bench_wear_waf(written));
+    // conservative wear-amplification factor, i.e.
+    // (max(erases)*BLOCK_COUNT*BLOCK_SIZE)/written
+    BENCH_FRESULT("cwaf", BLOCK_COUNT, bench_wear_cwaf(written));
     // wear coefficient of variation, i.e. stddev/mean
-    BENCH_FRESULT("wcv", BLOCK_COUNT, bench_wear_cv());
+    BENCH_FRESULT("wcv", BLOCK_COUNT, bench_wear_wcv());
 
     // clean up erase map
     free(bench_wear_erasemap);

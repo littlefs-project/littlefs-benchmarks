@@ -67,7 +67,7 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		-DFS=$(N_$3) \
 		-DDISK_GEOMETRY=$(N_$4) \
 		-Swear=1 \
-		-Swcwaf -Swwaf -Swcv \
+		-Swaf -Scwaf -Swcv \
 		$(if $(filter $3,$\
 				$(DEFAULT_LFS3_FILESYSTEMS) $\
 				$(DEFAULT_LFS2_FILESYSTEMS)),$\
@@ -221,11 +221,11 @@ $1: $2
 		<(./scripts/csv.py \
 			<(./scripts/csv.py $$^ \
 				-bcase -bFS -bBLOCK_RECYCLES -FBLOCK_RECYCLES \
-				-Dprobe=wcwaf -fwcwaf=bench_simtime \
+				-Dprobe=waf -fwaf=bench_simtime \
 				-o-) \
 			<(./scripts/csv.py $$^ \
 				-bcase -bFS -bBLOCK_RECYCLES -FBLOCK_RECYCLES \
-				-Dprobe=wwaf -fwwaf=bench_simtime \
+				-Dprobe=cwaf -fcwaf=bench_simtime \
 				-o-) \
 			<(./scripts/csv.py $$^ \
 				-bcase -bFS -bBLOCK_RECYCLES -FBLOCK_RECYCLES \
@@ -237,13 +237,13 @@ $1: $2
 		--title=$3 \
 		--subplot=" \
 				--title='seq' \
-				--ylabel='cwaf' \
-				-Dcase=bench_wear_seq \
-				-ywcwaf \
-			--subplot-below=\" \
 				--ylabel='waf' \
 				-Dcase=bench_wear_seq \
-				-ywwaf\" \
+				-ywaf \
+			--subplot-below=\" \
+				--ylabel='cwaf' \
+				-Dcase=bench_wear_seq \
+				-ycwaf\" \
 			--subplot-below=\" \
 				--ylabel='wear cv' \
 				-Dcase=bench_wear_seq \
@@ -251,30 +251,30 @@ $1: $2
 		--subplot-right=" \
 				--title='random' \
 				-Dcase=bench_wear_random \
-				-ywcwaf\
+				-ywaf\
 			--subplot-below=\" \
 				-Dcase=bench_wear_random \
-				-ywwaf\" \
+				-ycwaf\" \
 			--subplot-below=\" \
 				-Dcase=bench_wear_random \
 				-ywcv\"" \
 		--subplot-right=" \
 				--title='logging' \
 				-Dcase=bench_wear_logging \
-				-ywcwaf\
+				-ywaf\
 			--subplot-below=\" \
 				-Dcase=bench_wear_logging \
-				-ywwaf\" \
+				-ycwaf\" \
 			--subplot-below=\" \
 				-Dcase=bench_wear_logging \
 				-ywcv\"" \
 		--subplot-right=" \
 				--title='many' \
 				-Dcase=bench_wear_many \
-				-ywcwaf\
+				-ywaf\
 			--subplot-below=\" \
 				-Dcase=bench_wear_many \
-				-ywwaf\" \
+				-ycwaf\" \
 			--subplot-below=\" \
 				-Dcase=bench_wear_many \
 				-ywcv\"" \
