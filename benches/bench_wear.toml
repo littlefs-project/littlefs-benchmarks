@@ -323,6 +323,7 @@ code = '''
 
     // clean up erase map
     free(bench_wear_erasemap);
+    bench_wear_erasemap = NULL;
 
     #if defined(LFS3)
     lfs3_unmount(&lfs3) => 0;
