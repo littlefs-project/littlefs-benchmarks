@@ -26,11 +26,20 @@ int bench_helpers_populate(const struct lfs3_cfg *cfg, void *fs,
         lfs3_off_t static_count, lfs3_off_t static_size);
 
 
+// interesting usage info, though not all filesystems provide these
+struct bench_helpers_usage {
+    uintmax_t usage;
+    uintmax_t mdir;
+    uintmax_t btree;
+    uintmax_t data;
+};
+
 // find tight disk usage
 //
 // this is going to be a bit different for each filesystem
 //
-uintmax_t bench_helpers_usage(const struct lfs3_cfg *cfg, void *fs);
+int bench_helpers_usage(const struct lfs3_cfg *cfg, void *fs,
+        struct bench_helpers_usage *usage);
 
 
 #endif

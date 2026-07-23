@@ -325,18 +325,20 @@ code = '''
     #endif
 
     // find the total disk usage after the benchmark
-    //
-    // note this is garbage because of the above truncates!
+    struct bench_helpers_usage usage;
     #if defined(LFS3)
-    uintmax_t usage = bench_helpers_usage(CFG, &lfs3);
+    bench_helpers_usage(CFG, &lfs3, &usage) => 0;
     #elif defined(LFS2)
-    uintmax_t usage = bench_helpers_usage(CFG, &lfs2);
+    bench_helpers_usage(CFG, &lfs2, &usage) => 0;
     #elif defined(SPIFFS)
-    uintmax_t usage = bench_helpers_usage(CFG, &spiffs);
+    bench_helpers_usage(CFG, &spiffs, &usage) => 0;
     #elif defined(YAFFS2)
-    uintmax_t usage = bench_helpers_usage(CFG, &yaffs2);
+    bench_helpers_usage(CFG, &yaffs2, &usage) => 0;
     #endif
-    BENCH_RESULT("usage", written, usage);
+    BENCH_RESULT("usage", written, usage.usage);
+    BENCH_RESULT("mdir", written, usage.mdir);
+    BENCH_RESULT("btree", written, usage.btree);
+    BENCH_RESULT("data", written, usage.data);
 
     #if defined(LFS3)
     lfs3_unmount(&lfs3) => 0;
@@ -545,16 +547,20 @@ code = '''
     #endif
 
     // find the total disk usage after the benchmark
+    struct bench_helpers_usage usage;
     #if defined(LFS3)
-    uintmax_t usage = bench_helpers_usage(CFG, &lfs3);
+    bench_helpers_usage(CFG, &lfs3, &usage) => 0;
     #elif defined(LFS2)
-    uintmax_t usage = bench_helpers_usage(CFG, &lfs2);
+    bench_helpers_usage(CFG, &lfs2, &usage) => 0;
     #elif defined(SPIFFS)
-    uintmax_t usage = bench_helpers_usage(CFG, &spiffs);
+    bench_helpers_usage(CFG, &spiffs, &usage) => 0;
     #elif defined(YAFFS2)
-    uintmax_t usage = bench_helpers_usage(CFG, &yaffs2);
+    bench_helpers_usage(CFG, &yaffs2, &usage) => 0;
     #endif
-    BENCH_RESULT("usage", written, usage);
+    BENCH_RESULT("usage", written, usage.usage);
+    BENCH_RESULT("mdir", written, usage.mdir);
+    BENCH_RESULT("btree", written, usage.btree);
+    BENCH_RESULT("data", written, usage.data);
 
     #if defined(LFS3)
     lfs3_unmount(&lfs3) => 0;
@@ -884,16 +890,20 @@ code = '''
     #endif
 
     // find the total disk usage after the benchmark
+    struct bench_helpers_usage usage;
     #if defined(LFS3)
-    uintmax_t usage = bench_helpers_usage(CFG, &lfs3);
+    bench_helpers_usage(CFG, &lfs3, &usage) => 0;
     #elif defined(LFS2)
-    uintmax_t usage = bench_helpers_usage(CFG, &lfs2);
+    bench_helpers_usage(CFG, &lfs2, &usage) => 0;
     #elif defined(SPIFFS)
-    uintmax_t usage = bench_helpers_usage(CFG, &spiffs);
+    bench_helpers_usage(CFG, &spiffs, &usage) => 0;
     #elif defined(YAFFS2)
-    uintmax_t usage = bench_helpers_usage(CFG, &yaffs2);
+    bench_helpers_usage(CFG, &yaffs2, &usage) => 0;
     #endif
-    BENCH_RESULT("usage", written, usage);
+    BENCH_RESULT("usage", written, usage.usage);
+    BENCH_RESULT("mdir", written, usage.mdir);
+    BENCH_RESULT("btree", written, usage.btree);
+    BENCH_RESULT("data", written, usage.data);
 
     #if defined(LFS3)
     lfs3_unmount(&lfs3) => 0;
@@ -1096,16 +1106,20 @@ code = '''
     #endif
 
     // find the total disk usage after the benchmark
+    struct bench_helpers_usage usage;
     #if defined(LFS3)
-    uintmax_t usage = bench_helpers_usage(CFG, &lfs3);
+    bench_helpers_usage(CFG, &lfs3, &usage) => 0;
     #elif defined(LFS2)
-    uintmax_t usage = bench_helpers_usage(CFG, &lfs2);
+    bench_helpers_usage(CFG, &lfs2, &usage) => 0;
     #elif defined(SPIFFS)
-    uintmax_t usage = bench_helpers_usage(CFG, &spiffs);
+    bench_helpers_usage(CFG, &spiffs, &usage) => 0;
     #elif defined(YAFFS2)
-    uintmax_t usage = bench_helpers_usage(CFG, &yaffs2);
+    bench_helpers_usage(CFG, &yaffs2, &usage) => 0;
     #endif
-    BENCH_RESULT("usage", written, usage);
+    BENCH_RESULT("usage", written, usage.usage);
+    BENCH_RESULT("mdir", written, usage.mdir);
+    BENCH_RESULT("btree", written, usage.btree);
+    BENCH_RESULT("data", written, usage.data);
 
     #if defined(LFS3)
     lfs3_unmount(&lfs3) => 0;

@@ -72,6 +72,7 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		-DFS=$(N_$3) \
 		-DDISK_GEOMETRY=$(N_$4) \
 		-Swaf -Scwaf -Swcv \
+		-Susage -Smdir -Sbtree -Sdata \
 		$(if $(filter $3,$\
 				$(DEFAULT_LFS3_FILESYSTEMS) $\
 				$(DEFAULT_LFS2_FILESYSTEMS)),$\

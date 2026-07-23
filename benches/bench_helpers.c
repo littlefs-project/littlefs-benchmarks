@@ -199,7 +199,8 @@ static int bench_helpers_usage_cb(void *ctx, lfs3_block_t block) {
 //
 // this is a bit different for each filesystem
 //
-uintmax_t bench_helpers_usage(const struct lfs3_cfg *cfg, void *fs) {
+int bench_helpers_usage(const struct lfs3_cfg *cfg, void *fs,
+        struct bench_helpers_usage *usage) {
     #if defined(LFS3)
     (void)cfg;
     lfs3_t *lfs3 = fs;
@@ -207,8 +208,11 @@ uintmax_t bench_helpers_usage(const struct lfs3_cfg *cfg, void *fs) {
     //
     // littlefs can be a dag, so build a bitmap to find the exact
     // disk usage
-    uint8_t *usage_bmap = malloc((BLOCK_COUNT+8-1)/8);
-    memset(usage_bmap, 0, (BLOCK_COUNT+8-1)/8);
+    //
+    // but also use 2 bits so we can still find mdir/btree/data specific
+    // usage
+    uint8_t *usage_bmap = malloc(((2*BLOCK_COUNT)+8-1)/8);
+    memset(usage_bmap, 0, ((2*BLOCK_COUNT)+8-1)/8);
 
     lfs3_trv_t trv;
     lfs3_trv_open(lfs3, &trv, 0) => 0;
@@ -220,19 +224,33 @@ uintmax_t bench_helpers_usage(const struct lfs3_cfg *cfg, void *fs) {
             break;
         }
 
-        usage_bmap[binfo.block/8] |= 1 << (binfo.block % 8);
+        if (binfo.btype == LFS3_BTYPE_MDIR) {
+            usage_bmap[(2*binfo.block/8)] |= 1 << ((2*binfo.block) % 8);
+        } else if (binfo.btype == LFS3_BTYPE_BTREE) {
+            usage_bmap[(2*binfo.block/8)] |= 2 << ((2*binfo.block) % 8);
+        } else {
+            usage_bmap[(2*binfo.block/8)] |= 3 << ((2*binfo.block) % 8);
+        }
     }
     lfs3_trv_close(lfs3, &trv) => 0;
 
-    lfs3_size_t usage = 0;
+    memset(usage, 0, sizeof(struct bench_helpers_usage));
     for (lfs3_size_t j = 0; j < BLOCK_COUNT; j++) {
-        if (usage_bmap[j / 8] & (1 << (j % 8))) {
-            usage += 1;
+        uint8_t btype = (usage_bmap[(2*j) / 8] >> ((2*j) % 8)) & 0x3;
+        if (btype != 0) {
+            usage->usage += 1;
+            if (btype == 1) {
+                usage->mdir += 1;
+            } else if (btype == 2) {
+                usage->btree += 1;
+            } else {
+                usage->data += 1;
+            }
         }
     }
 
     free(usage_bmap);
-    return (uintmax_t)usage * (uintmax_t)BLOCK_SIZE;
+    return 0;
 
     #elif defined(LFS2)
     (void)cfg;
@@ -249,15 +267,15 @@ uintmax_t bench_helpers_usage(const struct lfs3_cfg *cfg, void *fs) {
         LFS3_WARN("lfs2_fs_traverse: failed %d", err);
     }
 
-    lfs3_size_t usage = 0;
+    memset(usage, 0, sizeof(struct bench_helpers_usage));
     for (lfs3_size_t j = 0; j < BLOCK_COUNT; j++) {
         if (usage_bmap[j / 8] & (1 << (j % 8))) {
-            usage += 1;
+            usage->usage += 1;
         }
     }
 
     free(usage_bmap);
-    return (uintmax_t)usage * (uintmax_t)BLOCK_SIZE;
+    return 0;
 
     #elif defined(SPIFFS)
     (void)cfg;
@@ -273,7 +291,13 @@ uintmax_t bench_helpers_usage(const struct lfs3_cfg *cfg, void *fs) {
     used += (BLOCK_COUNT*BLOCK_SIZE) - total;
 
     // note used is already in bytes
-    return used;
+    //
+    // we could report (BLOCK_COUNT*BLOCK_SIZE) - total as meta here,
+    // but, eh, we really only care about littlefs3, adding meta risks
+    // confusion downstream
+    memset(usage, 0, sizeof(struct bench_helpers_usage));
+    usage->usage = used;
+    return 0;
 
     #elif defined(YAFFS2)
     (void)cfg;
@@ -294,8 +318,10 @@ uintmax_t bench_helpers_usage(const struct lfs3_cfg *cfg, void *fs) {
     Y_LOFF_T free = yaffs_get_n_free_chunks(yaffs2);
     assert(free >= 0);
 
-    return (BLOCK_COUNT*BLOCK_SIZE)
+    memset(usage, 0, sizeof(struct bench_helpers_usage));
+    usage->usage = (BLOCK_COUNT*BLOCK_SIZE)
             - ((uintmax_t)free*(uintmax_t)yaffs2->data_bytes_per_chunk);
+    return 0;
     #endif
 }
 
