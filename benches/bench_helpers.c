@@ -114,6 +114,72 @@ int bench_helpers_warmup(const struct lfs3_cfg *cfg, void *fs) {
 
 
 
+// populate the filesystem with static files
+//
+// useful for static vs dynamic wear-leveling, metadata pressure, etc
+int bench_helpers_populate(const struct lfs3_cfg *cfg, void *fs,
+        lfs3_off_t static_count, lfs3_off_t static_size) {
+    char nbuf[256];
+    uint8_t *wbuf = malloc(static_size);
+    memset(wbuf, 's', static_size);
+
+    #if defined(LFS3)
+    (void)cfg;
+    lfs3_t *lfs3 = fs;
+
+    for (lfs3_off_t i = 0; i < static_count; i++) {
+        lfs3_file_t file;
+        sprintf(nbuf, "static_%08x", i);
+        lfs3_file_open(lfs3, &file, nbuf,
+                LFS3_O_WRONLY | LFS3_O_CREAT | LFS3_O_EXCL) => 0;
+        lfs3_file_write(lfs3, &file, wbuf, static_size) => static_size;
+        lfs3_file_close(lfs3, &file) => 0;
+    }
+    #elif defined(LFS2)
+    (void)cfg;
+    lfs2_t *lfs2 = fs;
+
+    for (lfs3_off_t i = 0; i < static_count; i++) {
+        lfs2_file_t file;
+        sprintf(nbuf, "static_%08x", i);
+        lfs2_file_open(lfs2, &file, nbuf,
+                LFS2_O_WRONLY | LFS2_O_CREAT | LFS2_O_EXCL) => 0;
+        lfs2_file_write(lfs2, &file, wbuf, static_size) => static_size;
+        lfs2_file_close(lfs2, &file) => 0;
+    }
+
+    #elif defined(SPIFFS)
+    (void)cfg;
+    spiffs *spiffs = fs;
+
+    for (lfs3_off_t i = 0; i < static_count; i++) {
+        sprintf(nbuf, "static_%08x", i);
+        spiffs_file fd = SPIFFS_open(spiffs, nbuf,
+                SPIFFS_WRONLY | SPIFFS_CREAT | SPIFFS_EXCL, 0777);
+        assert(fd >= 0);
+        SPIFFS_write(spiffs, fd, wbuf, static_size) => static_size;
+        SPIFFS_close(spiffs, fd) => 0;
+    }
+
+    #elif defined(YAFFS2)
+    (void)cfg;
+    (void)fs;
+
+    for (lfs3_off_t i = 0; i < static_count; i++) {
+        sprintf(nbuf, "static_%08x", i);
+        int fd = yaffs_open(nbuf, O_WRONLY | O_CREAT | O_EXCL, 0777);
+        assert(fd >= 0);
+        yaffs_write(fd, wbuf, static_size) => static_size;
+        yaffs_close(fd) => 0;
+    }
+    #endif
+
+    free(wbuf);
+    return 0;
+}
+
+
+
 // needed to find disk usage for littlefs2
 #if defined(LFS2)
 static int bench_helpers_usage_cb(void *ctx, lfs3_block_t block) {

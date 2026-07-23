@@ -19,6 +19,13 @@
 int bench_helpers_warmup(const struct lfs3_cfg *cfg, void *fs);
 
 
+// populate the filesystem with static files
+//
+// useful for static vs dynamic wear-leveling, metadata pressure, etc
+int bench_helpers_populate(const struct lfs3_cfg *cfg, void *fs,
+        lfs3_off_t static_count, lfs3_off_t static_size);
+
+
 // find tight disk usage
 //
 // this is going to be a bit different for each filesystem
