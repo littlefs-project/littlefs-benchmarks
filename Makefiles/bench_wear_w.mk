@@ -241,15 +241,15 @@ $1: $2
 		$(foreach r, $(subst $(comma),$(space),$3), \
 			<(./scripts/csv.py $$^ \
 				-b$4 -DBLOCK_RECYCLES='$(r),' \
-				-Dprobe=waf -fwaf_$(r)=bench_simtime \
+				-Dprobe=waf -fwaf_r$(r)=bench_simtime \
 				-o-) \
 			<(./scripts/csv.py $$^ \
 				-b$4 -DBLOCK_RECYCLES='$(r),' \
-				-Dprobe=cwaf -fcwaf_$(r)=bench_simtime \
+				-Dprobe=cwaf -fcwaf_r$(r)=bench_simtime \
 				-o-) \
 			<(./scripts/csv.py $$^ \
 				-b$4 -DBLOCK_RECYCLES='$(r),' \
-				-Dprobe=wcv -fwcv_$(r)=bench_simtime \
+				-Dprobe=wcv -fwcv_r$(r)=bench_simtime \
 				-o-)) \
 		-b$4 -F$4 \
 		-o$$@)
