@@ -32,10 +32,12 @@ BENCH_CASES ?= logging # seq random logging many
 # this is a bit of a hack, but we want to make sure the BUILDDIR
 # directory structure is correct before we run any commands
 ifneq ($(WEAR_S_RESULTSDIR),.)
-$(if $(findstring n,$(MAKEFLAGS)),, $(shell mkdir -p \
-		$(WEAR_S_RESULTSDIR) \
-		$(WEAR_S_PLOTSDIR) \
-		$(WEAR_S_TIKZDIR)))
+$(if $(findstring n,$(MAKEFLAGS)),, \
+		$(foreach d, \
+				$(WEAR_S_RESULTSDIR) \
+				$(WEAR_S_PLOTSDIR) \
+				$(WEAR_S_TIKZDIR), \
+            $(if $(wildcard $d),, $(shell mkdir -p $d))))
 endif
 
 

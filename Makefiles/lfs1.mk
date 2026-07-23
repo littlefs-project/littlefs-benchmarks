@@ -43,9 +43,11 @@ DEFAULT_SIZE_FILESYSTEMS += lfs1
 # this is a bit of a hack, but we want to make sure the BUILDDIR
 # directory structure is correct before we run any commands
 ifneq ($(LFS1_BUILDDIR),.)
-$(if $(findstring n,$(MAKEFLAGS)),, $(shell mkdir -p \
-		$(LFS1_BUILDDIR) \
-		$(dir $(LFS1_BENCH_OBJ))))
+$(if $(findstring n,$(MAKEFLAGS)),, \
+		$(foreach d, \
+				$(LFS1_BUILDDIR) \
+				$(dir $(LFS1_BENCH_OBJ)), \
+            $(if $(wildcard $d),, $(shell mkdir -p $d))))
 endif
 
 

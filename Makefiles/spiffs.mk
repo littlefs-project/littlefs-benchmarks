@@ -52,9 +52,11 @@ DEFAULT_SPIFFS_FILESYSTEMS += spiffs
 # this is a bit of a hack, but we want to make sure the BUILDDIR
 # directory structure is correct before we run any commands
 ifneq ($(SPIFFS_BUILDDIR),.)
-$(if $(findstring n,$(MAKEFLAGS)),, $(shell mkdir -p \
-		$(SPIFFS_BUILDDIR) \
-		$(dir $(SPIFFS_BENCH_OBJ))))
+$(if $(findstring n,$(MAKEFLAGS)),, \
+		$(foreach d, \
+				$(SPIFFS_BUILDDIR) \
+				$(dir $(SPIFFS_BENCH_OBJ)), \
+            $(if $(wildcard $d),, $(shell mkdir -p $d))))
 endif
 
 

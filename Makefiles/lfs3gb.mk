@@ -46,9 +46,11 @@ DEFAULT_LFS3_FILESYSTEMS  += lfs3gb
 # this is a bit of a hack, but we want to make sure the BUILDDIR
 # directory structure is correct before we run any commands
 ifneq ($(LFS3GB_BUILDDIR),.)
-$(if $(findstring n,$(MAKEFLAGS)),, $(shell mkdir -p \
-		$(LFS3GB_BUILDDIR) \
-		$(dir $(LFS3GB_BENCH_OBJ))))
+$(if $(findstring n,$(MAKEFLAGS)),, \
+		$(foreach d, \
+				$(LFS3GB_BUILDDIR) \
+				$(dir $(LFS3GB_BENCH_OBJ)), \
+            $(if $(wildcard $d),, $(shell mkdir -p $d))))
 endif
 
 

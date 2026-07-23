@@ -230,12 +230,14 @@ N_fram = 3
 # this is a bit of a hack, but we want to make sure the BUILDDIR
 # directory structure is correct before we run any commands
 ifneq ($(BUILDDIR),.)
-$(if $(findstring n,$(MAKEFLAGS)),, $(shell mkdir -p \
-		$(BUILDDIR) \
-		$(CODEMAPSDIR) \
-		$(RESULTSDIR) \
-		$(PLOTSDIR) \
-		$(TIKZDIR)))
+$(if $(findstring n,$(MAKEFLAGS)),, \
+		$(foreach d, \
+				$(BUILDDIR) \
+				$(CODEMAPSDIR) \
+				$(RESULTSDIR) \
+				$(PLOTSDIR) \
+				$(TIKZDIR), \
+            $(if $(wildcard $d),, $(shell mkdir -p $d))))
 endif
 
 # just use bash for everything, process substitution my beloved!
