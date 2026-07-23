@@ -16,8 +16,7 @@ WEAR_S_TIKZDIR ?= $(TIKZDIR)/wear_s
 WEAR_S_BLOCK_RECYCLES ?= 0,1,10,100,1000
 
 # number of static files to create
-#WEAR_S_STATIC_COUNTS ?= 0,1,5,10,50,100,500
-WEAR_S_STATIC_COUNTS ?= 0,1,2,4,8,16,32,64,128,256
+WEAR_S_STATIC_COUNTS ?= 0,1,2,4,8,16 #,32 #,64,128
 
 
 # default bench filesystems to default bench filesystems
