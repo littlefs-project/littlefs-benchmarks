@@ -13,6 +13,7 @@ LFS3F_BENCHFLAGS += -DFRUNCATE=1
 
 # add to list of filesystems
 FILESYSTEMS += lfs3f
+ALIAS_FILESYSTEMS += lfs3f
 U_lfs3f = LFS3F
 N_lfs3f = 34
 I_lfs3f = 0

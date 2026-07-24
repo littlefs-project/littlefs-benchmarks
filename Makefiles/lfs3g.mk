@@ -13,6 +13,7 @@ LFS3G_BENCHFLAGS += -DGRANULAR=1
 
 # add to list of filesystems
 FILESYSTEMS += lfs3g
+ALIAS_FILESYSTEMS += lfs3g
 U_lfs3g = LFS3G
 N_lfs3g = 33
 I_lfs3g = 0

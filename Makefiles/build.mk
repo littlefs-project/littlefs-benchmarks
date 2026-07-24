@@ -18,6 +18,10 @@ include Makefiles/yaffs2nckp.mk
 SIZE_FILESYSTEMS  ?= $(DEFAULT_SIZE_FILESYSTEMS)
 BUILD_FILESYSTEMS ?= $(DEFAULT_BUILD_FILESYSTEMS)
 
+# filter out aliases from these
+SIZE_FILESYSTEMS := $(filter-out $(ALIAS_FILESYSTEMS),$(SIZE_FILESYSTEMS))
+BUILD_FILESYSTEMS := $(filter-out $(ALIAS_FILESYSTEMS),$(BUILD_FILESYSTEMS))
+
 
 #======================================================================#
 # ctags rules                                                          #

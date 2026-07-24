@@ -13,6 +13,7 @@ YAFFS2NCKP_BENCHFLAGS ?= -DSKIP_CKPOINT=1
 
 # add to list of filesystems
 FILESYSTEMS += yaffs2nckp
+ALIAS_FILESYSTEMS += yaffs2nckp
 U_yaffs2nckp = YAFFS2NCKP
 N_yaffs2nckp = 51
 I_yaffs2nckp = 5
