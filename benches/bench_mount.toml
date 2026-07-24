@@ -69,10 +69,18 @@ defines.POWERLOSS_CHECK = 3
 # how long before powerloss/shutdown, we choose a uniform number of
 # nanoseconds between these
 defines.POWER_MINTIME = 0
-defines.POWER_MAXTIME = '10ULL*1000ULL*1000ULL*1000ULL' # 10 seconds
+defines.POWER_MAXTIME = '20ULL*1000ULL*1000ULL*1000ULL' # 20 seconds
 # alternatively, how long as defined by progs
 defines.POWER_MINPROGS = 0
 defines.POWER_MAXPROGS = 0
+# 0 => don't wait for mount+write
+# 1 => wait for mount+write
+# 2 => only wait for mount+write if stuck
+defines.POWER_WAITFORMOUNT = 2
+# abort if we make not progress this many times, you probably need to
+# increase POWER_MAXTIME or POWER_MAXPROGS
+defines.POWER_STUCKTHRESH = 20
+defines.POWER_STUCKASSERT = true
 
 # spiffs is limited to 32-bit disks
 if = 'BENCH_IFDEF_SPIFFS(DISK_SIZE < 0x100000000ULL, true)'
@@ -243,8 +251,12 @@ code = '''
     uint64_t rotates = 0;
     bool in_rotation = false;
     int mkconsistented = -1;
-    // this is where we end up after powerloss
+    uint64_t stuck = 0;
+    uint64_t stuck_before = -1;
+    uint64_t stuck_after = 0;
+    //// this is where we end up after powerloss ////
     setjmp(bench_mount_jmp);
+    ////                                         ////
     BENCH_ABORT("mountwrite");
     BENCH_ABORT("mount");
     BENCH_ABORT("mkconsistent");
@@ -265,6 +277,26 @@ code = '''
         BENCH_STOP("mkconsistent", mounts);
     }
     mkconsistented = 0;
+    // are we stuck?
+    stuck_after = written;
+    if (stuck_after != stuck_before) {
+        stuck = 0;
+        stuck_before = written;
+    } else {
+        stuck += 1;
+        // abort?
+        if (POWER_STUCKTHRESH && stuck >= (uint64_t)POWER_STUCKTHRESH
+                && POWER_WAITFORMOUNT != 2) {
+            LFS3_ERROR("stuck. stuck=%"PRIu64", aborting...",
+                    stuck);
+            if (POWER_STUCKASSERT) {
+                assert(stuck < POWER_STUCKTHRESH);
+            }
+            return;
+        }
+        LFS3_WARN("stuck? written=%"PRIu64", stuck=%"PRIu64", t=%"PRIu64,
+                written, stuck, BENCH_SIMTIME()-bench_mount_start_time);
+    }
     while (!((SIM_MOUNTS || (SIM_ROTATES && !POWERLOSS))
                 && mounts >= (uint64_t)SIM_MOUNTS
                 && (!POWERLOSS || rotates >= (uint64_t)SIM_ROTATES))
@@ -272,18 +304,28 @@ code = '''
             && !(SIM_TIME && BENCH_SIMTIME() >= SIM_TIME)) {
         // reset progs
         bench_mount_progs = 0;
+        bench_mount_start_time = -1;
+        bench_mount_stop_time = -1;
+        bench_mount_start_progs = -1;
+        bench_mount_stop_progs = -1;
         // how long to run this loop?
-        if (POWER_MINTIME || POWER_MAXTIME) {
-            bench_mount_start_time = BENCH_SIMTIME();
-            bench_mount_stop_time = bench_mount_start_time
-                    + POWER_MINTIME
-                    + (BENCH_PRNG(&prng) % (POWER_MAXTIME+1 - POWER_MINTIME));
-        }
-        if (POWER_MINPROGS || POWER_MAXPROGS) {
-            bench_mount_start_progs = 0;
-            bench_mount_stop_progs = bench_mount_start_progs
-                    + POWER_MINPROGS
-                    + (BENCH_PRNG(&prng) % (POWER_MAXPROGS+1 - POWER_MINPROGS));
+        if (POWER_WAITFORMOUNT == 0
+                || (POWER_WAITFORMOUNT == 2
+                    && stuck < (uint64_t)POWER_STUCKTHRESH)) {
+            if (POWER_MINTIME || POWER_MAXTIME) {
+                bench_mount_start_time = BENCH_SIMTIME();
+                bench_mount_stop_time = bench_mount_start_time
+                        + POWER_MINTIME
+                        + (BENCH_PRNG(&prng)
+                            % (POWER_MAXTIME+1 - POWER_MINTIME));
+            }
+            if (POWER_MINPROGS || POWER_MAXPROGS) {
+                bench_mount_start_progs = 0;
+                bench_mount_stop_progs = bench_mount_start_progs
+                        + POWER_MINPROGS
+                        + (BENCH_PRNG(&prng)
+                            % (POWER_MAXPROGS+1 - POWER_MINPROGS));
+            }
         }
 
         // TODO readonly mount?
@@ -502,6 +544,26 @@ code = '''
             if (mountwriting) {
                 BENCH_STOP("mountwrite", mounts);
                 mountwriting = false;
+
+                // how long to run this loop?
+                if (POWER_WAITFORMOUNT == 1
+                        || (POWER_WAITFORMOUNT == 2
+                            && stuck >= (uint64_t)POWER_STUCKTHRESH)) {
+                    if (POWER_MINTIME || POWER_MAXTIME) {
+                        bench_mount_start_time = BENCH_SIMTIME();
+                        bench_mount_stop_time = bench_mount_start_time
+                                + POWER_MINTIME
+                                + (BENCH_PRNG(&prng)
+                                    % (POWER_MAXTIME+1 - POWER_MINTIME));
+                    }
+                    if (POWER_MINPROGS || POWER_MAXPROGS) {
+                        bench_mount_start_progs = 0;
+                        bench_mount_stop_progs = bench_mount_start_progs
+                                + POWER_MINPROGS
+                                + (BENCH_PRNG(&prng)
+                                    % (POWER_MAXPROGS+1 - POWER_MINPROGS));
+                    }
+                }
             }
         }
         // close
@@ -542,29 +604,8 @@ code = '''
     BENCH_RESULT("grms", mounts, grms);
     #endif
 
-    // report the total stack/heap usage after the benchmark
-    #ifdef BENCH_STACK
-    BENCH_RESULT("stack", written, BENCH_STACK_WATERMARK());
-    #endif
-    #ifdef BENCH_HEAP
-    BENCH_RESULT("heap", written, BENCH_HEAP_WATERMARK());
-    #endif
-
-    // find the total disk usage after the benchmark
-    struct bench_helpers_usage usage;
-    #if defined(LFS3)
-    bench_helpers_usage(CFG, &lfs3, &usage) => 0;
-    #elif defined(LFS2)
-    bench_helpers_usage(CFG, &lfs2, &usage) => 0;
-    #elif defined(SPIFFS)
-    bench_helpers_usage(CFG, &spiffs, &usage) => 0;
-    #elif defined(YAFFS2)
-    bench_helpers_usage(CFG, &yaffs2, &usage) => 0;
-    #endif
-    BENCH_RESULT("usage", written, usage.usage);
-    BENCH_RESULT("mdir", written, usage.mdir);
-    BENCH_RESULT("btree", written, usage.btree);
-    BENCH_RESULT("data", written, usage.data);
+    // don't bother with ram/disk measurements, for one, we're leaking
+    // memory out the wazoo, for two, we're not mounted!
 
     // other cleanup?
     #if defined(LFS3)
