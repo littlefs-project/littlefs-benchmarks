@@ -74,7 +74,7 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		$(if $(SIM_SIZE),-DSIM_SIZE=$(SIM_SIZE)) \
 		-DFS=$(N_$3) \
 		-DDISK_GEOMETRY=$(N_$4) \
-		-Swaf -Scwaf -Swcv \
+		-Swear=max -Swear=stddev -Swaf \
 		$(if $(filter $3,$\
 				$(DEFAULT_LFS3_FILESYSTEMS) $\
 				$(DEFAULT_LFS2_FILESYSTEMS)),$\
@@ -128,15 +128,15 @@ $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
 			-bcase -bFS -bBLOCK_RECYCLES -b$4 \
+			-Dprobe=wear+max -fwmax=bench_simtime \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-bcase -bFS -bBLOCK_RECYCLES -b$4 \
+			-Dprobe=wear+stddev -fwstddev=bench_simtime \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-bcase -bFS -bBLOCK_RECYCLES -b$4 \
 			-Dprobe=waf -fwaf=bench_simtime \
-			-o-) \
-		<(./scripts/csv.py $$^ \
-			-bcase -bFS -bBLOCK_RECYCLES -b$4 \
-			-Dprobe=cwaf -fcwaf=bench_simtime \
-			-o-) \
-		<(./scripts/csv.py $$^ \
-			-bcase -bFS -bBLOCK_RECYCLES -b$4 \
-			-Dprobe=wcv -fwcv=bench_simtime \
 			-o-) \
 		-W1500 -H350 \
 		--title=$3 \
@@ -145,47 +145,47 @@ $1: $2
 		-x$4 \
 		--subplot=" \
 				--title='seq' \
+				--ylabel='max' \
+				-Dcase=bench_wear_seq \
+				-ywmax \
+			--subplot-below=\" \
+				--ylabel='stddev' \
+				-Dcase=bench_wear_seq \
+				-ywstddev\" \
+			--subplot-below=\" \
 				--ylabel='waf' \
 				-Dcase=bench_wear_seq \
-				-ywaf \
-			--subplot-below=\" \
-				--ylabel='cwaf' \
-				-Dcase=bench_wear_seq \
-				-ycwaf\" \
-			--subplot-below=\" \
-				--ylabel='wcv' \
-				-Dcase=bench_wear_seq \
-				-ywcv\"" \
+				-ywaf\"" \
 		--subplot-right=" \
 				--title='random' \
 				-Dcase=bench_wear_random \
-				-ywaf \
+				-ywmax \
 			--subplot-below=\" \
 				-Dcase=bench_wear_random \
-				-ycwaf\" \
+				-ywstddev\" \
 			--subplot-below=\" \
 				-Dcase=bench_wear_random \
-				-ywcv\"" \
+				-ywaf\"" \
 		--subplot-right=" \
 				--title='logging' \
 				-Dcase=bench_wear_logging \
-				-ywaf \
+				-ywmax \
 			--subplot-below=\" \
 				-Dcase=bench_wear_logging \
-				-ycwaf\" \
+				-ywstddev\" \
 			--subplot-below=\" \
 				-Dcase=bench_wear_logging \
-				-ywcv\"" \
+				-ywaf\"" \
 		--subplot-right=" \
 				--title='many' \
 				-Dcase=bench_wear_many \
-				-ywaf \
+				-ywmax \
 			--subplot-below=\" \
 				-Dcase=bench_wear_many \
-				-ycwaf\" \
+				-ywstddev\" \
 			--subplot-below=\" \
 				-Dcase=bench_wear_many \
-				-ywcv\"" \
+				-ywaf\"" \
 		--legend \
 		$(foreach fs, $(BENCH_FILESYSTEMS),$\
 			-L'$(N_$(fs))=$(fs),%(BLOCK_RECYCLES)s') \
@@ -243,15 +243,15 @@ $1: $2
 		$(foreach r, $(subst $(comma),$(space),$3), \
 			<(./scripts/csv.py $$^ \
 				-b$4 -DBLOCK_RECYCLES='$(r),' \
+				-Dprobe=wear+max -fwmax_r$(r)=bench_simtime \
+				-o-) \
+			<(./scripts/csv.py $$^ \
+				-b$4 -DBLOCK_RECYCLES='$(r),' \
+				-Dprobe=wear+stddev -fwstddev_r$(r)=bench_simtime \
+				-o-) \
+			<(./scripts/csv.py $$^ \
+				-b$4 -DBLOCK_RECYCLES='$(r),' \
 				-Dprobe=waf -fwaf_r$(r)=bench_simtime \
-				-o-) \
-			<(./scripts/csv.py $$^ \
-				-b$4 -DBLOCK_RECYCLES='$(r),' \
-				-Dprobe=cwaf -fcwaf_r$(r)=bench_simtime \
-				-o-) \
-			<(./scripts/csv.py $$^ \
-				-b$4 -DBLOCK_RECYCLES='$(r),' \
-				-Dprobe=wcv -fwcv_r$(r)=bench_simtime \
 				-o-)) \
 		-b$4 -F$4 \
 		-o$$@)

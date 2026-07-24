@@ -86,27 +86,6 @@ code = '''
         return ((double)wear_max*(double)BLOCK_COUNT*(double)BLOCK_SIZE)
                 / (double)((written) ? written : 1);
     }
-
-    // wear coefficient of variation, i.e. stddev/mean
-    double bench_wear_wcv(void) {
-        if (!bench_wear_erasemap) {
-            return 0.0;
-        }
-
-        bench_io_t wear_sum = 0;
-        for (lfs3_block_t i = 0; i < BLOCK_COUNT; i++) {
-            wear_sum += bench_wear_erasemap[i];
-        }
-        double wear_avg = (double)wear_sum / (double)BLOCK_COUNT;
-
-        double wear_var = 0.0;
-        for (lfs3_block_t i = 0; i < BLOCK_COUNT; i++) {
-            wear_var += ((double)bench_wear_erasemap[i] - wear_avg)
-                    * ((double)bench_wear_erasemap[i] - wear_avg);
-        }
-        return sqrt(wear_var / (double)BLOCK_COUNT)
-                / wear_avg;
-    }
 '''
 
 
@@ -349,8 +328,6 @@ code = '''
     // conservative wear-amplification factor, i.e.
     // (max(erases)*BLOCK_COUNT*BLOCK_SIZE)/written
     BENCH_FRESULT("cwaf", BLOCK_COUNT, bench_wear_cwaf(written));
-    // wear coefficient of variation, i.e. stddev/mean
-    BENCH_FRESULT("wcv", BLOCK_COUNT, bench_wear_wcv());
 
     // report the total stack/heap usage after the benchmark
     #ifdef BENCH_STACK
