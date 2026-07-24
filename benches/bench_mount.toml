@@ -284,18 +284,25 @@ code = '''
         stuck_before = written;
     } else {
         stuck += 1;
+        LFS3_WARN("stuck? written=%"PRIu64", stuck=%"PRIu64", "
+                    "t=%"PRId64", p=%"PRId64,
+                written, stuck,
+                (bench_mount_stop_time != -1)
+                    ? BENCH_SIMTIME()-bench_mount_start_time
+                    : -1,
+                (bench_mount_stop_progs != -1)
+                    ? bench_mount_progs-bench_mount_start_progs
+                    : -1);
         // abort?
         if (POWER_STUCKTHRESH && stuck >= (uint64_t)POWER_STUCKTHRESH
                 && POWER_WAITFORMOUNT != 2) {
-            LFS3_ERROR("stuck. stuck=%"PRIu64", aborting...",
-                    stuck);
+            LFS3_ERROR("stuck. stuck=%"PRIu64" >= %"PRIu64", aborting...",
+                    stuck, POWER_STUCKTHRESH);
             if (POWER_STUCKASSERT) {
                 assert(stuck < POWER_STUCKTHRESH);
             }
             return;
         }
-        LFS3_WARN("stuck? written=%"PRIu64", stuck=%"PRIu64", t=%"PRIu64,
-                written, stuck, BENCH_SIMTIME()-bench_mount_start_time);
     }
     while (!((SIM_MOUNTS || (SIM_ROTATES && !POWERLOSS))
                 && mounts >= (uint64_t)SIM_MOUNTS
