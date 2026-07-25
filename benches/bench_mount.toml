@@ -323,8 +323,7 @@ code = '''
                 bench_mount_start_time = BENCH_SIMTIME();
                 bench_mount_stop_time = bench_mount_start_time
                         + POWER_MINTIME
-                        + ((((uint64_t)BENCH_PRNG(&prng) << 0)
-                                | ((uint64_t)BENCH_PRNG(&prng) << 32))
+                        + ((0x100010001ULL * BENCH_PRNG(&prng))
                             % (POWER_MAXTIME+1 - POWER_MINTIME));
             }
             if (POWER_MINPROGS || POWER_MAXPROGS) {
@@ -561,8 +560,7 @@ code = '''
                         bench_mount_start_time = BENCH_SIMTIME();
                         bench_mount_stop_time = bench_mount_start_time
                                 + POWER_MINTIME
-                                + ((((uint64_t)BENCH_PRNG(&prng) << 0)
-                                        | ((uint64_t)BENCH_PRNG(&prng) << 32))
+                                + ((0x100010001ULL * BENCH_PRNG(&prng))
                                     % (POWER_MAXTIME+1 - POWER_MINTIME));
                     }
                     if (POWER_MINPROGS || POWER_MAXPROGS) {
