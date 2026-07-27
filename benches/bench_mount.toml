@@ -26,9 +26,7 @@ defines.STATIC_COUNT = 0
 defines.STATIC_SIZE = 512 # 64 # inlined (in theory, check mdirs/data)
 
 # also bench read-only mount?
-#
-# TODO this isn't implemented yet
-# defines.ROMOUNT = true
+defines.ROMOUNT = true
 
 # run with simulated powerloss? defaults to a nice shutdown
 defines.POWERLOSS = false
@@ -38,29 +36,12 @@ defines.POWERLOSS_NOISE = false
 
 # for spiffs, check the filesystem after a powerloss
 #
-# well this was a bit of a journey
+# note this may take a very long time, but the metadata itself is pl
+# safe, so it _should_ be ok to call this on error
 #
-# Spiffs comes with a SPIFFS_check function intended to validate and
-# correct any errors after a known powerloss, but as far as I can tell,
-# the best strategy is to just never call it. It just takes too long.
-# (to be fair, we are benching on geometries larger than what spiffs was
-# designed for)
-#
-# The good news is spiffs's metadata appears to be pl safe, and that's
-# really what's important. See the spiffs docs (and confirmed so far in
-# my testing):
+# relevant spiffs docs:
 # https://github.com/pellepl/spiffs/wiki/FAQ#
 #     powerlosses-contd-when-should-i-run-spiffs_check
-#
-# So while we may end up with weird state and spurious errors (and
-# duplicated data?) things should still work. Probably. And these sort
-# of errors are _relatively_ easy to workaround at the application
-# level.
-#
-# Note the goal here isn't really to measure powerloss properties. All
-# three filesystems have different transaction models anyway. The goal
-# is just to measure how long the filesystems take to get to some sort
-# of functional state after a powerloss.
 #
 # available check modes:
 # 0 => no pl check
@@ -68,7 +49,11 @@ defines.POWERLOSS_NOISE = false
 # 2 => check after error
 # 3 => at least force a log-rotate, this avoids corrupt logs getting
 #      stuck without losing data
-defines.POWERLOSS_CHECK = 3
+defines.POWERLOSS_CHECK = 2
+# 0 => try to keep writing to log after an error
+# 1 => immediately rotate log after an error
+# 2 => just remove log after an error
+defines.POWERLOSS_CHECKROTATE = 1
 
 # how long before powerloss/shutdown, we choose a uniform number of
 # nanoseconds between these
@@ -300,7 +285,6 @@ code = '''
     volatile uint64_t grms = 0;
     volatile uint64_t rotates = 0;
     volatile bool in_rotation = false;
-    volatile int mkconsistented = -1;
     volatile uint64_t stuck = 0;
     volatile uint64_t stuck_before = -1;
     volatile uint64_t stuck_after = 0;
@@ -320,13 +304,6 @@ code = '''
         rotates += 1;
         in_rotation = false;
     }
-    // if we didn't need mkconsistent, report 0 so percentile
-    // measurements make sense
-    if (mkconsistented == 0) {
-        BENCH_START("mkconsistent");
-        BENCH_STOP("mkconsistent", mounts);
-    }
-    mkconsistented = 0;
     // are we stuck?
     stuck_after = written;
     if (stuck_after != stuck_before) {
@@ -381,13 +358,69 @@ code = '''
             }
         }
 
-        // TODO readonly mount?
+        // increment mounts
+        mounts += 1;
+
+        // measure read-only mount time?
+        //
+        // optional as there is a risk this messes with the normal
+        // somehow (in _theory_ it doesn't...)
+        if (ROMOUNT) {
+            BENCH_START("romount");
+            #if defined(LFS3)
+            lfs3_mount(&lfs3, LFS3_M_RDONLY, CFG) => 0;
+            #elif defined(LFS2)
+            lfs2_mount(&lfs2, CFG_LFS2) => 0;
+            #elif defined(SPIFFS)
+            // note this is only read-only because we set
+            // SPIFFS_USE_MAGIC=0, otherwise spiffs will try to erase
+            // any corrupted blocks
+            SPIFFS_mount(&spiffs, (spiffs_config*)CFG_SPIFFS, work_buffer,
+                    fd_buffer, FD_SIZE,
+                    scache_buffer, SCACHE_SIZE,
+                    NULL) => 0;
+            #elif defined(YAFFS2)
+            // yaffs2 uses some global state we need to reset
+            extern struct list_head yaffsfs_deviceList;
+            INIT_LIST_HEAD(&yaffsfs_deviceList);
+            extern int yaffsfs_handlesInitialised;
+            yaffsfs_handlesInitialised = false;
+            // yes, yaffs2 needs this to be zeroed
+            yaffs2 = (struct yaffs_dev){
+                .driver_context = CFG,
+                .param = CFG_YAFFS2->param,
+                .drv = CFG_YAFFS2->drv,
+            };
+            yaffs_add_device(&yaffs2);
+            yaffs_mount2("/", true) => 0;
+            //                  ^- read-only
+            #endif
+            BENCH_STOP("romount", mounts);
+
+            BENCH_START("rounmount");
+            #if defined(LFS3)
+            lfs3_unmount(&lfs3) => 0;
+            #elif defined(LFS2)
+            lfs2_unmount(&lfs2) => 0;
+            #elif defined(SPIFFS)
+            SPIFFS_unmount(&spiffs);
+            #elif defined(YAFFS2)
+            yaffs_unmount("/") => 0;
+            yaffs_remove_device(&yaffs2);
+            #endif
+            BENCH_STOP("rounmount", mounts);
+        }
 
         // measure mount time
         BENCH_START("mountwrite");
         bool mountwriting = true;
+        bool mkconsistented = false;
+        #if defined(SPIFFS)
+        // spiffs only: needs_check gets set to true if we hit an error
+        bool needs_check = false;
+    remount_and_check:;
+        #endif
         BENCH_START("mount");
-        mounts += 1;
         #if defined(LFS3)
         lfs3_mount(&lfs3, LFS3_M_RDWR, CFG) => 0;
         // keep track of how many grms we've seen
@@ -401,15 +434,6 @@ code = '''
                 fd_buffer, FD_SIZE,
                 scache_buffer, SCACHE_SIZE,
                 NULL) => 0;
-        // check the filesystem for errors after powerlos?
-        //
-        // note this takes literally forever, see above
-        if (POWERLOSS_CHECK == 1 && POWERLOSS) {
-            BENCH_START("mkconsistent");
-            SPIFFS_check(&spiffs) => 0;
-            mkconsistented = 1;
-            BENCH_STOP("mkconsistent", mounts);
-        }
         #elif defined(YAFFS2)
         // yaffs2 uses some global state we need to reset
         extern struct list_head yaffsfs_deviceList;
@@ -425,23 +449,42 @@ code = '''
         yaffs_add_device(&yaffs2);
         yaffs_mount("/") => 0;
         #endif
-        BENCH_STOP("mount", mounts);
 
-        // include mkconsistent cost for fairness, note inconsistent
-        // mounts are the same as read-only mounts
+        // include mkconsistent cost for fairness
         #if defined(LFS3)
         BENCH_START("mkconsistent");
         lfs3_fs_mkconsistent(&lfs3) => 0;
-        mkconsistented = 1;
+        mkconsistented = true;
         BENCH_STOP("mkconsistent", mounts);
         #elif defined(LFS2)
         BENCH_START("mkconsistent");
         lfs2_fs_mkconsistent(&lfs2) => 0;
-        mkconsistented = 1;
+        mkconsistented = true;
         BENCH_STOP("mkconsistent", mounts);
         #elif defined(SPIFFS)
+        // check the filesystem for errors after powerloss?
+        //
+        // note this takes literally forever, see above
+        if (POWERLOSS && (POWERLOSS_CHECK == 1 || needs_check)) {
+            BENCH_START("mkconsistent");
+            SPIFFS_check(&spiffs) => 0;
+            // immediately rotate log after an error?
+            if (needs_check && POWERLOSS_CHECKROTATE == 1) {
+                int err = SPIFFS_remove(&spiffs, "bench_log.1");
+                assert(!err || err == SPIFFS_ERR_NOT_FOUND);
+                err = SPIFFS_rename(&spiffs, "bench_log", "bench_log.1");
+                assert(!err || err == SPIFFS_ERR_NOT_FOUND);
+            // remove log after an error?
+            } else if (needs_check && POWERLOSS_CHECKROTATE == 2) {
+                int err = SPIFFS_remove(&spiffs, "bench_log");
+                assert(!err || err == SPIFFS_ERR_NOT_FOUND);
+            }
+            mkconsistented = true;
+            BENCH_STOP("mkconsistent", mounts);
+        }
         #elif defined(YAFFS2)
         #endif
+        BENCH_STOP("mount", mounts);
 
         // open a file
         //
@@ -501,29 +544,13 @@ code = '''
             #elif defined(SPIFFS)
             s32_t d = SPIFFS_fflush(&spiffs, fd);
             assert(d >= 0 || POWERLOSS);
-            bool forcelogrotate = false;
-            if (POWERLOSS_CHECK == 1) {
-                // if running SPIFFS_check, we should never find an
-                // error here
-                assert(d >= 0);
-            } else if (POWERLOSS_CHECK == 2) {
-                // uh oh, need to run spiffs check to fix things? this is
-                // _very_ expensive
-                //
-                // note this takes literally forever, see above
-                if (d < 0) {
-                    BENCH_START("mkconsistent");
-                    SPIFFS_check(&spiffs) => 0;
-                    mkconsistented = 1;
-                    BENCH_STOP("mkconsistent", mounts);
-                    d = SPIFFS_fflush(&spiffs, fd);
-                    assert(d >= 0);
-                }
-            } else if (POWERLOSS_CHECK == 3) {
-                // at least force a log rotate
-                forcelogrotate = true;
-            } else {
-                // do nothing
+            if (d < 0) {
+                // uh oh, found an error? try to remount with check
+                needs_check = true;
+                BENCH_ABORT("write");
+                SPIFFS_close(&spiffs, fd) => 0;
+                SPIFFS_unmount(&spiffs);
+                goto remount_and_check;
             }
             #elif defined(YAFFS2)
             yaffs_fsync(fd) => 0;
@@ -567,17 +594,39 @@ code = '''
             spiffs_stat stat;
             SPIFFS_fstat(&spiffs, fd, &stat) => 0;
             assert(stat.size >= 0);
-            if (stat.size >= SIZE || forcelogrotate) {
+            if (stat.size >= SIZE) {
                 SPIFFS_close(&spiffs, fd) => 0;
                 int err = SPIFFS_remove(&spiffs, "bench_log.1");
-                assert(!err || err == SPIFFS_ERR_NOT_FOUND);
-                SPIFFS_rename(&spiffs, "bench_log", "bench_log.1") => 0;
+                assert(!err || err == SPIFFS_ERR_NOT_FOUND || POWERLOSS);
+                if (err && err != SPIFFS_ERR_NOT_FOUND) {
+                    // uh oh, found an error? try to remount with check
+                    needs_check = true;
+                    BENCH_ABORT("write");
+                    SPIFFS_unmount(&spiffs);
+                    goto remount_and_check;
+                }
+                err = SPIFFS_rename(&spiffs, "bench_log", "bench_log.1");
+                assert(!err || err == SPIFFS_ERR_NOT_FOUND || POWERLOSS);
+                if (err && err != SPIFFS_ERR_NOT_FOUND) {
+                    // uh oh, found an error? try to remount with check
+                    needs_check = true;
+                    BENCH_ABORT("write");
+                    SPIFFS_unmount(&spiffs);
+                    goto remount_and_check;
+                }
                 fd = SPIFFS_open(&spiffs, "bench_log",
                         SPIFFS_WRONLY
                             | SPIFFS_CREAT
                             | SPIFFS_EXCL
                             | SPIFFS_APPEND, 0777);
-                assert(fd >= 0);
+                assert(fd >= 0 || POWERLOSS);
+                if (fd < 0) {
+                    // uh oh, found an error? try to remount with check
+                    needs_check = true;
+                    BENCH_ABORT("write");
+                    SPIFFS_unmount(&spiffs);
+                    goto remount_and_check;
+                }
             }
             #elif defined(YAFFS2)
             struct yaffs_stat stat;
@@ -619,6 +668,13 @@ code = '''
                 }
             }
         }
+        // if we didn't need mkconsistent, report 0 so percentile
+        // measurements make sense
+        if (!mkconsistented) {
+            BENCH_START("mkconsistent");
+            BENCH_STOP("mkconsistent", mounts);
+        }
+
         // close
         BENCH_START("closeunmount");
         BENCH_START("close");

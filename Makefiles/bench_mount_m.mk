@@ -84,12 +84,14 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		$(if $(SIM_SIZE),-DSIM_SIZE=$(SIM_SIZE)) \
 		-DFS=$(N_$3) \
 		-DDISK_GEOMETRY=$(N_$4) \
-		-Srotates \
-		-Sgrms \
+		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_M_P))),$\
+			-Sromount=$(p)) \
+		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_M_P))),$\
+			-Smount=$(p)) \
 		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_M_P))),$\
 			-Smountwrite=$(p)) \
-		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_M_P))),$\
-			-Scloseunmount=$(p)) \
+		-Srotates -Sgrms \
+		-Sclose -Sunmount \
 		-Susage -Smdir -Sbtree -Sdata \
 		-DPOWERLOSS=$(or $6,$(MOUNT_M_POWERLOSS)) \
 		-DSTATIC_COUNT=$(or $7,$(MOUNT_M_STATIC_COUNTS)) \
@@ -118,13 +120,20 @@ all plot: plot-mount-m
 plot-mount-m: \
 		$(MOUNT_M_PLOTSDIR)/plots.html \
 		$(foreach g, $(BENCH_GEOMETRIES), \
-			$(MOUNT_M_PLOTSDIR)/plot_mount_m.$(g).svg)
+			$(MOUNT_M_PLOTSDIR)/plot_mount_m_romount.$(g).svg)
+			$(MOUNT_M_PLOTSDIR)/plot_mount_m_mount.$(g).svg)
+			$(MOUNT_M_PLOTSDIR)/plot_mount_m_mountwrite.$(g).svg)
 
 ## Create a quick html page for easy viewing
 $(MOUNT_M_PLOTSDIR)/plots.html:
 	echo -e "$(subst $(nl),\n,$(HTML_HEADER))" >> $@
 	$(foreach g, $(BENCH_GEOMETRIES), \
-		echo -e "<p><img src="plot_mount_m.$(g).svg"></p>" >> $@ $(nl))
+		echo -e "<p><img src="plot_mount_m_romount.$(g).svg"></p>" $\
+			>> $@ $(nl)$\
+		echo -e "<p><img src="plot_mount_m_mount.$(g).svg"></p>" $\
+			>> $@ $(nl)$\
+		echo -e "<p><img src="plot_mount_m_mountwrite.$(g).svg"></p>" $\
+			>> $@ $(nl))
 	echo -e "$(subst $(nl),\n,$(HTML_FOOTER))" >> $@
 
 # core plot rule
@@ -136,12 +145,13 @@ $(MOUNT_M_PLOTSDIR)/plots.html:
 # $5 - x-ticks
 # $6 - x-skip
 # $7 - extra plotmpl.py flags
+# $8 - probe name
 #
 define PLOT_MOUNT_M_RULE
 $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
-			-bcase -bFS -bPOWERLOSS -b$4 -Dprobe=mountwrite+$(MOUNT_M_P) \
+			-bcase -bFS -bPOWERLOSS -b$4 -Dprobe=$8 \
 			-flatency='float(bench_simtime)/1.0e9' \
 			-o-) \
 		-W1500 -H350 \
@@ -201,15 +211,16 @@ endef
 # plot rules
 $(foreach g, $(BENCH_GEOMETRIES), \
 	$(eval $(call PLOT_MOUNT_M_RULE,$\
-		$(MOUNT_M_PLOTSDIR)/plot_mount_m.$(g).svg,$\
+		$(MOUNT_M_PLOTSDIR)/plot_mount_m_%.$(g).svg,$\
 		$(foreach c, $(BENCH_CASES),$\
 			$(foreach fs, $(BENCH_FILESYSTEMS),$\
 				$(MOUNT_M_RESULTSDIR)/bench_mount_m.$(c).$(fs).$(g).csv)),$\
-		"metadata - $(g) - simulated mount time",$\
+		"metadata - $(g) - simulated $$* time",$\
 		STATIC_COUNT,$\
 		$(MOUNT_M_STATIC_COUNTS),$\
 		2,$\
-		--xlabel="static counts")))
+		--xlabel="static counts",$\
+		'$$*+$(MOUNT_M_P)')))
 
 
 #======================================================================#
@@ -234,8 +245,28 @@ define TIKZ_MOUNT_M_RULE
 $1: $2
 	$$(strip ./scripts/csv.py \
 		<(./scripts/csv.py $$^ \
+			-b$3 -DPOWERLOSS=0 -Dprobe=romount+$(MOUNT_M_P) \
+			-fromount_npl_$(subst .,$(nil),$(MOUNT_M_P))=$\
+				'float(bench_simtime)/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$3 -DPOWERLOSS=0 -Dprobe=mount+$(MOUNT_M_P) \
+			-fmount_npl_$(subst .,$(nil),$(MOUNT_M_P))=$\
+				'float(bench_simtime)/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
 			-b$3 -DPOWERLOSS=0 -Dprobe=mountwrite+$(MOUNT_M_P) \
 			-fmountwrite_npl_$(subst .,$(nil),$(MOUNT_M_P))=$\
+				'float(bench_simtime)/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$3 -DPOWERLOSS=1 -Dprobe=romount+$(MOUNT_M_P) \
+			-fromount_ypl_$(subst .,$(nil),$(MOUNT_M_P))=$\
+				'float(bench_simtime)/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$3 -DPOWERLOSS=1 -Dprobe=mount+$(MOUNT_M_P) \
+			-fmount_ypl_$(subst .,$(nil),$(MOUNT_M_P))=$\
 				'float(bench_simtime)/1.0e9' \
 			-o-) \
 		<(./scripts/csv.py $$^ \

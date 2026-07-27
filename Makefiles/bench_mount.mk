@@ -74,12 +74,14 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		$(if $(SIM_SIZE),-DSIM_SIZE=$(SIM_SIZE)) \
 		-DFS=$(N_$3) \
 		-DDISK_GEOMETRY=$(N_$4) \
-		-Srotates \
-		-Sgrms \
+		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_P))),$\
+			-Sromount=$(p)) \
+		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_P))),$\
+			-Smount=$(p)) \
 		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_P))),$\
 			-Smountwrite=$(p)) \
-		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_P))),$\
-			-Scloseunmount=$(p)) \
+		-Srotates -Sgrms \
+		-Sclose -Sunmount \
 		-DPOWERLOSS=$(or $6,$(MOUNT_POWERLOSS)) \
 		-o$$@)
 endef
@@ -105,19 +107,33 @@ all plot: plot-mount
 plot-mount: \
 		$(MOUNT_PLOTSDIR)/plots.html \
 		$(foreach g, $(BENCH_GEOMETRIES), \
-			$(MOUNT_PLOTSDIR)/plot_mount.$(g).svg) \
+			$(MOUNT_PLOTSDIR)/plot_mount_romount.$(g).svg \
+			$(MOUNT_PLOTSDIR)/plot_mount_mount.$(g).svg \
+			$(MOUNT_PLOTSDIR)/plot_mount_mountwrite.$(g).svg) \
 		$(foreach g, $(BENCH_GEOMETRIES), \
 			$(foreach p, $(subst $(comma),$(space),$(MOUNT_P)), \
-				$(MOUNT_PLOTSDIR)/plot_mount.$(p).$(g).svg))
+				$(MOUNT_PLOTSDIR)/plot_mount_romount.$(p).$(g).svg \
+				$(MOUNT_PLOTSDIR)/plot_mount_mount.$(p).$(g).svg \
+				$(MOUNT_PLOTSDIR)/plot_mount_mountwrite.$(p).$(g).svg))
 
 ## Create a quick html page for easy viewing
 $(MOUNT_PLOTSDIR)/plots.html:
 	echo -e "$(subst $(nl),\n,$(HTML_HEADER))" >> $@
 	$(foreach g, $(BENCH_GEOMETRIES), \
-		echo -e "<p><img src="plot_mount.$(g).svg"></p>" >> $@ $(nl))
+		echo -e "<p><img src="plot_mount_romount.$(g).svg"></p>" $\
+			>> $@ $(nl)$\
+		echo -e "<p><img src="plot_mount_mount.$(g).svg"></p>" $\
+			>> $@ $(nl)$\
+		echo -e "<p><img src="plot_mount_mountwrite.$(g).svg"></p>" $\
+			>> $@ $(nl))
 	$(foreach g, $(BENCH_GEOMETRIES), \
 		$(foreach p, $(subst $(comma),$(space),$(MOUNT_P)), \
-			echo -e "<p><img src="plot_mount.$(p).$(g).svg"></p>" >> $@ $(nl)))
+			echo -e "<p><img src="plot_mount_romount.$(p).$(g).svg"></p>" $\
+				>> $@ $(nl)$\
+			echo -e "<p><img src="plot_mount_mount.$(p).$(g).svg"></p>" $\
+				>> $@ $(nl)$\
+			echo -e "<p><img src="plot_mount_mountwrite.$(p).$(g).svg"></p>" $\
+				>> $@ $(nl)))
 	echo -e "$(subst $(nl),\n,$(HTML_FOOTER))" >> $@
 
 # core plot rule
@@ -129,55 +145,49 @@ $(MOUNT_PLOTSDIR)/plots.html:
 # $5 - x-ticks
 # $6 - x-skip
 # $7 - extra plotmpl.py flags
+# $8 - probe name
 #
 define PLOT_MOUNT_RULE
 $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
-			-Si='enumerate()' -bcase -bPOWERLOSS -bFS -b$4 \
+			-Si='enumerate()' -bcase -bPOWERLOSS -bFS -b$4 -D$4=$8 \
 			-flatency='bench_simtime/1.0e9' \
 			-o-) \
-		-W1500 $(if, -H350) -H525 \
+		-W1500 -H350 \
 		--title=$3 \
 		-bFS \
+		-ylatency \
 		--subplot=" \
 				--title='seq' \
 				--ylabel='mount latency (no pl)' \
 				-Dcase=bench_mount_seq \
-				-DPOWERLOSS=0 -D$4='mountwrite+*' \
-				-ylatency --yunits=s \
+				-DPOWERLOSS=0 \
 			--subplot-below=\" \
 				--ylabel='mount latency (yes pl)' \
 				-Dcase=bench_mount_seq \
-				-DPOWERLOSS=1 -D$4='mountwrite+*' \
-				-ylatency --yunits=s\"" \
+				-DPOWERLOSS=1\"" \
 		--subplot-right=" \
 				--title='random' \
 				-Dcase=bench_mount_random \
-				-DPOWERLOSS=0 -D$4='mountwrite+*' \
-				-ylatency --yunits=s \
+				-DPOWERLOSS=0 \
 			--subplot-below=\" \
 				-Dcase=bench_mount_random \
-				-DPOWERLOSS=1 -D$4='mountwrite+*' \
-				-ylatency --yunits=s\"" \
+				-DPOWERLOSS=1\"" \
 		--subplot-right=" \
 				--title='logging' \
 				-Dcase=bench_mount_logging \
-				-DPOWERLOSS=0 -D$4='mountwrite+*' \
-				-ylatency --yunits=s \
+				-DPOWERLOSS=0 \
 			--subplot-below=\" \
 				-Dcase=bench_mount_logging \
-				-DPOWERLOSS=1 -D$4='mountwrite+*' \
-				-ylatency --yunits=s\"" \
+				-DPOWERLOSS=1\"" \
 		--subplot-right=" \
 				--title='many' \
 				-Dcase=bench_mount_many \
-				-DPOWERLOSS=0 -D$4='mountwrite+*' \
-				-ylatency --yunits=s \
+				-DPOWERLOSS=0 \
 			--subplot-below=\" \
 				-Dcase=bench_mount_many \
-				-DPOWERLOSS=1 -D$4='mountwrite+*' \
-				-ylatency --yunits=s\"" \
+				-DPOWERLOSS=1\"" \
 		--legend \
 		$(foreach fs, $(BENCH_FILESYSTEMS),$\
 			-L'$(N_$(fs))=$(fs)') \
@@ -185,6 +195,7 @@ $1: $2
 			-C'$(N_$(fs))=$(C_$(fs))') \
 		$(foreach fs, $(BENCH_FILESYSTEMS),$\
 			-F'$(N_$(fs))=$(addsuffix -,$(F_$(fs)))') \
+		-ylatency --yunits=s \
 		-X"-0.25,$\
 			$$(shell python -c 'b=len("$5".split(","))-1; print(b+1/4)')" \
 		$$(shell python -c '$\
@@ -198,15 +209,16 @@ endef
 # plot rules
 $(foreach g, $(BENCH_GEOMETRIES), \
 	$(eval $(call PLOT_MOUNT_RULE,$\
-		$(MOUNT_PLOTSDIR)/plot_mount.$(g).svg,$\
+		$(MOUNT_PLOTSDIR)/plot_mount_%.$(g).svg,$\
 		$(foreach c, $(BENCH_CASES),$\
 			$(foreach fs, $(BENCH_FILESYSTEMS),$\
 				$(MOUNT_RESULTSDIR)/bench_mount.$(c).$(fs).$(g).csv)),$\
-		"$(g) - simulated mount time",$\
+		"$(g) - simulated $$* time",$\
 		probe,$\
 		$(MOUNT_P),$\
 		1,$\
-		--xlabel="percentile")))
+		--xlabel="percentile",$\
+		'$$*+*')))
 
 # per-percentile plot rule
 #
@@ -217,59 +229,50 @@ $(foreach g, $(BENCH_GEOMETRIES), \
 # $5 - x-ticks
 # $6 - x-skip
 # $7 - extra plotmpl.py flags
+# $8 - probe name
 #
 define PLOT_MOUNT_P_RULE
 $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
-			-Si='enumerate()' -bcase -bPOWERLOSS -b$4 -bprobe -Dprobe='*+$$*' \
+			-Si='enumerate()' -bcase -bPOWERLOSS -b$4 -bprobe -Dprobe=$8 \
 			-flatency='bench_simtime/1.0e9' \
 			-o-) \
 		-W1500 -H350 \
 		--title=$3 \
-		-bprobe \
+		-ylatency \
 		--subplot=" \
 				--title='seq (mount)' \
 				--ylabel='latency (no pl)' \
 				-Dcase=bench_mount_seq \
-				-DPOWERLOSS=0 -Dprobe='mountwrite+*' \
-				-ylatency --yunits=s \
+				-DPOWERLOSS=0 \
 			--subplot-below=\" \
 				--ylabel='latency (yes pl)' \
 				-Dcase=bench_mount_seq \
-				-DPOWERLOSS=1 -Dprobe='mountwrite+*' \
-				-ylatency --yunits=s\"" \
+				-DPOWERLOSS=1\"" \
 		--subplot-right=" \
 				--title='random (mount)' \
 				-Dcase=bench_mount_random \
-				-DPOWERLOSS=0 -Dprobe='mountwrite+*' \
-				-ylatency --yunits=s \
+				-DPOWERLOSS=0 \
 			--subplot-below=\" \
-				-W0.5 \
 				-Dcase=bench_mount_random \
-				-DPOWERLOSS=1 -Dprobe='mountwrite+*' \
-				-ylatency --yunits=s\"" \
+				-DPOWERLOSS=1\"" \
 		--subplot-right=" \
 				--title='logging (mount)' \
 				-Dcase=bench_mount_logging \
-				-DPOWERLOSS=0 -Dprobe='mountwrite+*' \
-				-ylatency --yunits=s \
+				-DPOWERLOSS=0 \
 			--subplot-below=\" \
-				-W0.5 \
 				-Dcase=bench_mount_logging \
-				-DPOWERLOSS=1 -Dprobe='mountwrite+*' \
-				-ylatency --yunits=s\"" \
+				-DPOWERLOSS=1\"" \
 		--subplot-right=" \
 				--title='many (mount)' \
 				-Dcase=bench_mount_many \
-				-DPOWERLOSS=0 -Dprobe='mountwrite+*' \
-				-ylatency --yunits=s \
+				-DPOWERLOSS=0 \
 			--subplot-below=\" \
-				-W0.5 \
 				-Dcase=bench_mount_many \
-				-DPOWERLOSS=1 -Dprobe='mountwrite+*' \
-				-ylatency --yunits=s\"" \
+				-DPOWERLOSS=1\"" \
 		-Fo: -C'mountwrite+*=$(C_BLUE)' \
+		-ylatency --yunits=s \
 		-X"-0.25,$\
 			$$(shell python -c 'b=len("$5".split())-1; print(b+1/4)')" \
 		$$(shell python -c '$\
@@ -281,17 +284,19 @@ $1: $2
 endef
 
 # per-percentile plot rules
-$(foreach g, $(BENCH_GEOMETRIES), \
-	$(eval $(call PLOT_MOUNT_P_RULE,$\
-		$(MOUNT_PLOTSDIR)/plot_mount.%.$(g).svg,$\
-		$(foreach c, $(BENCH_CASES),$\
-			$(foreach fs, $(BENCH_FILESYSTEMS),$\
-				$(MOUNT_RESULTSDIR)/bench_mount.$(c).$(fs).$(g).csv)),$\
-		"$$* - $(g) - simulated mount time",$\
-		FS,$\
-		$(BENCH_FILESYSTEMS),$\
-		1,$\
-		--xlabel="filesystem")))
+$(foreach p, $(subst $(comma),$(space),$(MOUNT_P)), \
+	$(foreach g, $(BENCH_GEOMETRIES), \
+		$(eval $(call PLOT_MOUNT_P_RULE,$\
+			$(MOUNT_PLOTSDIR)/plot_mount_%.$(p).$(g).svg,$\
+			$(foreach c, $(BENCH_CASES),$\
+				$(foreach fs, $(BENCH_FILESYSTEMS),$\
+					$(MOUNT_RESULTSDIR)/bench_mount.$(c).$(fs).$(g).csv)),$\
+			"$(p) - $(g) - simulated $$* time",$\
+			FS,$\
+			$(BENCH_FILESYSTEMS),$\
+			1,$\
+			--xlabel="filesystem",$\
+			'$$*+$(p)'))))
 
 
 #======================================================================#
@@ -318,12 +323,9 @@ $1: $2
 		$(foreach p, $(subst $(comma),$(space),$3), \
 			<(./scripts/csv.py $$^ \
 				-bPOWERLOSS -Dprobe='mountwrite+$(p)' \
+				-fromount_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
+				-fmount_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
 				-fmountwrite_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
-				-o-)) \
-		$(foreach p, $(subst $(comma),$(space),$3), \
-			<(./scripts/csv.py $$^ \
-				-bPOWERLOSS -Dprobe='closeunmount+$(p)' \
-				-fcloseunmount_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
 				-o-)) \
 		-bPOWERLOSS \
 		-o$$@)
