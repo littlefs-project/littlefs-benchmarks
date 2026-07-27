@@ -53,6 +53,7 @@ defines.POWERLOSS_CHECK = 2
 # 0 => try to keep writing to log after an error
 # 1 => immediately rotate log after an error
 # 2 => just remove log after an error
+# 3 => rename log to *.trash, note this risks space issues
 defines.POWERLOSS_CHECKROTATE = 1
 
 # how long before powerloss/shutdown, we choose a uniform number of
@@ -477,6 +478,12 @@ code = '''
             // remove log after an error?
             } else if (needs_check && POWERLOSS_CHECKROTATE == 2) {
                 int err = SPIFFS_remove(&spiffs, "bench_log");
+                assert(!err || err == SPIFFS_ERR_NOT_FOUND);
+            // move log to trash after an error?
+            } else if (needs_check && POWERLOSS_CHECKROTATE == 3) {
+                int err = SPIFFS_remove(&spiffs, "bench_log.trash");
+                assert(!err || err == SPIFFS_ERR_NOT_FOUND);
+                err = SPIFFS_rename(&spiffs, "bench_log", "bench_log.trash");
                 assert(!err || err == SPIFFS_ERR_NOT_FOUND);
             }
             mkconsistented = true;
