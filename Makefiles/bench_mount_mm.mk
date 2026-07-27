@@ -1,30 +1,30 @@
-ifndef BENCH_MOUNT_M_MK
-BENCH_MOUNT_M_MK := 1
+ifndef BENCH_MOUNT_MM_MK
+BENCH_MOUNT_MM_MK := 1
 
 # include build rules + filesystems
 include Makefiles/build.mk
 
 # overrideable results dir
-MOUNT_M_RESULTSDIR ?= $(RESULTSDIR)/mount_m
+MOUNT_MM_RESULTSDIR ?= $(RESULTSDIR)/mount_mm
 # overrideable plots dir
-MOUNT_M_PLOTSDIR ?= $(PLOTSDIR)/mount_m
+MOUNT_MM_PLOTSDIR ?= $(PLOTSDIR)/mount_mm
 # overrideable tikz dir
-MOUNT_M_TIKZDIR ?= $(TIKZDIR)/mount_m
+MOUNT_MM_TIKZDIR ?= $(TIKZDIR)/mount_mm
 
 
 # what percentile are we interested in?
-MOUNT_M_P ?= max
+MOUNT_MM_P ?= max
 
 # run with powerloss
-MOUNT_M_POWERLOSS ?= 0,1
+MOUNT_MM_POWERLOSS ?= 0,1
 
 # number of static files to create
-MOUNT_M_STATIC_COUNTS ?= 0,1,2,4,8,16,32,64,128,256,512,1024,2048,4096
+MOUNT_MM_STATIC_COUNTS ?= 0,1,2,4,8,16,32,64,128,256,512,1024,2048,4096
 
 # size of static files
 #
-# note this is both inlineable for littlefs and page-aligned for others
-MOUNT_M_STATIC_SIZE ?= 512
+# very small, note this does hurt fs that align to pages
+MOUNT_MM_STATIC_SIZE ?= 64
 
 
 # default bench filesystems to default bench filesystems
@@ -39,12 +39,12 @@ BENCH_CASES ?= logging # seq random logging many
 
 # this is a bit of a hack, but we want to make sure the BUILDDIR
 # directory structure is correct before we run any commands
-ifneq ($(MOUNT_M_RESULTSDIR),.)
+ifneq ($(MOUNT_MM_RESULTSDIR),.)
 $(if $(findstring n,$(MAKEFLAGS)),, \
 		$(foreach d, \
-				$(MOUNT_M_RESULTSDIR) \
-				$(MOUNT_M_PLOTSDIR) \
-				$(MOUNT_M_TIKZDIR), \
+				$(MOUNT_MM_RESULTSDIR) \
+				$(MOUNT_MM_PLOTSDIR) \
+				$(MOUNT_MM_TIKZDIR), \
             $(if $(wildcard $d),, $(shell mkdir -p $d))))
 endif
 
@@ -54,13 +54,13 @@ endif
 #======================================================================#
 
 ## Run benches
-.PHONY: all bench bench-mount-m
-all bench: bench-mount-m
-bench-mount-m: \
+.PHONY: all bench bench-mount-mm
+all bench: bench-mount-mm
+bench-mount-mm: \
 		$(foreach c, $(BENCH_CASES), \
 			$(foreach fs, $(BENCH_FILESYSTEMS), \
 				$(foreach g, $(BENCH_GEOMETRIES), \
-					$(MOUNT_M_RESULTSDIR)/bench_mount_m.$(c).$(fs).$(g).csv)))
+					$(MOUNT_MM_RESULTSDIR)/bench_mount_mm.$(c).$(fs).$(g).csv)))
 
 # core bench rule
 #
@@ -73,7 +73,7 @@ bench-mount-m: \
 # $7 - static counts
 # $8 - static size
 #
-define BENCH_MOUNT_M_RULE
+define BENCH_MOUNT_MM_RULE
 $1: $($(U_$3)_BENCH_RUNNER)
 	$$(strip ./scripts/bench.py -R$$< -B bench_mount_$2 \
 		$(BENCHFLAGS) $($(U_$3)_BENCHFLAGS) \
@@ -86,14 +86,14 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		-DDISK_GEOMETRY=$(N_$4) \
 		-Srotates \
 		-Sgrms \
-		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_M_P))),$\
+		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_MM_P))),$\
 			-Smountwrite=$(p)) \
-		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_M_P))),$\
+		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_MM_P))),$\
 			-Scloseunmount=$(p)) \
 		-Susage -Smdir -Sbtree -Sdata \
-		-DPOWERLOSS=$(or $6,$(MOUNT_M_POWERLOSS)) \
-		-DSTATIC_COUNT=$(or $7,$(MOUNT_M_STATIC_COUNTS)) \
-		-DSTATIC_SIZE=$(or $8,$(MOUNT_M_STATIC_SIZE)) \
+		-DPOWERLOSS=$(or $6,$(MOUNT_MM_POWERLOSS)) \
+		-DSTATIC_COUNT=$(or $7,$(MOUNT_MM_STATIC_COUNTS)) \
+		-DSTATIC_SIZE=$(or $8,$(MOUNT_MM_STATIC_SIZE)) \
 		-o$$@)
 endef
 
@@ -101,8 +101,8 @@ endef
 $(foreach c, $(BENCH_CASES),$\
 	$(foreach fs, $(BENCH_FILESYSTEMS),$\
 		$(foreach g, $(BENCH_GEOMETRIES),$\
-			$(eval $(call BENCH_MOUNT_M_RULE,$\
-				$(MOUNT_M_RESULTSDIR)/bench_mount_m.$(c).$(fs).$(g).csv,$\
+			$(eval $(call BENCH_MOUNT_MM_RULE,$\
+				$(MOUNT_MM_RESULTSDIR)/bench_mount_mm.$(c).$(fs).$(g).csv,$\
 				$(c),$\
 				$(fs),$\
 				$(g))))))
@@ -113,18 +113,18 @@ $(foreach c, $(BENCH_CASES),$\
 #======================================================================#
 
 ## Plot benchmarks
-.PHONY: all plot plot-mount-m
-all plot: plot-mount-m
-plot-mount-m: \
-		$(MOUNT_M_PLOTSDIR)/plots.html \
+.PHONY: all plot plot-mount-mm
+all plot: plot-mount-mm
+plot-mount-mm: \
+		$(MOUNT_MM_PLOTSDIR)/plots.html \
 		$(foreach g, $(BENCH_GEOMETRIES), \
-			$(MOUNT_M_PLOTSDIR)/plot_mount_m.$(g).svg)
+			$(MOUNT_MM_PLOTSDIR)/plot_mount_mm.$(g).svg)
 
 ## Create a quick html page for easy viewing
-$(MOUNT_M_PLOTSDIR)/plots.html:
+$(MOUNT_MM_PLOTSDIR)/plots.html:
 	echo -e "$(subst $(nl),\n,$(HTML_HEADER))" >> $@
 	$(foreach g, $(BENCH_GEOMETRIES), \
-		echo -e "<p><img src="plot_mount_m.$(g).svg"></p>" >> $@ $(nl))
+		echo -e "<p><img src="plot_mount_mm.$(g).svg"></p>" >> $@ $(nl))
 	echo -e "$(subst $(nl),\n,$(HTML_FOOTER))" >> $@
 
 # core plot rule
@@ -137,11 +137,11 @@ $(MOUNT_M_PLOTSDIR)/plots.html:
 # $6 - x-skip
 # $7 - extra plotmpl.py flags
 #
-define PLOT_MOUNT_M_RULE
+define PLOT_MOUNT_MM_RULE
 $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
-			-bcase -bFS -bPOWERLOSS -b$4 -Dprobe=mountwrite+$(MOUNT_M_P) \
+			-bcase -bFS -bPOWERLOSS -b$4 -Dprobe=mountwrite+$(MOUNT_MM_P) \
 			-flatency='float(bench_simtime)/1.0e9' \
 			-o-) \
 		-W1500 -H350 \
@@ -174,10 +174,10 @@ $1: $2
 				-DPOWERLOSS=1\"" \
 		--subplot-right=" \
 				--title='many' \
-				-Dcase=bench_mount_many \
+				-Dcase=bench_mount_mmany \
 				-DPOWERLOSS=0 \
 			--subplot-below=\" \
-				-Dcase=bench_mount_many \
+				-Dcase=bench_mount_mmany \
 				-DPOWERLOSS=1\"" \
 		--legend \
 		$(foreach fs, $(BENCH_FILESYSTEMS),$\
@@ -200,14 +200,14 @@ endef
 
 # plot rules
 $(foreach g, $(BENCH_GEOMETRIES), \
-	$(eval $(call PLOT_MOUNT_M_RULE,$\
-		$(MOUNT_M_PLOTSDIR)/plot_mount_m.$(g).svg,$\
+	$(eval $(call PLOT_MOUNT_MM_RULE,$\
+		$(MOUNT_MM_PLOTSDIR)/plot_mount_mm.$(g).svg,$\
 		$(foreach c, $(BENCH_CASES),$\
 			$(foreach fs, $(BENCH_FILESYSTEMS),$\
-				$(MOUNT_M_RESULTSDIR)/bench_mount_m.$(c).$(fs).$(g).csv)),$\
+				$(MOUNT_MM_RESULTSDIR)/bench_mount_mm.$(c).$(fs).$(g).csv)),$\
 		"metadata - $(g) - simulated mount time",$\
 		STATIC_COUNT,$\
-		$(MOUNT_M_STATIC_COUNTS),$\
+		$(MOUNT_MM_STATIC_COUNTS),$\
 		2,$\
 		--xlabel="static counts")))
 
@@ -217,12 +217,12 @@ $(foreach g, $(BENCH_GEOMETRIES), \
 #======================================================================#
 
 ## Generate tikz results
-.PHONY: all tikz tikz-mount-m
-all tikz tikz-mount-m: \
+.PHONY: all tikz tikz-mount-mm
+all tikz tikz-mount-mm: \
         $(foreach c, $(BENCH_CASES), \
             $(foreach fs, $(BENCH_FILESYSTEMS), \
                 $(foreach g, $(BENCH_GEOMETRIES), \
-                    $(MOUNT_M_TIKZDIR)/tikz_mount_m.$(c).$(fs).$(g).csv)))
+                    $(MOUNT_MM_TIKZDIR)/tikz_mount_mm.$(c).$(fs).$(g).csv)))
 
 # core tikz rule
 #
@@ -230,17 +230,17 @@ all tikz tikz-mount-m: \
 # $2 - source
 # $3 - x-axis
 #
-define TIKZ_MOUNT_M_RULE
+define TIKZ_MOUNT_MM_RULE
 $1: $2
 	$$(strip ./scripts/csv.py \
 		<(./scripts/csv.py $$^ \
-			-b$3 -DPOWERLOSS=0 -Dprobe=mountwrite+$(MOUNT_M_P) \
-			-fmountwrite_npl_$(subst .,$(nil),$(MOUNT_M_P))=$\
+			-b$3 -DPOWERLOSS=0 -Dprobe=mountwrite+$(MOUNT_MM_P) \
+			-fmountwrite_npl_$(subst .,$(nil),$(MOUNT_MM_P))=$\
 				'float(bench_simtime)/1.0e9' \
 			-o-) \
 		<(./scripts/csv.py $$^ \
-			-b$3 -DPOWERLOSS=1 -Dprobe=mountwrite+$(MOUNT_M_P) \
-			-fmountwrite_ypl_$(subst .,$(nil),$(MOUNT_M_P))=$\
+			-b$3 -DPOWERLOSS=1 -Dprobe=mountwrite+$(MOUNT_MM_P) \
+			-fmountwrite_ypl_$(subst .,$(nil),$(MOUNT_MM_P))=$\
 				'float(bench_simtime)/1.0e9' \
 			-o-) \
 		-b$3 -F$3 \
@@ -251,9 +251,9 @@ endef
 $(foreach c, $(BENCH_CASES), \
 	$(foreach fs, $(BENCH_FILESYSTEMS), \
 		$(foreach g, $(BENCH_GEOMETRIES), \
-			$(eval $(call TIKZ_MOUNT_M_RULE,$\
-				$(MOUNT_M_TIKZDIR)/tikz_mount_m.$(c).$(fs).$(g).csv,$\
-				$(MOUNT_M_RESULTSDIR)/bench_mount_m.$(c).$(fs).$(g).csv,$\
+			$(eval $(call TIKZ_MOUNT_MM_RULE,$\
+				$(MOUNT_MM_TIKZDIR)/tikz_mount_mm.$(c).$(fs).$(g).csv,$\
+				$(MOUNT_MM_RESULTSDIR)/bench_mount_mm.$(c).$(fs).$(g).csv,$\
 				STATIC_COUNT)))))
 
 
@@ -262,25 +262,25 @@ $(foreach c, $(BENCH_CASES), \
 #======================================================================#
 
 ## Save bench results
-.PHONY: save save-results save-results-mount-m
-save save-results: save-results-mount-m
-save-results-mount-m:
+.PHONY: save save-results save-results-mount-mm
+save save-results: save-results-mount-mm
+save-results-mount-mm:
 	mkdir -p $(SAVEDIR)/$(RESULTSDIR)/
-	cp -ru $(MOUNT_M_RESULTSDIR) $(SAVEDIR)/$(RESULTSDIR)/
+	cp -ru $(MOUNT_MM_RESULTSDIR) $(SAVEDIR)/$(RESULTSDIR)/
 
 ## Save bench plots
-.PHONY: save save-plots save-plots-mount-m
-save save-plots: save-plots-mount-m
-save-plots-mount-m:
+.PHONY: save save-plots save-plots-mount-mm
+save save-plots: save-plots-mount-mm
+save-plots-mount-mm:
 	mkdir -p $(SAVEDIR)/$(PLOTSDIR)/
-	cp -ru $(MOUNT_M_PLOTSDIR) $(SAVEDIR)/$(PLOTSDIR)/
+	cp -ru $(MOUNT_MM_PLOTSDIR) $(SAVEDIR)/$(PLOTSDIR)/
 
 ## Save tikz
-.PHONY: save save-tikz save-tikz-mount-m
-save save-tikz: save-tikz-mount-m
-save-tikz-mount-m:
+.PHONY: save save-tikz save-tikz-mount-mm
+save save-tikz: save-tikz-mount-mm
+save-tikz-mount-mm:
 	mkdir -p $(SAVEDIR)/$(TIKZDIR)/
-	cp -ru $(MOUNT_M_TIKZDIR) $(SAVEDIR)/$(TIKZDIR)/
+	cp -ru $(MOUNT_MM_TIKZDIR) $(SAVEDIR)/$(TIKZDIR)/
 
 
 #======================================================================#
@@ -288,10 +288,10 @@ save-tikz-mount-m:
 #======================================================================#
 
 ## Mark current results as up-to-date to prevent reruns
-.PHONY: reuse-results touch-results reuse-results-mount-m touch-results-mount-m
-reuse-results touch-results: reuse-results-mount-m touch-results-mount-m
-reuse-results-mount-m touch-results-mount-m:
-	find $(MOUNT_M_RESULTSDIR) -name '*.csv' -execdir touch '{}' ';'
+.PHONY: reuse-results touch-results reuse-results-mount-mm touch-results-mount-mm
+reuse-results touch-results: reuse-results-mount-mm touch-results-mount-mm
+reuse-results-mount-mm touch-results-mount-mm:
+	find $(MOUNT_MM_RESULTSDIR) -name '*.csv' -execdir touch '{}' ';'
 	@echo "# note: Make sure you build before plotting!"
 
 
@@ -300,24 +300,24 @@ reuse-results-mount-m touch-results-mount-m:
 #======================================================================#
 
 ## Clean bench results
-.PHONY: clean clean-results clean-results-mount-m
-clean clean-results: clean-results-mount-m
-clean-results-mount-m:
-	rm -rf $(MOUNT_M_RESULTSDIR)
+.PHONY: clean clean-results clean-results-mount-mm
+clean clean-results: clean-results-mount-mm
+clean-results-mount-mm:
+	rm -rf $(MOUNT_MM_RESULTSDIR)
 	@echo "# note: Not cleaning saved output"
 
 ## Clean bench plots
-.PHONY: clean clean-plots clean-plots-mount-m
-clean clean-plots: clean-plots-mount-m
-clean-plots-mount-m:
-	rm -rf $(MOUNT_M_PLOTSDIR)
+.PHONY: clean clean-plots clean-plots-mount-mm
+clean clean-plots: clean-plots-mount-mm
+clean-plots-mount-mm:
+	rm -rf $(MOUNT_MM_PLOTSDIR)
 	@echo "# note: Not cleaning saved output"
 
 ## Clean tikz
-.PHONY: clean clean-tikz clean-tikz-mount-m
-clean clean-tikz: clean-tikz-mount-m
-clean-tikz-mount-m:
-	rm -rf $(MOUNT_M_TIKZDIR)
+.PHONY: clean clean-tikz clean-tikz-mount-mm
+clean clean-tikz: clean-tikz-mount-mm
+clean-tikz-mount-mm:
+	rm -rf $(MOUNT_MM_TIKZDIR)
 	@echo "# note: Not cleaning saved output"
 
 
