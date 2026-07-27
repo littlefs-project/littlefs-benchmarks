@@ -145,6 +145,7 @@ $1: $2
 				--ylabel='mount latency (no pl)' \
 				-Dcase=bench_mount_seq \
 				-DPOWERLOSS=0 -D$4='mountwrite+*' \
+				-ylatency --yunits=s \
 			--subplot-below=\" \
 				--ylabel='mount latency (yes pl)' \
 				-Dcase=bench_mount_seq \
