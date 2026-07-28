@@ -72,8 +72,12 @@ defines.POWER_WAITFORMOUNT = 2
 defines.POWER_STUCKTHRESH = 10
 defines.POWER_STUCKASSERT = true
 
-# spiffs is limited to 32-bit disks
-if = 'BENCH_IFDEF_SPIFFS(DISK_SIZE < 0x100000000ULL, true)'
+if = [
+    # spiffs is limited to 32-bit disks
+    'BENCH_IFDEF_SPIFFS(DISK_SIZE < 0x100000000ULL, true)',
+    # SPIFFS_check just takes way too long on big disks
+    'BENCH_IFDEF_SPIFFS(!POWERLOSS || DISK_SIZE <= 256*1024*1024, true)',
+]
 
 hooks.prog = 'bench_mount_bd_prog'
 code = '''
@@ -321,15 +325,20 @@ code = '''
                 (bench_mount_stop_progs != -1)
                     ? bench_mount_progs-bench_mount_start_progs
                     : -1);
-        // abort?
-        if (POWER_STUCKTHRESH && stuck >= (uint64_t)POWER_STUCKTHRESH
-                && POWER_WAITFORMOUNT != 2) {
-            LFS3_ERROR("stuck. stuck=%"PRIu64" >= %"PRIu64", aborting...",
-                    stuck, POWER_STUCKTHRESH);
-            if (POWER_STUCKASSERT) {
-                assert(stuck < POWER_STUCKTHRESH);
+        if (POWER_STUCKTHRESH && stuck >= (uint64_t)POWER_STUCKTHRESH) {
+            // abort?
+            if (POWER_WAITFORMOUNT != 2) {
+                LFS3_ERROR("stuck. stuck=%"PRIu64" >= %"PRIu64", aborting...",
+                        stuck, POWER_STUCKTHRESH);
+                if (POWER_STUCKASSERT) {
+                    assert(stuck < POWER_STUCKTHRESH);
+                }
+                return;
+            // wait?
+            } else {
+                LFS3_WARN("stuck. stuck=%"PRIu64" >= %"PRIu64", waiting...",
+                        stuck, POWER_STUCKTHRESH);
             }
-            return;
         }
     }
     while (!((SIM_MOUNTS || (SIM_ROTATES && !POWERLOSS))
@@ -435,6 +444,10 @@ code = '''
                 fd_buffer, FD_SIZE,
                 scache_buffer, SCACHE_SIZE,
                 NULL) => 0;
+        LFS3_DEBUG("spiffs: mounted %dx%d blocks, %dx%d pages, %d mounts",
+                BLOCK_SIZE, BLOCK_COUNT,
+                SPAGE_SIZE, BLOCK_COUNT*(BLOCK_SIZE/SPAGE_SIZE),
+                mounts);
         #elif defined(YAFFS2)
         // yaffs2 uses some global state we need to reset
         extern struct list_head yaffsfs_deviceList;
@@ -468,6 +481,7 @@ code = '''
         // note this takes literally forever, see above
         if (POWERLOSS && (POWERLOSS_CHECK == 1 || needs_check)) {
             BENCH_START("mkconsistent");
+            LFS3_DEBUG("spiffs: checking...");
             SPIFFS_check(&spiffs) => 0;
             // immediately rotate log after an error?
             if (needs_check && POWERLOSS_CHECKROTATE == 1) {
@@ -553,6 +567,7 @@ code = '''
             assert(d >= 0 || POWERLOSS);
             if (d < 0) {
                 // uh oh, found an error? try to remount with check
+                LFS3_DEBUG("spiffs: fflush error: %d, remounting...", d);
                 needs_check = true;
                 BENCH_ABORT("write");
                 SPIFFS_close(&spiffs, fd) => 0;
@@ -607,6 +622,7 @@ code = '''
                 assert(!err || err == SPIFFS_ERR_NOT_FOUND || POWERLOSS);
                 if (err && err != SPIFFS_ERR_NOT_FOUND) {
                     // uh oh, found an error? try to remount with check
+                    LFS3_DEBUG("spiffs: remove error: %d, remounting...", err);
                     needs_check = true;
                     BENCH_ABORT("write");
                     SPIFFS_unmount(&spiffs);
@@ -616,6 +632,7 @@ code = '''
                 assert(!err || err == SPIFFS_ERR_NOT_FOUND || POWERLOSS);
                 if (err && err != SPIFFS_ERR_NOT_FOUND) {
                     // uh oh, found an error? try to remount with check
+                    LFS3_DEBUG("spiffs: rename error: %d, remounting...", err);
                     needs_check = true;
                     BENCH_ABORT("write");
                     SPIFFS_unmount(&spiffs);
@@ -629,6 +646,7 @@ code = '''
                 assert(fd >= 0 || POWERLOSS);
                 if (fd < 0) {
                     // uh oh, found an error? try to remount with check
+                    LFS3_DEBUG("spiffs: open error: %d, remounting...", fd);
                     needs_check = true;
                     BENCH_ABORT("write");
                     SPIFFS_unmount(&spiffs);

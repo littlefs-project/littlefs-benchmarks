@@ -120,8 +120,8 @@ all plot: plot-mount-m
 plot-mount-m: \
 		$(MOUNT_M_PLOTSDIR)/plots.html \
 		$(foreach g, $(BENCH_GEOMETRIES), \
-			$(MOUNT_M_PLOTSDIR)/plot_mount_m_romount.$(g).svg)
-			$(MOUNT_M_PLOTSDIR)/plot_mount_m_mount.$(g).svg)
+			$(MOUNT_M_PLOTSDIR)/plot_mount_m_romount.$(g).svg \
+			$(MOUNT_M_PLOTSDIR)/plot_mount_m_mount.$(g).svg \
 			$(MOUNT_M_PLOTSDIR)/plot_mount_m_mountwrite.$(g).svg)
 
 ## Create a quick html page for easy viewing

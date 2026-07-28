@@ -120,19 +120,19 @@ all plot: plot-mount-mm
 plot-mount-mm: \
 		$(MOUNT_MM_PLOTSDIR)/plots.html \
 		$(foreach g, $(BENCH_GEOMETRIES), \
-			$(MOUNT_MM_PLOTSDIR)/plot_mount_mm_romount.$(g).svg
-			$(MOUNT_MM_PLOTSDIR)/plot_mount_mm_mount.$(g).svg
+			$(MOUNT_MM_PLOTSDIR)/plot_mount_mm_romount.$(g).svg \
+			$(MOUNT_MM_PLOTSDIR)/plot_mount_mm_mount.$(g).svg \
 			$(MOUNT_MM_PLOTSDIR)/plot_mount_mm_mountwrite.$(g).svg)
 
 ## Create a quick html page for easy viewing
 $(MOUNT_MM_PLOTSDIR)/plots.html:
 	echo -e "$(subst $(nl),\n,$(HTML_HEADER))" >> $@
 	$(foreach g, $(BENCH_GEOMETRIES), \
-		echo -e "<p><img src="plot_mount_mm.$(g).svg"></p>" $\
+		echo -e "<p><img src="plot_mount_mm_romount.$(g).svg"></p>" $\
 			>> $@ $(nl)$\
-		echo -e "<p><img src="plot_mount_mm.$(g).svg"></p>" $\
+		echo -e "<p><img src="plot_mount_mm_mount.$(g).svg"></p>" $\
 			>> $@ $(nl)$\
-		echo -e "<p><img src="plot_mount_mm.$(g).svg"></p>" $\
+		echo -e "<p><img src="plot_mount_mm_mountwrite.$(g).svg"></p>" $\
 			>> $@ $(nl))
 	echo -e "$(subst $(nl),\n,$(HTML_FOOTER))" >> $@
 
