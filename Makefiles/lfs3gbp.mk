@@ -35,10 +35,11 @@ N_lfs3gbp = 32
 I_lfs3gbp = 0
 C_lfs3gbp = $(C_BLUE)
 F_lfs3gbp = $$$$gbp$$$$ # gbp
-DEFAULT_SIZE_FILESYSTEMS  += lfs3gbp
-DEFAULT_BUILD_FILESYSTEMS += lfs3gbp
-DEFAULT_BENCH_FILESYSTEMS += lfs3gbp
-DEFAULT_LFS3_FILESYSTEMS  += lfs3gbp
+DEFAULT_SIZE_FILESYSTEMS   += lfs3gbp
+DEFAULT_BUILD_FILESYSTEMS  += lfs3gbp
+DEFAULT_BENCH_FILESYSTEMS  += lfs3gbp
+DEFAULT_LFS3_FILESYSTEMS   += lfs3gbp
+DEFAULT_LFS3GB_FILESYSTEMS += lfs3gbp
 
 # include compile-time deps
 -include $(LFS3GBP_DEP)
