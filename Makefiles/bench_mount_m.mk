@@ -233,7 +233,11 @@ all tikz tikz-mount-m: \
         $(foreach c, $(BENCH_CASES), \
             $(foreach fs, $(BENCH_FILESYSTEMS), \
                 $(foreach g, $(BENCH_GEOMETRIES), \
-                    $(MOUNT_M_TIKZDIR)/tikz_mount_m.$(c).$(fs).$(g).csv)))
+                    $(MOUNT_M_TIKZDIR)/tikz_mount_m.$(c).$(fs).$(g).csv))) \
+        $(foreach c, $(BENCH_CASES), \
+            $(foreach fs, $(BENCH_FILESYSTEMS), \
+                $(foreach g, $(BENCH_GEOMETRIES), \
+                    $(MOUNT_M_TIKZDIR)/tikz_mount_m_usage.$(c).$(fs).$(g).csv)))
 
 # core tikz rule
 #
@@ -285,6 +289,67 @@ $(foreach c, $(BENCH_CASES), \
 			$(eval $(call TIKZ_MOUNT_M_RULE,$\
 				$(MOUNT_M_TIKZDIR)/tikz_mount_m.$(c).$(fs).$(g).csv,$\
 				$(MOUNT_M_RESULTSDIR)/bench_mount_m.$(c).$(fs).$(g).csv,$\
+				STATIC_COUNT)))))
+
+# usage tikz rule
+#
+# $1 - target
+# $2 - source
+# $3 - fs type/version
+# $4 - disk geometry
+# $5 - x-axis
+#
+define TIKZ_MOUNT_M_USAGE_RULE
+$1: $2
+	$$(strip ./scripts/csv.py \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=0 -Dprobe=usage \
+			-fusage_npl=bench_simtime \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=0 -Dprobe=mdir \
+			-fmdir_npl=bench_simtime \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=0 -Dprobe=btree \
+			-fbtree_npl=bench_simtime \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=0 -Dprobe=data \
+			-fdata_npl=bench_simtime \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=1 -Dprobe=usage \
+			-fusage_ypl=bench_simtime \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=1 -Dprobe=mdir \
+			-fmdir_ypl=bench_simtime \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=1 -Dprobe=btree \
+			-fbtree_ypl=bench_simtime \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=1 -Dprobe=data \
+			-fdata_ypl=bench_simtime \
+			-o-) \
+		-b$5 -F$5 \
+		-FBLOCK_COUNT="$$$$($($(U_$3)_BENCH_RUNNER) bench_mount \
+			-DDISK_GEOMETRY=$(N_$4) \
+			-QBLOCK_COUNT)" \
+		-o$$@)
+endef
+
+# usage tikz rules
+$(foreach c, $(BENCH_CASES), \
+	$(foreach fs, $(BENCH_FILESYSTEMS), \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(eval $(call TIKZ_MOUNT_M_USAGE_RULE,$\
+				$(MOUNT_M_TIKZDIR)/tikz_mount_m_usage.$(c).$(fs).$(g).csv,$\
+				$(MOUNT_M_RESULTSDIR)/bench_mount_m.$(c).$(fs).$(g).csv,$\
+				$(fs),$\
+				$(g),$\
 				STATIC_COUNT)))))
 
 
