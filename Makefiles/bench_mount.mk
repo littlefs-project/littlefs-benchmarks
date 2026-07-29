@@ -322,9 +322,15 @@ $1: $2
 	$$(strip ./scripts/csv.py \
 		$(foreach p, $(subst $(comma),$(space),$3), \
 			<(./scripts/csv.py $$^ \
-				-bPOWERLOSS -Dprobe='mountwrite+$(p)' \
+				-bPOWERLOSS -Dprobe='romount+$(p)' \
 				-fromount_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
+				-o-) \
+			<(./scripts/csv.py $$^ \
+				-bPOWERLOSS -Dprobe='mount+$(p)' \
 				-fmount_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
+				-o-) \
+			<(./scripts/csv.py $$^ \
+				-bPOWERLOSS -Dprobe='mountwrite+$(p)' \
 				-fmountwrite_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
 				-o-)) \
 		-bPOWERLOSS \
