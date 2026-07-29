@@ -10,8 +10,8 @@
 
 // warm up the filesystem
 //
-// this writes a 1 block file 2*block_count times to get it into a good
-// state for benchmarking
+// this writes a 1 block file 2*block_count times to get things into a
+// good state for benchmarking
 //
 // most importantly this uses up any pre-erased blocks created during
 // format, which is inconsistent across filesystems and messes with

@@ -154,6 +154,7 @@ code = '''
         #endif
         if (err) {
             LFS3_ERROR("Bench warmup failed: %d", err);
+            assert(!err);
             return;
         }
         BENCH_HEAP_RESUME();
@@ -177,6 +178,7 @@ code = '''
         #endif
         if (err) {
             LFS3_ERROR("Bench populate failed: %d", err);
+            assert(!err);
             return;
         }
         BENCH_HEAP_RESUME();

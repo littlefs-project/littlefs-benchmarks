@@ -18,6 +18,10 @@ defines.SIM_SIZE = 0
 # set this to true to skip bench warmup
 defines.SKIP_WARMUP = false
 
+# optionally create a bunch of static files
+defines.STATIC_COUNT = 0
+defines.STATIC_SIZE = 'BLOCK_SIZE'
+
 if = [
     # spiffs is limited to 32-bit disks
     'BENCH_IFDEF_SPIFFS(DISK_SIZE < 0x100000000ULL, true)',
@@ -80,6 +84,31 @@ code = '''
         #endif
         if (err) {
             LFS3_ERROR("Bench warmup failed: %d", err);
+            assert(!err);
+            return;
+        }
+        BENCH_HEAP_RESUME();
+        BENCH_STACK_RESUME();
+    }
+    if (STATIC_COUNT) {
+        BENCH_STACK_PAUSE();
+        BENCH_HEAP_PAUSE();
+        #if defined(LFS3)
+        int err = bench_helpers_populate(CFG, &lfs3,
+                STATIC_COUNT, STATIC_SIZE);
+        #elif defined(LFS2)
+        int err = bench_helpers_populate(CFG, &lfs2,
+                STATIC_COUNT, STATIC_SIZE);
+        #elif defined(SPIFFS)
+        int err = bench_helpers_populate(CFG, &spiffs,
+                STATIC_COUNT, STATIC_SIZE);
+        #elif defined(YAFFS2)
+        int err = bench_helpers_populate(CFG, &yaffs2,
+                STATIC_COUNT, STATIC_SIZE);
+        #endif
+        if (err) {
+            LFS3_ERROR("Bench populate failed: %d", err);
+            assert(!err);
             return;
         }
         BENCH_HEAP_RESUME();
@@ -251,6 +280,31 @@ code = '''
         #endif
         if (err) {
             LFS3_ERROR("Bench warmup failed: %d", err);
+            assert(!err);
+            return;
+        }
+        BENCH_HEAP_RESUME();
+        BENCH_STACK_RESUME();
+    }
+    if (STATIC_COUNT) {
+        BENCH_STACK_PAUSE();
+        BENCH_HEAP_PAUSE();
+        #if defined(LFS3)
+        int err = bench_helpers_populate(CFG, &lfs3,
+                STATIC_COUNT, STATIC_SIZE);
+        #elif defined(LFS2)
+        int err = bench_helpers_populate(CFG, &lfs2,
+                STATIC_COUNT, STATIC_SIZE);
+        #elif defined(SPIFFS)
+        int err = bench_helpers_populate(CFG, &spiffs,
+                STATIC_COUNT, STATIC_SIZE);
+        #elif defined(YAFFS2)
+        int err = bench_helpers_populate(CFG, &yaffs2,
+                STATIC_COUNT, STATIC_SIZE);
+        #endif
+        if (err) {
+            LFS3_ERROR("Bench populate failed: %d", err);
+            assert(!err);
             return;
         }
         BENCH_HEAP_RESUME();
@@ -426,6 +480,31 @@ code = '''
         #endif
         if (err) {
             LFS3_ERROR("Bench warmup failed: %d", err);
+            assert(!err);
+            return;
+        }
+        BENCH_HEAP_RESUME();
+        BENCH_STACK_RESUME();
+    }
+    if (STATIC_COUNT) {
+        BENCH_STACK_PAUSE();
+        BENCH_HEAP_PAUSE();
+        #if defined(LFS3)
+        int err = bench_helpers_populate(CFG, &lfs3,
+                STATIC_COUNT, STATIC_SIZE);
+        #elif defined(LFS2)
+        int err = bench_helpers_populate(CFG, &lfs2,
+                STATIC_COUNT, STATIC_SIZE);
+        #elif defined(SPIFFS)
+        int err = bench_helpers_populate(CFG, &spiffs,
+                STATIC_COUNT, STATIC_SIZE);
+        #elif defined(YAFFS2)
+        int err = bench_helpers_populate(CFG, &yaffs2,
+                STATIC_COUNT, STATIC_SIZE);
+        #endif
+        if (err) {
+            LFS3_ERROR("Bench populate failed: %d", err);
+            assert(!err);
             return;
         }
         BENCH_HEAP_RESUME();
@@ -655,6 +734,31 @@ code = '''
         #endif
         if (err) {
             LFS3_ERROR("Bench warmup failed: %d", err);
+            assert(!err);
+            return;
+        }
+        BENCH_HEAP_RESUME();
+        BENCH_STACK_RESUME();
+    }
+    if (STATIC_COUNT) {
+        BENCH_STACK_PAUSE();
+        BENCH_HEAP_PAUSE();
+        #if defined(LFS3)
+        int err = bench_helpers_populate(CFG, &lfs3,
+                STATIC_COUNT, STATIC_SIZE);
+        #elif defined(LFS2)
+        int err = bench_helpers_populate(CFG, &lfs2,
+                STATIC_COUNT, STATIC_SIZE);
+        #elif defined(SPIFFS)
+        int err = bench_helpers_populate(CFG, &spiffs,
+                STATIC_COUNT, STATIC_SIZE);
+        #elif defined(YAFFS2)
+        int err = bench_helpers_populate(CFG, &yaffs2,
+                STATIC_COUNT, STATIC_SIZE);
+        #endif
+        if (err) {
+            LFS3_ERROR("Bench populate failed: %d", err);
+            assert(!err);
             return;
         }
         BENCH_HEAP_RESUME();
