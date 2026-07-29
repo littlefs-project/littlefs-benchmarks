@@ -35,6 +35,8 @@ if = [
     'BENCH_IFDEF_YAFFS2(BLOCK_SIZE > YPAGE_SIZE, true)',
 ]
 
+hooks.init = 'bench_wear_init'
+hooks.deinit = 'bench_wear_deinit'
 hooks.erase = 'bench_wear_bd_erase'
 code = '''
     // include common bench helpers
@@ -44,12 +46,22 @@ code = '''
     #include <math.h>
 
     // measure wear
-    bench_io_t *bench_wear_erasemap = NULL;
+    bench_io_t *bench_wear_erasemap;
 
+    // init bench state
+    void bench_wear_init(void) {
+        bench_wear_erasemap = malloc(BLOCK_COUNT*sizeof(bench_io_t));
+        memset(bench_wear_erasemap, 0, BLOCK_COUNT*sizeof(bench_io_t));
+    }
+
+    // cleanup bench state
+    void bench_wear_deinit(void) {
+        free(bench_wear_erasemap);
+    }
+
+    // hook erase
     int bench_wear_bd_erase(const struct lfs3_cfg *cfg, lfs3_block_t block) {
-        if (bench_wear_erasemap) {
-            bench_wear_erasemap[block] += 1;
-        }
+        bench_wear_erasemap[block] += 1;
         return BENCH_BD_ERASENOHOOKS(cfg, block);
     }
 
@@ -171,14 +183,6 @@ code = '''
         BENCH_STACK_RESUME();
     }
     uint32_t prng = SEED;
-
-    // initialize erase map to track wear
-    BENCH_STACK_PAUSE();
-    BENCH_HEAP_PAUSE();
-    bench_wear_erasemap = malloc(BLOCK_COUNT*sizeof(bench_io_t));
-    memset(bench_wear_erasemap, 0, BLOCK_COUNT*sizeof(bench_io_t));
-    BENCH_HEAP_RESUME();
-    BENCH_STACK_PAUSE();
 
     // reset our timer
     BENCH_SIMRESET();
@@ -366,13 +370,5 @@ code = '''
     yaffs_unmount("/") => 0;
     yaffs_remove_device(&yaffs2);
     #endif
-
-    // clean up erase map
-    BENCH_STACK_PAUSE();
-    BENCH_HEAP_PAUSE();
-    free(bench_wear_erasemap);
-    bench_wear_erasemap = NULL;
-    BENCH_HEAP_RESUME();
-    BENCH_STACK_PAUSE();
 '''
 

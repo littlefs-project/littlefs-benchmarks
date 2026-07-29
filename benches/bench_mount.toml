@@ -79,6 +79,7 @@ if = [
     'BENCH_IFDEF_SPIFFS(!POWERLOSS || DISK_SIZE <= 256*1024*1024, true)',
 ]
 
+hooks.init = 'bench_mount_init'
 hooks.prog = 'bench_mount_bd_prog'
 code = '''
     // include common bench helpers
@@ -97,17 +98,6 @@ code = '''
     int64_t bench_mount_start_progs;
     int64_t bench_mount_stop_progs;
 
-    // needed in bench_mount_init
-    void bench_mount_reset(void);
-
-    // init bench state, call this before running!
-    //
-    // TODO add init/deinit hooks?
-    void bench_mount_init(void) {
-        bench_mount_prng = 42;
-        bench_mount_reset();
-    }
-
     // reset for next mount
     void bench_mount_reset(void) {
         bench_mount_progs = 0;
@@ -115,6 +105,12 @@ code = '''
         bench_mount_stop_time = -1;
         bench_mount_start_progs = -1;
         bench_mount_stop_progs = -1;
+    }
+
+    // init bench state
+    void bench_mount_init(void) {
+        bench_mount_prng = 42;
+        bench_mount_reset();
     }
 
     // hook prog
@@ -156,9 +152,6 @@ code = '''
 [cases.bench_mount_logging]
 defines.FRUNCATE = false
 code = '''
-    // reset bench state
-    bench_mount_init();
-
     #if defined(LFS3)
     lfs3_t lfs3;
     lfs3_format(&lfs3, LFS3_F_RDWR, CFG) => 0;

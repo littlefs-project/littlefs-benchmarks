@@ -37,6 +37,7 @@ defines.GC_INTERRUPT = false
 # spiffs is limited to 32-bit disks
 if = 'BENCH_IFDEF_SPIFFS(DISK_SIZE < 0x100000000ULL, true)'
 
+hooks.init = 'bench_wl_init'
 hooks.read = 'bench_wl_bd_read'
 hooks.prog = 'bench_wl_bd_prog'
 hooks.erase = 'bench_wl_bd_erase'
@@ -45,13 +46,18 @@ code = '''
     #include "benches/bench_helpers.h"
 
     // gc time measurement
-    bench_sns_t bench_wl_gc_start_time = -1;
+    bench_sns_t bench_wl_gc_start_time;
     // too many issues with yaffs2 and thinking all errors are bad
     // blocks, so just use setjmp to abort gc
     #ifdef YAFFS2
     #include <setjmp.h>
     jmp_buf bench_wl_gc_jmp;
     #endif
+
+    // init bench state
+    void bench_wl_init(void) {
+        bench_wl_gc_start_time = -1;
+    }
 
     void bench_wl_gc_start(void) {
         bench_wl_gc_start_time = BENCH_SIMTIME();
