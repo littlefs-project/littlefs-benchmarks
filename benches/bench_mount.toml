@@ -336,11 +336,10 @@ code = '''
             }
         }
     }
-    while (!((SIM_MOUNTS || (SIM_ROTATES && !POWERLOSS))
-                && mounts >= (uint64_t)SIM_MOUNTS
-                && (!POWERLOSS || rotates >= (uint64_t)SIM_ROTATES))
-            && !(SIM_SIZE && written >= (uint64_t)SIM_SIZE)
-            && !(SIM_TIME && BENCH_SIMTIME() >= SIM_TIME)) {
+    while ((!SIM_MOUNTS || mounts < (uint64_t)SIM_MOUNTS)
+            && (!SIM_ROTATES || rotates < (uint64_t)SIM_ROTATES)
+            && (!SIM_SIZE || written < (uint64_t)SIM_SIZE)
+            && (!SIM_TIME || BENCH_SIMTIME() < SIM_TIME)) {
         // reset progs
         bench_mount_reset();
         // how long to run this loop?
@@ -524,15 +523,14 @@ code = '''
         assert(fd >= 0);
         #endif
         BENCH_STOP("open", mounts);
-        while (!((SIM_MOUNTS || (SIM_ROTATES && !POWERLOSS))
-                    && mounts >= (uint64_t)SIM_MOUNTS
-                    && (!POWERLOSS || rotates >= (uint64_t)SIM_ROTATES))
-                && !(SIM_SIZE && written >= (uint64_t)SIM_SIZE)
-                && !(SIM_TIME && BENCH_SIMTIME() >= SIM_TIME)
+        while (((!SIM_MOUNTS || mounts < (uint64_t)SIM_MOUNTS)
+                    && (!SIM_ROTATES || rotates < (uint64_t)SIM_ROTATES)
+                    && (!SIM_SIZE || written < (uint64_t)SIM_SIZE)
+                    && (!SIM_TIME || BENCH_SIMTIME() < SIM_TIME))
                 // time to reboot?
-                && (POWERLOSS
-                    || mountwriting
-                    || !((bench_mount_stop_time != -1
+                && !(!POWERLOSS
+                    && !mountwriting
+                    && ((bench_mount_stop_time != -1
                             && BENCH_SIMTIME() >= bench_mount_stop_time)
                         || (bench_mount_stop_progs != -1
                             && bench_mount_progs > bench_mount_stop_progs)))) {
