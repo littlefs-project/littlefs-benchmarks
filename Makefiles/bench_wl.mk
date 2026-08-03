@@ -124,7 +124,7 @@ $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
 			-Si='enumerate()' -bcase -bFS -b$4 \
-			-flatency='bench_simtime/1.0e9' \
+			-flatency='bench_t/1.0e9' \
 			-o-) \
 		-W1500 -H350 \
 		--title=$3 \
@@ -191,7 +191,7 @@ $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
 			-Si='enumerate()' -bcase -b$4 -Dprobe='write+$$*' \
-			-flatency='bench_simtime/1.0e9' \
+			-flatency='bench_t/1.0e9' \
 			-o-) \
 		-W1500 -H175 \
 		--title=$3 \
@@ -261,7 +261,7 @@ $1: $2
 		$(foreach p, $(subst $(comma),$(space),$3), \
 			<(./scripts/csv.py $$^ \
 				-bi=0 -Dprobe='write+$(p)' \
-				-flatency_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
+				-flatency_$(subst .,$(nil),$(p))='bench_t/1.0e9' \
 				-o-)) \
 		-bi \
 		-o$$@)

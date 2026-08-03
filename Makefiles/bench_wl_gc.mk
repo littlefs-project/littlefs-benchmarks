@@ -72,10 +72,12 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		$(if $(SIM_SIZE),-DSIM_SIZE=$(SIM_SIZE)) \
 		-DFS=$(N_$3) \
 		-DDISK_GEOMETRY=$(N_$4) \
+		-Swrite -Sgc \
 		$(foreach p, $(subst $(comma),$(space),$(or $5,$(WL_GC_P))),$\
 			-Swrite=$(p)) \
 		$(foreach p, $(subst $(comma),$(space),$(or $5,$(WL_GC_P))),$\
 			-Sgc=$(p)) \
+		-Swrite=cdf1000 -Sgc=cdf1000 \
 		-DGC=$(or $6,$(WL_GC_GC)) \
 		-o$$@)
 endef
@@ -131,7 +133,8 @@ $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
 			-Si='enumerate()' -bcase -bGC -bFS -b$4 \
-			-flatency='bench_simtime/1.0e9' \
+			-U$4='write,gc,write+cdf*,gc+cdf*' \
+			-flatency='bench_t/1.0e9' \
 			-o-) \
 		-W1500 $(if, -H350) -H525 \
 		--title=$3 \
@@ -236,7 +239,7 @@ $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
 			-Si='enumerate()' -bcase -bGC -b$4 -bprobe -Dprobe='*+$$*' \
-			-flatency='bench_simtime/1.0e9' \
+			-flatency='bench_t/1.0e9' \
 			-o-) \
 		-W1500 -H350 \
 		--title=$3 \
@@ -346,7 +349,11 @@ all tikz tikz-wl-gc: \
         $(foreach c, $(BENCH_CASES), \
             $(foreach fs, $(BENCH_FILESYSTEMS), \
                 $(foreach g, $(BENCH_GEOMETRIES), \
-                    $(WL_GC_TIKZDIR)/tikz_wl_gc_ops.$(c).$(fs).$(g).csv)))
+                    $(WL_GC_TIKZDIR)/tikz_wl_gc_ops.$(c).$(fs).$(g).csv))) \
+        $(foreach c, $(BENCH_CASES), \
+            $(foreach fs, $(BENCH_FILESYSTEMS), \
+                $(foreach g, $(BENCH_GEOMETRIES), \
+                    $(WL_GC_TIKZDIR)/tikz_wl_gc_cdf.$(c).$(fs).$(g).csv)))
 
 # core tikz rule
 #
@@ -360,12 +367,12 @@ $1: $2
 		$(foreach p, $(subst $(comma),$(space),$3), \
 			<(./scripts/csv.py $$^ \
 				-bGC -Dprobe='write+$(p)' \
-				-flatency_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
+				-flatency_$(subst .,$(nil),$(p))='bench_t/1.0e9' \
 				-o-)) \
 		$(foreach p, $(subst $(comma),$(space),$3), \
 			<(./scripts/csv.py $$^ \
 				-bGC -Dprobe='gc+$(p)' \
-				-fgc_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
+				-fgc_$(subst .,$(nil),$(p))='bench_t/1.0e9' \
 				-o-)) \
 		-bGC \
 		-o$$@)
@@ -387,12 +394,14 @@ $(foreach c, $(BENCH_CASES), \
 # $3 - fs type/version
 # $4 - disk geometry
 #
+# note we _don't_ use +avg probes here because of rounding+int issues
+#
 define TIKZ_WL_GC_OPS_RULE
 $1: $2
 	$$(strip ./scripts/csv.py \
 		$(foreach probe, write gc, \
 			<(./scripts/csv.py $$^ \
-				-bGC -Dprobe='$(probe)+avg' \
+				-bGC -Dprobe='$(probe)' \
 				-f$(if $(filter gc,$(probe)),gc_)read_time="$\
 					float($$$$($($(U_$3)_BENCH_RUNNER) \
 							-DDISK_GEOMETRY=$(N_$4) \
@@ -403,7 +412,7 @@ $1: $2
 						+ $$$$($($(U_$3)_BENCH_RUNNER) \
 							-DDISK_GEOMETRY=$(N_$4) \
 							-QREAD_UTIMING)*bench_readed) \
-						/ float(hits) \
+						/ float(bench_hits) \
 						/ 1.0e9" \
 				-f$(if $(filter gc,$(probe)),gc_)prog_time="$\
 					float($$$$($($(U_$3)_BENCH_RUNNER) \
@@ -415,7 +424,7 @@ $1: $2
 						+ $$$$($($(U_$3)_BENCH_RUNNER) \
 							-DDISK_GEOMETRY=$(N_$4) \
 							-QPROG_UTIMING)*bench_progged) \
-						/ float(hits) \
+						/ float(bench_hits) \
 						/ 1.0e9" \
 				-f$(if $(filter gc,$(probe)),gc_)erase_time="$\
 					float($$$$($($(U_$3)_BENCH_RUNNER) \
@@ -427,7 +436,7 @@ $1: $2
 						+ $$$$($($(U_$3)_BENCH_RUNNER) \
 							-DDISK_GEOMETRY=$(N_$4) \
 							-QERASE_UTIMING)*bench_erased) \
-						/ float(hits) \
+						/ float(bench_hits) \
 						/ 1.0e9" \
 				-o-)) \
 		-bGC \
@@ -443,6 +452,42 @@ $(foreach c, $(BENCH_CASES), \
 				$(WL_GC_RESULTSDIR)/bench_wl_gc.$(c).$(fs).$(g).csv,$\
 				$(fs),$\
 				$(g))))))
+
+# cdf tikz rule
+#
+# $1 - target
+# $2 - source
+#
+define TIKZ_WL_GC_CDF_RULE
+$1: $2
+	$$(strip ./scripts/csv.py \
+		<(./scripts/csv.py $$^ \
+			-bp -Fp=bench_p -DGC=0 -Dprobe='write+cdf*' \
+			-fngc_latency='bench_t/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-bp -Fp=bench_p -DGC=0 -Dprobe='gc+cdf*' \
+			-fngc_gc='bench_t/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-bp -Fp=bench_p -DGC=1 -Dprobe='write+cdf*' \
+			-fygc_latency='bench_t/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-bp -Fp=bench_p -DGC=1 -Dprobe='gc+cdf*' \
+			-fygc_gc='bench_t/1.0e9' \
+			-o-) \
+		-bp -Fp \
+		-o$$@)
+endef
+
+# cdf tikz rules
+$(foreach c, $(BENCH_CASES), \
+	$(foreach fs, $(BENCH_FILESYSTEMS), \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(eval $(call TIKZ_WL_GC_CDF_RULE,$\
+				$(WL_GC_TIKZDIR)/tikz_wl_gc_cdf.$(c).$(fs).$(g).csv,$\
+				$(WL_GC_RESULTSDIR)/bench_wl_gc.$(c).$(fs).$(g).csv)))))
 
 
 #======================================================================#
