@@ -373,7 +373,7 @@ $1: $2
 		$(foreach probe, romount mount mountwrite, \
 			<(./scripts/csv.py $$^ \
 				-bPOWERLOSS -Dprobe='$(probe)+max' \
-				-fmax_read_time="$\
+				-f$(probe)_max_read_time="$\
 					float($$$$($($(U_$3)_BENCH_RUNNER) \
 							-DDISK_GEOMETRY=$(N_$4) \
 							-QREAD_TIMING)*bench_reads \
@@ -384,7 +384,7 @@ $1: $2
 							-DDISK_GEOMETRY=$(N_$4) \
 							-QREAD_UTIMING)*bench_readed) \
 						/ 1.0e9" \
-				-fmax_prog_time="$\
+				-f$(probe)_max_prog_time="$\
 					float($$$$($($(U_$3)_BENCH_RUNNER) \
 							-DDISK_GEOMETRY=$(N_$4) \
 							-QPROG_TIMING)*bench_progs \
@@ -395,7 +395,7 @@ $1: $2
 							-DDISK_GEOMETRY=$(N_$4) \
 							-QPROG_UTIMING)*bench_progged) \
 						/ 1.0e9" \
-				-fmax_erase_time="$\
+				-f$(probe)_max_erase_time="$\
 					float($$$$($($(U_$3)_BENCH_RUNNER) \
 							-DDISK_GEOMETRY=$(N_$4) \
 							-QERASE_TIMING)*bench_erases \
@@ -434,19 +434,19 @@ $1: $2
 		$(foreach probe, romount mount mountwrite, \
 			<(./scripts/csv.py $$^ \
 				-bPOWERLOSS -Dprobe='mount+max($(probe))' \
-				-fmax_mount_time='bench_t/1.0e9' \
+				-f$(probe)_max_mount_time='bench_t/1.0e9' \
 				-o-) \
 			<(./scripts/csv.py $$^ \
 				-bPOWERLOSS -Dprobe='mkconsistent+max($(probe))' \
-				-fmax_mkconsistent_time='bench_t/1.0e9' \
+				-f$(probe)_max_mkconsistent_time='bench_t/1.0e9' \
 				-o-) \
 			<(./scripts/csv.py $$^ \
 				-bPOWERLOSS -Dprobe='open+max($(probe))' \
-				-fmax_open_time='bench_t/1.0e9' \
+				-f$(probe)_max_open_time='bench_t/1.0e9' \
 				-o-) \
 			<(./scripts/csv.py $$^ \
 				-bPOWERLOSS -Dprobe='write_+max($(probe))' \
-				-fmax_write_time='bench_t/1.0e9' \
+				-f$(probe)_max_write_time='bench_t/1.0e9' \
 				-o-)) \
 		-bPOWERLOSS \
 		-o$$@)
