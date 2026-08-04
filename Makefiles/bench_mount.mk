@@ -80,6 +80,12 @@ $1: $($(U_$3)_BENCH_RUNNER)
 			-Smount=$(p)) \
 		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_P))),$\
 			-Smountwrite=$(p)) \
+		$(foreach w, mount mkconsistent open write_,$\
+			-S$(w)='max(romount)') \
+		$(foreach w, mount mkconsistent open write_,$\
+			-S$(w)='max(mount)') \
+		$(foreach w, mount mkconsistent open write_,$\
+			-S$(w)='max(mountwrite)') \
 		-Srotates -Sgrms \
 		-Sclose -Sunmount \
 		-DPOWERLOSS=$(or $6,$(MOUNT_POWERLOSS)) \
@@ -152,7 +158,7 @@ $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
 			-Si='enumerate()' -bcase -bPOWERLOSS -bFS -b$4 -D$4=$8 \
-			-flatency='bench_simtime/1.0e9' \
+			-flatency='bench_t/1.0e9' \
 			-o-) \
 		-W1500 -H350 \
 		--title=$3 \
@@ -236,7 +242,7 @@ $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
 			-Si='enumerate()' -bcase -bPOWERLOSS -b$4 -bprobe -Dprobe=$8 \
-			-flatency='bench_simtime/1.0e9' \
+			-flatency='bench_t/1.0e9' \
 			-o-) \
 		-W1500 -H350 \
 		--title=$3 \
@@ -309,7 +315,15 @@ all tikz tikz-mount: \
         $(foreach c, $(BENCH_CASES), \
             $(foreach fs, $(BENCH_FILESYSTEMS), \
                 $(foreach g, $(BENCH_GEOMETRIES), \
-                    $(MOUNT_TIKZDIR)/tikz_mount.$(c).$(fs).$(g).csv)))
+                    $(MOUNT_TIKZDIR)/tikz_mount.$(c).$(fs).$(g).csv))) \
+        $(foreach c, $(BENCH_CASES), \
+            $(foreach fs, $(BENCH_FILESYSTEMS), \
+                $(foreach g, $(BENCH_GEOMETRIES), \
+                    $(MOUNT_TIKZDIR)/tikz_mount_ops.$(c).$(fs).$(g).csv))) \
+        $(foreach c, $(BENCH_CASES), \
+            $(foreach fs, $(BENCH_FILESYSTEMS), \
+                $(foreach g, $(BENCH_GEOMETRIES), \
+                    $(MOUNT_TIKZDIR)/tikz_mount_work.$(c).$(fs).$(g).csv)))
 
 # core tikz rule
 #
@@ -323,15 +337,15 @@ $1: $2
 		$(foreach p, $(subst $(comma),$(space),$3), \
 			<(./scripts/csv.py $$^ \
 				-bPOWERLOSS -Dprobe='romount+$(p)' \
-				-fromount_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
+				-fromount_$(subst .,$(nil),$(p))='bench_t/1.0e9' \
 				-o-) \
 			<(./scripts/csv.py $$^ \
 				-bPOWERLOSS -Dprobe='mount+$(p)' \
-				-fmount_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
+				-fmount_$(subst .,$(nil),$(p))='bench_t/1.0e9' \
 				-o-) \
 			<(./scripts/csv.py $$^ \
 				-bPOWERLOSS -Dprobe='mountwrite+$(p)' \
-				-fmountwrite_$(subst .,$(nil),$(p))='bench_simtime/1.0e9' \
+				-fmountwrite_$(subst .,$(nil),$(p))='bench_t/1.0e9' \
 				-o-)) \
 		-bPOWERLOSS \
 		-o$$@)
@@ -345,6 +359,108 @@ $(foreach c, $(BENCH_CASES), \
 				$(MOUNT_TIKZDIR)/tikz_mount.$(c).$(fs).$(g).csv,$\
 				$(MOUNT_RESULTSDIR)/bench_mount.$(c).$(fs).$(g).csv,$\
 				$(MOUNT_P))))))
+
+# ops tikz rule
+#
+# $1 - target
+# $2 - source
+# $3 - fs type/version
+# $4 - disk geometry
+#
+define TIKZ_MOUNT_OPS_RULE
+$1: $2
+	$$(strip ./scripts/csv.py \
+		$(foreach probe, romount mount mountwrite, \
+			<(./scripts/csv.py $$^ \
+				-bPOWERLOSS -Dprobe='$(probe)+max' \
+				-fmax_read_time="$\
+					float($$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QREAD_TIMING)*bench_reads \
+						+ $$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QREAD_WTIMING)*bench_wreads \
+						+ $$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QREAD_UTIMING)*bench_readed) \
+						/ 1.0e9" \
+				-fmax_prog_time="$\
+					float($$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QPROG_TIMING)*bench_progs \
+						+ $$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QPROG_WTIMING)*bench_wprogs \
+						+ $$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QPROG_UTIMING)*bench_progged) \
+						/ 1.0e9" \
+				-fmax_erase_time="$\
+					float($$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QERASE_TIMING)*bench_erases \
+						+ $$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QERASE_WTIMING)*bench_werases \
+						+ $$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QERASE_UTIMING)*bench_erased) \
+						/ 1.0e9" \
+				-o-)) \
+		-bPOWERLOSS \
+		-o$$@)
+endef
+
+# ops tikz rules
+$(foreach c, $(BENCH_CASES), \
+	$(foreach fs, $(BENCH_FILESYSTEMS), \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(eval $(call TIKZ_MOUNT_OPS_RULE,$\
+				$(MOUNT_TIKZDIR)/tikz_mount_ops.$(c).$(fs).$(g).csv,$\
+				$(MOUNT_RESULTSDIR)/bench_mount.$(c).$(fs).$(g).csv,$\
+				$(fs),$\
+				$(g))))))
+
+# work tikz rule
+#
+# $1 - target
+# $2 - source
+# $3 - fs type/version
+# $4 - disk geometry
+#
+define TIKZ_MOUNT_WORK_RULE
+$1: $2
+	$$(strip ./scripts/csv.py \
+		$(foreach probe, romount mount mountwrite, \
+			<(./scripts/csv.py $$^ \
+				-bPOWERLOSS -Dprobe='mount+max($(probe))' \
+				-fmax_mount_time='bench_t/1.0e9' \
+				-o-) \
+			<(./scripts/csv.py $$^ \
+				-bPOWERLOSS -Dprobe='mkconsistent+max($(probe))' \
+				-fmax_mkconsistent_time='bench_t/1.0e9' \
+				-o-) \
+			<(./scripts/csv.py $$^ \
+				-bPOWERLOSS -Dprobe='open+max($(probe))' \
+				-fmax_open_time='bench_t/1.0e9' \
+				-o-) \
+			<(./scripts/csv.py $$^ \
+				-bPOWERLOSS -Dprobe='write_+max($(probe))' \
+				-fmax_write_time='bench_t/1.0e9' \
+				-o-)) \
+		-bPOWERLOSS \
+		-o$$@)
+endef
+
+# work tikz rules
+$(foreach c, $(BENCH_CASES), \
+	$(foreach fs, $(BENCH_FILESYSTEMS), \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(eval $(call TIKZ_MOUNT_WORK_RULE,$\
+				$(MOUNT_TIKZDIR)/tikz_mount_work.$(c).$(fs).$(g).csv,$\
+				$(MOUNT_RESULTSDIR)/bench_mount.$(c).$(fs).$(g).csv,$\
+				$(fs),$\
+				$(g))))))
 
 
 #======================================================================#

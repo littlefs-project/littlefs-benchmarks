@@ -152,7 +152,7 @@ $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
 			-bcase -bFS -bPOWERLOSS -b$4 -Dprobe=$8 \
-			-flatency='float(bench_simtime)/1.0e9' \
+			-flatency='float(bench_t)/1.0e9' \
 			-o-) \
 		-W1500 -H350 \
 		--title=$3 \
@@ -247,32 +247,32 @@ $1: $2
 		<(./scripts/csv.py $$^ \
 			-b$3 -DPOWERLOSS=0 -Dprobe=romount+$(MOUNT_MM_P) \
 			-fromount_npl_$(subst .,$(nil),$(MOUNT_MM_P))=$\
-				'float(bench_simtime)/1.0e9' \
+				'float(bench_t)/1.0e9' \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-b$3 -DPOWERLOSS=0 -Dprobe=mount+$(MOUNT_MM_P) \
 			-fmount_npl_$(subst .,$(nil),$(MOUNT_MM_P))=$\
-				'float(bench_simtime)/1.0e9' \
+				'float(bench_t)/1.0e9' \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-b$3 -DPOWERLOSS=0 -Dprobe=mountwrite+$(MOUNT_MM_P) \
 			-fmountwrite_npl_$(subst .,$(nil),$(MOUNT_MM_P))=$\
-				'float(bench_simtime)/1.0e9' \
+				'float(bench_t)/1.0e9' \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-b$3 -DPOWERLOSS=1 -Dprobe=romount+$(MOUNT_MM_P) \
 			-fromount_ypl_$(subst .,$(nil),$(MOUNT_MM_P))=$\
-				'float(bench_simtime)/1.0e9' \
+				'float(bench_t)/1.0e9' \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-b$3 -DPOWERLOSS=1 -Dprobe=mount+$(MOUNT_MM_P) \
 			-fmount_ypl_$(subst .,$(nil),$(MOUNT_MM_P))=$\
-				'float(bench_simtime)/1.0e9' \
+				'float(bench_t)/1.0e9' \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-b$3 -DPOWERLOSS=1 -Dprobe=mountwrite+$(MOUNT_MM_P) \
 			-fmountwrite_ypl_$(subst .,$(nil),$(MOUNT_MM_P))=$\
-				'float(bench_simtime)/1.0e9' \
+				'float(bench_t)/1.0e9' \
 			-o-) \
 		-b$3 -F$3 \
 		-o$$@)

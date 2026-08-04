@@ -152,7 +152,7 @@ $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
 			-bcase -bFS -bPOWERLOSS -b$4 -Dprobe=$8 \
-			-flatency='float(bench_simtime)/1.0e9' \
+			-flatency='float(bench_t)/1.0e9' \
 			-o-) \
 		-W1500 -H350 \
 		--title=$3 \
@@ -251,32 +251,32 @@ $1: $2
 		<(./scripts/csv.py $$^ \
 			-b$3 -DPOWERLOSS=0 -Dprobe=romount+$(MOUNT_M_P) \
 			-fromount_npl_$(subst .,$(nil),$(MOUNT_M_P))=$\
-				'float(bench_simtime)/1.0e9' \
+				'float(bench_t)/1.0e9' \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-b$3 -DPOWERLOSS=0 -Dprobe=mount+$(MOUNT_M_P) \
 			-fmount_npl_$(subst .,$(nil),$(MOUNT_M_P))=$\
-				'float(bench_simtime)/1.0e9' \
+				'float(bench_t)/1.0e9' \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-b$3 -DPOWERLOSS=0 -Dprobe=mountwrite+$(MOUNT_M_P) \
 			-fmountwrite_npl_$(subst .,$(nil),$(MOUNT_M_P))=$\
-				'float(bench_simtime)/1.0e9' \
+				'float(bench_t)/1.0e9' \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-b$3 -DPOWERLOSS=1 -Dprobe=romount+$(MOUNT_M_P) \
 			-fromount_ypl_$(subst .,$(nil),$(MOUNT_M_P))=$\
-				'float(bench_simtime)/1.0e9' \
+				'float(bench_t)/1.0e9' \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-b$3 -DPOWERLOSS=1 -Dprobe=mount+$(MOUNT_M_P) \
 			-fmount_ypl_$(subst .,$(nil),$(MOUNT_M_P))=$\
-				'float(bench_simtime)/1.0e9' \
+				'float(bench_t)/1.0e9' \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-b$3 -DPOWERLOSS=1 -Dprobe=mountwrite+$(MOUNT_M_P) \
 			-fmountwrite_ypl_$(subst .,$(nil),$(MOUNT_M_P))=$\
-				'float(bench_simtime)/1.0e9' \
+				'float(bench_t)/1.0e9' \
 			-o-) \
 		-b$3 -F$3 \
 		-o$$@)
@@ -304,35 +304,35 @@ $1: $2
 	$$(strip ./scripts/csv.py \
 		<(./scripts/csv.py $$^ \
 			-b$5 -DPOWERLOSS=0 -Dprobe=usage \
-			-fusage_npl=bench_simtime \
+			-fusage_npl=bench_t \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-b$5 -DPOWERLOSS=0 -Dprobe=mdir \
-			-fmdir_npl=bench_simtime \
+			-fmdir_npl=bench_t \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-b$5 -DPOWERLOSS=0 -Dprobe=btree \
-			-fbtree_npl=bench_simtime \
+			-fbtree_npl=bench_t \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-b$5 -DPOWERLOSS=0 -Dprobe=data \
-			-fdata_npl=bench_simtime \
+			-fdata_npl=bench_t \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-b$5 -DPOWERLOSS=1 -Dprobe=usage \
-			-fusage_ypl=bench_simtime \
+			-fusage_ypl=bench_t \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-b$5 -DPOWERLOSS=1 -Dprobe=mdir \
-			-fmdir_ypl=bench_simtime \
+			-fmdir_ypl=bench_t \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-b$5 -DPOWERLOSS=1 -Dprobe=btree \
-			-fbtree_ypl=bench_simtime \
+			-fbtree_ypl=bench_t \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-b$5 -DPOWERLOSS=1 -Dprobe=data \
-			-fdata_ypl=bench_simtime \
+			-fdata_ypl=bench_t \
 			-o-) \
 		-b$5 -F$5 \
 		-FBLOCK_COUNT="$$$$($($(U_$3)_BENCH_RUNNER) bench_mount \

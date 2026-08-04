@@ -76,7 +76,7 @@ if = [
     # spiffs is limited to 32-bit disks
     'BENCH_IFDEF_SPIFFS(DISK_SIZE < 0x100000000ULL, true)',
     # SPIFFS_check just takes way too long on big disks
-    'BENCH_IFDEF_SPIFFS(!POWERLOSS || DISK_SIZE <= 256*1024*1024, true)',
+    'BENCH_IFDEF_SPIFFS(!POWERLOSS || DISK_SIZE <= 128*1024*1024, true)',
 ]
 
 hooks.init = 'bench_mount_init'
@@ -296,6 +296,7 @@ code = '''
     BENCH_ABORT("mkconsistent");
     BENCH_ABORT("open");
     BENCH_ABORT("write");
+    BENCH_ABORT("write_");
     BENCH_ABORT("close");
     BENCH_ABORT("unmount");
     BENCH_ABORT("closeunmount");
@@ -534,6 +535,9 @@ code = '''
                             && BENCH_SIMTIME() >= bench_mount_stop_time)
                         || (bench_mount_stop_progs != -1
                             && bench_mount_progs > bench_mount_stop_progs)))) {
+            if (mountwriting) {
+                BENCH_START("write_");
+            }
             BENCH_START("write");
             // append to log
             uint8_t wbuf[CHUNK];
@@ -563,6 +567,7 @@ code = '''
                 LFS3_DEBUG("spiffs: fflush error: %d, remounting...", d);
                 needs_check = true;
                 BENCH_ABORT("write");
+                BENCH_ABORT("write_");
                 SPIFFS_close(&spiffs, fd) => 0;
                 SPIFFS_unmount(&spiffs);
                 goto remount_and_check;
@@ -618,6 +623,7 @@ code = '''
                     LFS3_DEBUG("spiffs: remove error: %d, remounting...", err);
                     needs_check = true;
                     BENCH_ABORT("write");
+                    BENCH_ABORT("write_");
                     SPIFFS_unmount(&spiffs);
                     goto remount_and_check;
                 }
@@ -628,6 +634,7 @@ code = '''
                     LFS3_DEBUG("spiffs: rename error: %d, remounting...", err);
                     needs_check = true;
                     BENCH_ABORT("write");
+                    BENCH_ABORT("write_");
                     SPIFFS_unmount(&spiffs);
                     goto remount_and_check;
                 }
@@ -642,6 +649,7 @@ code = '''
                     LFS3_DEBUG("spiffs: open error: %d, remounting...", fd);
                     needs_check = true;
                     BENCH_ABORT("write");
+                    BENCH_ABORT("write_");
                     SPIFFS_unmount(&spiffs);
                     goto remount_and_check;
                 }
@@ -662,6 +670,7 @@ code = '''
             written += CHUNK;
             BENCH_STOP("write", written);
             if (mountwriting) {
+                BENCH_STOP("write_", mounts);
                 BENCH_STOP("mountwrite", mounts);
                 mountwriting = false;
 
