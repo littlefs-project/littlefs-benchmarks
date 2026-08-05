@@ -23,7 +23,8 @@ int bench_helpers_warmup(const struct lfs3_cfg *cfg, void *fs);
 //
 // useful for static vs dynamic wear-leveling, metadata pressure, etc
 int bench_helpers_populate(const struct lfs3_cfg *cfg, void *fs,
-        lfs3_off_t static_count, lfs3_off_t static_size);
+        lfs3_off_t static_count, lfs3_off_t static_size,
+        bool static_compact);
 
 
 // interesting usage info, though not all filesystems provide these

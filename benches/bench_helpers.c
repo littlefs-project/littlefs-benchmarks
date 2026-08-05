@@ -118,7 +118,8 @@ int bench_helpers_warmup(const struct lfs3_cfg *cfg, void *fs) {
 //
 // useful for static vs dynamic wear-leveling, metadata pressure, etc
 int bench_helpers_populate(const struct lfs3_cfg *cfg, void *fs,
-        lfs3_off_t static_count, lfs3_off_t static_size) {
+        lfs3_off_t static_count, lfs3_off_t static_size,
+        bool static_compact) {
     char nbuf[256];
     uint8_t *wbuf = malloc(static_size);
     memset(wbuf, 's', static_size);
@@ -134,6 +135,14 @@ int bench_helpers_populate(const struct lfs3_cfg *cfg, void *fs,
                 LFS3_O_WRONLY | LFS3_O_CREAT | LFS3_O_EXCL) => 0;
         lfs3_file_write(lfs3, &file, wbuf, static_size) => static_size;
         lfs3_file_close(lfs3, &file) => 0;
+    }
+
+    if (static_compact) {
+        lfs3_gc_t gc;
+        lfs3_gc_open(lfs3, &gc, LFS3_GC_COMPACTMETA) => 0;
+        lfs3_sblock_t steps = lfs3_gc_write(lfs3, &gc, -1);
+        assert(steps >= 0);
+        lfs3_gc_close(lfs3, &gc) => 0;
     }
     #elif defined(LFS2)
     (void)cfg;

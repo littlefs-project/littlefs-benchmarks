@@ -24,6 +24,7 @@ defines.SKIP_WARMUP = false
 # optionally create a bunch of static files
 defines.STATIC_COUNT = 0
 defines.STATIC_SIZE = 512 # 64 # inlined (in theory, check mdirs/data)
+defines.STATIC_COMPACT = 0
 
 # also bench read-only mount?
 defines.ROMOUNT = true
@@ -247,16 +248,16 @@ code = '''
         BENCH_HEAP_PAUSE();
         #if defined(LFS3)
         int err = bench_helpers_populate(CFG, &lfs3,
-                STATIC_COUNT, STATIC_SIZE);
+                STATIC_COUNT, STATIC_SIZE, STATIC_COMPACT);
         #elif defined(LFS2)
         int err = bench_helpers_populate(CFG, &lfs2,
-                STATIC_COUNT, STATIC_SIZE);
+                STATIC_COUNT, STATIC_SIZE, STATIC_COMPACT);
         #elif defined(SPIFFS)
         int err = bench_helpers_populate(CFG, &spiffs,
-                STATIC_COUNT, STATIC_SIZE);
+                STATIC_COUNT, STATIC_SIZE, STATIC_COMPACT);
         #elif defined(YAFFS2)
         int err = bench_helpers_populate(CFG, &yaffs2,
-                STATIC_COUNT, STATIC_SIZE);
+                STATIC_COUNT, STATIC_SIZE, STATIC_COMPACT);
         #endif
         if (err) {
             LFS3_ERROR("Bench populate failed: %d", err);
