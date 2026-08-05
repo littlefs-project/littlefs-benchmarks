@@ -327,9 +327,9 @@ code = '''
     volatile uint64_t stuck = 0;
     volatile uint64_t stuck_before = -1;
     volatile uint64_t stuck_after = 0;
-    //// this is where we end up after powerloss ////
+    ///////////// this is where we end up after powerloss /////////////
     setjmp(bench_mount_jmp);
-    ////                                         ////
+    /////////////                                         /////////////
     BENCH_ABORT("romount");
     BENCH_ABORT("mountwrite");
     BENCH_ABORT("mount");
