@@ -11,8 +11,8 @@ defines.CHUNK = 64
 defines.SEED = 42
 
 # simulate this number of mounts or interuppted log-rotations
-defines.SIM_MOUNTS = 10000
-defines.SIM_ROTATES = 10 # ignored if not POWERLOSS
+defines.SIM_MOUNTS = 1000
+defines.SIM_ROTATES = 0 # ignored if not POWERLOSS
 # simulated time, in nanoseconds, to run the test
 defines.SIM_TIME = 0 # '60ULL*60ULL*1000ULL*1000ULL*1000ULL' # 1 hour
 # simulation size in bytes
