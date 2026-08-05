@@ -29,6 +29,9 @@ defines.STATIC_SIZE = 512 # 64 # inlined (in theory, check mdirs/data)
 defines.ROMOUNT = true
 
 # run with simulated powerloss? defaults to a nice shutdown
+# 0 => nice shutdown
+# 1 => oh no, unexpected shutdown
+# 2 => oh nooo, unexpected shutdown during only progs
 defines.POWERLOSS = false
 
 # emulate failed progs by adding noise?
@@ -80,7 +83,9 @@ if = [
 ]
 
 hooks.init = 'bench_mount_init'
+hooks.read = 'bench_mount_bd_read'
 hooks.prog = 'bench_mount_bd_prog'
+hooks.erase = 'bench_mount_bd_erase'
 code = '''
     // include common bench helpers
     #include "benches/bench_helpers.h"
@@ -113,7 +118,26 @@ code = '''
         bench_mount_reset();
     }
 
+    // hook read
+    int bench_mount_bd_read(const struct lfs3_cfg *cfg, lfs3_block_t block,
+            lfs3_off_t off, void *buffer, lfs3_size_t size) {
+        // time for powerloss?
+        if (POWERLOSS == 1
+                && ((bench_mount_stop_time != -1
+                        && BENCH_SIMTIME() >= bench_mount_stop_time)
+                    || (bench_mount_stop_progs != -1
+                        && bench_mount_progs > bench_mount_stop_progs))) {
+            // simulate powerloss
+            longjmp(bench_mount_jmp, 1);
+        }
+
+        return BENCH_BD_READNOHOOKS(cfg, block, off, buffer, size);
+    }
+
     // hook prog
+    //
+    // this one has a few more features because it's the most
+    // interesting under powerloss
     int bench_mount_bd_prog(const struct lfs3_cfg *cfg, lfs3_block_t block,
             lfs3_off_t off, const void *buffer, lfs3_size_t size) {
         // time for powerloss?
@@ -140,6 +164,21 @@ code = '''
         // increment progs
         bench_mount_progs += 1;
         return err;
+    }
+
+    // hook erase
+    int bench_mount_bd_erase(const struct lfs3_cfg *cfg, lfs3_block_t block) {
+        // time for powerloss?
+        if (POWERLOSS == 1
+                && ((bench_mount_stop_time != -1
+                        && BENCH_SIMTIME() >= bench_mount_stop_time)
+                    || (bench_mount_stop_progs != -1
+                        && bench_mount_progs > bench_mount_stop_progs))) {
+            // simulate powerloss
+            longjmp(bench_mount_jmp, 1);
+        }
+
+        return BENCH_BD_ERASENOHOOKS(cfg, block);
     }
 '''
 
@@ -291,12 +330,15 @@ code = '''
     //// this is where we end up after powerloss ////
     setjmp(bench_mount_jmp);
     ////                                         ////
+    BENCH_ABORT("romount");
     BENCH_ABORT("mountwrite");
     BENCH_ABORT("mount");
     BENCH_ABORT("mkconsistent");
     BENCH_ABORT("open");
-    BENCH_ABORT("write");
     BENCH_ABORT("write_");
+    BENCH_ABORT("write");
+    BENCH_ABORT("sync_");
+    BENCH_ABORT("sync");
     BENCH_ABORT("close");
     BENCH_ABORT("unmount");
     BENCH_ABORT("closeunmount");
@@ -555,6 +597,10 @@ code = '''
             #endif
 
             // sync
+            if (mountwriting) {
+                BENCH_START("sync_");
+            }
+            BENCH_START("sync");
             #if defined(LFS3)
             lfs3_file_sync(&lfs3, &file) => 0;
             #elif defined(LFS2)
@@ -568,6 +614,8 @@ code = '''
                 needs_check = true;
                 BENCH_ABORT("write");
                 BENCH_ABORT("write_");
+                BENCH_ABORT("sync");
+                BENCH_ABORT("sync_");
                 SPIFFS_close(&spiffs, fd) => 0;
                 SPIFFS_unmount(&spiffs);
                 goto remount_and_check;
@@ -575,6 +623,10 @@ code = '''
             #elif defined(YAFFS2)
             yaffs_fsync(fd) => 0;
             #endif
+            BENCH_STOP("sync", written + CHUNK);
+            if (mountwriting) {
+                BENCH_STOP("sync_", mounts);
+            }
 
             // for v3, fruncate, for v2, rotate if full
             //

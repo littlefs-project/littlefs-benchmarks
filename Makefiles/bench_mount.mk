@@ -16,7 +16,7 @@ MOUNT_TIKZDIR ?= $(TIKZDIR)/mount
 MOUNT_P ?= avg,p50,p90,p99,p99.9,p99.99,p99.999,max
 
 # run with powerloss
-MOUNT_POWERLOSS ?= 0,1
+MOUNT_POWERLOSS ?= 0,1,2
 
 
 # default bench filesystems to default bench filesystems
@@ -80,11 +80,11 @@ $1: $($(U_$3)_BENCH_RUNNER)
 			-Smount=$(p)) \
 		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_P))),$\
 			-Smountwrite=$(p)) \
-		$(foreach w, mount mkconsistent open write_,$\
+		$(foreach w, mount mkconsistent open write_ sync_,$\
 			-S$(w)='max(romount)') \
-		$(foreach w, mount mkconsistent open write_,$\
+		$(foreach w, mount mkconsistent open write_ sync_,$\
 			-S$(w)='max(mount)') \
-		$(foreach w, mount mkconsistent open write_,$\
+		$(foreach w, mount mkconsistent open write_ sync_,$\
 			-S$(w)='max(mountwrite)') \
 		-Srotates -Sgrms \
 		-Sclose -Sunmount \
@@ -172,28 +172,41 @@ $1: $2
 			--subplot-below=\" \
 				--ylabel='mount latency (yes pl)' \
 				-Dcase=bench_mount_seq \
-				-DPOWERLOSS=1\"" \
+				-DPOWERLOSS=1\" \
+			--subplot-below=\" \
+				--ylabel='mount latency (prog pl)' \
+				-Dcase=bench_mount_seq \
+				-DPOWERLOSS=2\"" \
 		--subplot-right=" \
 				--title='random' \
 				-Dcase=bench_mount_random \
 				-DPOWERLOSS=0 \
 			--subplot-below=\" \
 				-Dcase=bench_mount_random \
-				-DPOWERLOSS=1\"" \
+				-DPOWERLOSS=1\" \
+			--subplot-below=\" \
+				-Dcase=bench_mount_random \
+				-DPOWERLOSS=2\"" \
 		--subplot-right=" \
 				--title='logging' \
 				-Dcase=bench_mount_logging \
 				-DPOWERLOSS=0 \
 			--subplot-below=\" \
 				-Dcase=bench_mount_logging \
-				-DPOWERLOSS=1\"" \
+				-DPOWERLOSS=1\" \
+			--subplot-below=\" \
+				-Dcase=bench_mount_logging \
+				-DPOWERLOSS=2\"" \
 		--subplot-right=" \
 				--title='many' \
 				-Dcase=bench_mount_many \
 				-DPOWERLOSS=0 \
 			--subplot-below=\" \
 				-Dcase=bench_mount_many \
-				-DPOWERLOSS=1\"" \
+				-DPOWERLOSS=1\" \
+			--subplot-below=\" \
+				-Dcase=bench_mount_many \
+				-DPOWERLOSS=2\"" \
 		--legend \
 		$(foreach fs, $(BENCH_FILESYSTEMS),$\
 			-L'$(N_$(fs))=$(fs)') \
@@ -255,28 +268,41 @@ $1: $2
 			--subplot-below=\" \
 				--ylabel='latency (yes pl)' \
 				-Dcase=bench_mount_seq \
-				-DPOWERLOSS=1\"" \
+				-DPOWERLOSS=1\" \
+			--subplot-below=\" \
+				--ylabel='latency (prog pl)' \
+				-Dcase=bench_mount_seq \
+				-DPOWERLOSS=2\"" \
 		--subplot-right=" \
 				--title='random (mount)' \
 				-Dcase=bench_mount_random \
 				-DPOWERLOSS=0 \
 			--subplot-below=\" \
 				-Dcase=bench_mount_random \
-				-DPOWERLOSS=1\"" \
+				-DPOWERLOSS=1\" \
+			--subplot-below=\" \
+				-Dcase=bench_mount_random \
+				-DPOWERLOSS=2\"" \
 		--subplot-right=" \
 				--title='logging (mount)' \
 				-Dcase=bench_mount_logging \
 				-DPOWERLOSS=0 \
 			--subplot-below=\" \
 				-Dcase=bench_mount_logging \
-				-DPOWERLOSS=1\"" \
+				-DPOWERLOSS=1\" \
+			--subplot-below=\" \
+				-Dcase=bench_mount_logging \
+				-DPOWERLOSS=2\"" \
 		--subplot-right=" \
 				--title='many (mount)' \
 				-Dcase=bench_mount_many \
 				-DPOWERLOSS=0 \
 			--subplot-below=\" \
 				-Dcase=bench_mount_many \
-				-DPOWERLOSS=1\"" \
+				-DPOWERLOSS=1\" \
+			--subplot-below=\" \
+				-Dcase=bench_mount_many \
+				-DPOWERLOSS=2\"" \
 		-Fo: -C'mountwrite+*=$(C_BLUE)' \
 		-ylatency --yunits=s \
 		-X"-0.25,$\
@@ -447,6 +473,10 @@ $1: $2
 			<(./scripts/csv.py $$^ \
 				-bPOWERLOSS -Dprobe='write_+max($(probe))' \
 				-f$(probe)_max_write_time='bench_t/1.0e9' \
+				-o-) \
+			<(./scripts/csv.py $$^ \
+				-bPOWERLOSS -Dprobe='sync_+max($(probe))' \
+				-f$(probe)_max_sync_time='bench_t/1.0e9' \
 				-o-)) \
 		-bPOWERLOSS \
 		-o$$@)
