@@ -316,7 +316,7 @@ code = '''
 
     // ok, one of these needs to be non-zero
     LFS3_ASSERT(SIM_MOUNTS > 0
-            || (SIM_ROTATES > 0 && !POWERLOSS)
+            || (SIM_ROTATES > 0 && POWERLOSS)
             || SIM_TIME > 0
             || SIM_SIZE > 0);
     volatile uint64_t mounts = 0;
@@ -379,10 +379,12 @@ code = '''
             }
         }
     }
-    while ((!SIM_MOUNTS || mounts < (uint64_t)SIM_MOUNTS)
-            && (!SIM_ROTATES || rotates < (uint64_t)SIM_ROTATES)
-            && (!SIM_SIZE || written < (uint64_t)SIM_SIZE)
-            && (!SIM_TIME || BENCH_SIMTIME() < SIM_TIME)) {
+    while ((SIM_MOUNTS && mounts < (uint64_t)SIM_MOUNTS)
+            || (SIM_ROTATES
+                && POWERLOSS
+                && rotates < (uint64_t)SIM_ROTATES)
+            || (SIM_SIZE && written < (uint64_t)SIM_SIZE)
+            || (SIM_TIME && BENCH_SIMTIME() < SIM_TIME)) {
         // reset progs
         bench_mount_reset();
         // how long to run this loop?
@@ -566,10 +568,12 @@ code = '''
         assert(fd >= 0);
         #endif
         BENCH_STOP("open", mounts);
-        while (((!SIM_MOUNTS || mounts < (uint64_t)SIM_MOUNTS)
-                    && (!SIM_ROTATES || rotates < (uint64_t)SIM_ROTATES)
-                    && (!SIM_SIZE || written < (uint64_t)SIM_SIZE)
-                    && (!SIM_TIME || BENCH_SIMTIME() < SIM_TIME))
+        while (((SIM_MOUNTS && mounts < (uint64_t)SIM_MOUNTS)
+                    || (SIM_ROTATES
+                        && POWERLOSS
+                        && rotates < (uint64_t)SIM_ROTATES)
+                    || (SIM_SIZE && written < (uint64_t)SIM_SIZE)
+                    || (SIM_TIME && BENCH_SIMTIME() < SIM_TIME))
                 // time to reboot?
                 && !(!POWERLOSS
                     && !mountwriting
