@@ -19,7 +19,8 @@ MOUNT_MM_P ?= max
 MOUNT_MM_POWERLOSS ?= 0,1,2
 
 # number of static files to create
-MOUNT_MM_STATIC_COUNTS ?= 0,1,2,4,8,16,32,64,128,256,512,1024,2048,4096
+MOUNT_MM_STATIC_COUNTS ?= $\
+		0,1,2,4,8,16,32,64,128,256,512,1024,2048,4096,8192,16384
 
 # size of static files
 #
