@@ -278,25 +278,57 @@ code = '''
     // this hits yaffs2 especially hard because create forces the
     // current checkpoint to be erased, resulting in a one-time spike
     // when mount + open creates the initial file
+    //
+    // we also go ahead and fill the file with data so all filesystems
+    // have roughly the same baseline even if they never make it to
+    // write loop
     #if defined(LFS3)
     lfs3_file_t file;
     lfs3_file_open(&lfs3, &file, "bench_log",
             LFS3_O_WRONLY | LFS3_O_CREAT | LFS3_O_EXCL | LFS3_O_APPEND) => 0;
+    for (lfs3_size_t i = 0; i < SIZE; i += CHUNK) {
+        uint8_t wbuf[CHUNK];
+        for (lfs3_size_t j = 0; j < CHUNK; j++) {
+            wbuf[j] = 'a' + (BENCH_PRNG(&prng) % 26);
+        }
+        lfs3_file_write(&lfs3, &file, wbuf, CHUNK) => CHUNK;
+    }
     lfs3_file_close(&lfs3, &file) => 0;
     #elif defined(LFS2)
     lfs2_file_t file;
     lfs2_file_open(&lfs2, &file, "bench_log",
             LFS2_O_WRONLY | LFS2_O_CREAT | LFS3_O_EXCL | LFS2_O_APPEND) => 0;
+    for (lfs3_size_t i = 0; i < SIZE; i += CHUNK) {
+        uint8_t wbuf[CHUNK];
+        for (lfs3_size_t j = 0; j < CHUNK; j++) {
+            wbuf[j] = 'a' + (BENCH_PRNG(&prng) % 26);
+        }
+        lfs2_file_write(&lfs2, &file, wbuf, CHUNK) => CHUNK;
+    }
     lfs2_file_close(&lfs2, &file) => 0;
     #elif defined(SPIFFS)
     spiffs_file fd = SPIFFS_open(&spiffs, "bench_log",
             SPIFFS_WRONLY | SPIFFS_CREAT | SPIFFS_EXCL | SPIFFS_APPEND, 0777);
     assert(fd >= 0);
+    for (lfs3_size_t i = 0; i < SIZE; i += CHUNK) {
+        uint8_t wbuf[CHUNK];
+        for (lfs3_size_t j = 0; j < CHUNK; j++) {
+            wbuf[j] = 'a' + (BENCH_PRNG(&prng) % 26);
+        }
+        SPIFFS_write(&spiffs, fd, wbuf, CHUNK) => CHUNK;
+    }
     SPIFFS_close(&spiffs, fd) => 0;
     #elif defined(YAFFS2)
     int fd = yaffs_open("bench_log",
             O_WRONLY | O_CREAT | O_EXCL | O_APPEND, 0777);
     assert(fd >= 0);
+    for (lfs3_size_t i = 0; i < SIZE; i += CHUNK) {
+        uint8_t wbuf[CHUNK];
+        for (lfs3_size_t j = 0; j < CHUNK; j++) {
+            wbuf[j] = 'a' + (BENCH_PRNG(&prng) % 26);
+        }
+        yaffs_write(fd, wbuf, CHUNK) => CHUNK;
+    }
     yaffs_close(fd) => 0;
     #endif
 
