@@ -81,9 +81,7 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_P))),$\
 			-Smountwrite=$(p)) \
 		$(foreach w, mount mkconsistent open write_ sync_,$\
-			-S$(w)='max(romount)') \
-		$(foreach w, mount mkconsistent open write_ sync_,$\
-			-S$(w)='max(mount)') \
+			-S$(w)=avg) \
 		$(foreach w, mount mkconsistent open write_ sync_,$\
 			-S$(w)='max(mountwrite)') \
 		-Srotates -Sgrms \
@@ -457,27 +455,46 @@ $(foreach c, $(BENCH_CASES), \
 define TIKZ_MOUNT_WORK_RULE
 $1: $2
 	$$(strip ./scripts/csv.py \
-		$(foreach probe, romount mount mountwrite, \
-			<(./scripts/csv.py $$^ \
-				-bPOWERLOSS -Dprobe='mount+max($(probe))' \
-				-f$(probe)_max_mount_time='bench_t/1.0e9' \
-				-o-) \
-			<(./scripts/csv.py $$^ \
-				-bPOWERLOSS -Dprobe='mkconsistent+max($(probe))' \
-				-f$(probe)_max_mkconsistent_time='bench_t/1.0e9' \
-				-o-) \
-			<(./scripts/csv.py $$^ \
-				-bPOWERLOSS -Dprobe='open+max($(probe))' \
-				-f$(probe)_max_open_time='bench_t/1.0e9' \
-				-o-) \
-			<(./scripts/csv.py $$^ \
-				-bPOWERLOSS -Dprobe='write_+max($(probe))' \
-				-f$(probe)_max_write_time='bench_t/1.0e9' \
-				-o-) \
-			<(./scripts/csv.py $$^ \
-				-bPOWERLOSS -Dprobe='sync_+max($(probe))' \
-				-f$(probe)_max_sync_time='bench_t/1.0e9' \
-				-o-)) \
+		<(./scripts/csv.py $$^ \
+			-bPOWERLOSS -Dprobe='mount+avg' \
+			-fmountwrite_avg_mount_time='bench_t/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-bPOWERLOSS -Dprobe='mkconsistent+avg' \
+			-fmountwrite_avg_mkconsistent_time='bench_t/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-bPOWERLOSS -Dprobe='open+avg' \
+			-fmountwrite_avg_open_time='bench_t/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-bPOWERLOSS -Dprobe='write_+avg' \
+			-fmountwrite_avg_write_time='bench_t/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-bPOWERLOSS -Dprobe='sync_+avg' \
+			-fmountwrite_avg_sync_time='bench_t/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-bPOWERLOSS -Dprobe='mount+max(mountwrite)' \
+			-fmountwrite_max_mount_time='bench_t/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-bPOWERLOSS -Dprobe='mkconsistent+max(mountwrite)' \
+			-fmountwrite_max_mkconsistent_time='bench_t/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-bPOWERLOSS -Dprobe='open+max(mountwrite)' \
+			-fmountwrite_max_open_time='bench_t/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-bPOWERLOSS -Dprobe='write_+max(mountwrite)' \
+			-fmountwrite_max_write_time='bench_t/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-bPOWERLOSS -Dprobe='sync_+max(mountwrite)' \
+			-fmountwrite_max_sync_time='bench_t/1.0e9' \
+			-o-) \
 		-bPOWERLOSS \
 		-o$$@)
 endef
