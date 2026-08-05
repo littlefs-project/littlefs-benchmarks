@@ -16,7 +16,7 @@ MOUNT_M_TIKZDIR ?= $(TIKZDIR)/mount_m
 MOUNT_M_P ?= max
 
 # run with powerloss
-MOUNT_M_POWERLOSS ?= 0,1
+MOUNT_M_POWERLOSS ?= 0,1,2
 
 # number of static files to create
 MOUNT_M_STATIC_COUNTS ?= 0,1,2,4,8,16,32,64,128,256,512,1024,2048,4096
@@ -167,28 +167,41 @@ $1: $2
 			--subplot-below=\" \
 				--ylabel='mount latency (yes pl)' \
 				-Dcase=bench_mount_seq \
-				-DPOWERLOSS=1\"" \
+				-DPOWERLOSS=1\" \
+			--subplot-below=\" \
+				--ylabel='mount latency (prog pl)' \
+				-Dcase=bench_mount_seq \
+				-DPOWERLOSS=2\"" \
 		--subplot-right=" \
 				--title='random' \
 				-Dcase=bench_mount_random \
 				-DPOWERLOSS=0 \
 			--subplot-below=\" \
 				-Dcase=bench_mount_random \
-				-DPOWERLOSS=1\"" \
+				-DPOWERLOSS=1\" \
+			--subplot-below=\" \
+				-Dcase=bench_mount_random \
+				-DPOWERLOSS=2\"" \
 		--subplot-right=" \
 				--title='logging' \
 				-Dcase=bench_mount_logging \
 				-DPOWERLOSS=0 \
 			--subplot-below=\" \
 				-Dcase=bench_mount_logging \
-				-DPOWERLOSS=1\"" \
+				-DPOWERLOSS=1\" \
+			--subplot-below=\" \
+				-Dcase=bench_mount_logging \
+				-DPOWERLOSS=2\"" \
 		--subplot-right=" \
 				--title='many' \
 				-Dcase=bench_mount_many \
 				-DPOWERLOSS=0 \
 			--subplot-below=\" \
 				-Dcase=bench_mount_many \
-				-DPOWERLOSS=1\"" \
+				-DPOWERLOSS=1\" \
+			--subplot-below=\" \
+				-Dcase=bench_mount_many \
+				-DPOWERLOSS=2\"" \
 		--legend \
 		$(foreach fs, $(BENCH_FILESYSTEMS),$\
 			-L'$(N_$(fs))=$(fs)') \
@@ -278,6 +291,21 @@ $1: $2
 			-fmountwrite_ypl_$(subst .,$(nil),$(MOUNT_M_P))=$\
 				'float(bench_t)/1.0e9' \
 			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$3 -DPOWERLOSS=2 -Dprobe=romount+$(MOUNT_M_P) \
+			-fromount_ppl_$(subst .,$(nil),$(MOUNT_M_P))=$\
+				'float(bench_t)/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$3 -DPOWERLOSS=2 -Dprobe=mount+$(MOUNT_M_P) \
+			-fmount_ppl_$(subst .,$(nil),$(MOUNT_M_P))=$\
+				'float(bench_t)/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$3 -DPOWERLOSS=2 -Dprobe=mountwrite+$(MOUNT_M_P) \
+			-fmountwrite_ppl_$(subst .,$(nil),$(MOUNT_M_P))=$\
+				'float(bench_t)/1.0e9' \
+			-o-) \
 		-b$3 -F$3 \
 		-o$$@)
 endef
@@ -333,6 +361,22 @@ $1: $2
 		<(./scripts/csv.py $$^ \
 			-b$5 -DPOWERLOSS=1 -Dprobe=data \
 			-fdata_ypl=bench_t \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=2 -Dprobe=usage \
+			-fusage_ppl=bench_t \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=2 -Dprobe=mdir \
+			-fmdir_ppl=bench_t \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=2 -Dprobe=btree \
+			-fbtree_ppl=bench_t \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=2 -Dprobe=data \
+			-fdata_ppl=bench_t \
 			-o-) \
 		-b$5 -F$5 \
 		-FBLOCK_COUNT="$$$$($($(U_$3)_BENCH_RUNNER) bench_mount \

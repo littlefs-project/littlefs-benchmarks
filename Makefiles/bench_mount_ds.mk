@@ -19,7 +19,7 @@ MOUNT_DS_TIKZDIR ?= $(TIKZDIR)/mount_ds
 MOUNT_DS_P ?= max
 
 # run with powerloss
-MOUNT_DS_POWERLOSS ?= 0,1
+MOUNT_DS_POWERLOSS ?= 0,1,2
 
 # range of disk sizes to test
 #
@@ -167,28 +167,41 @@ $1: $2
 			--subplot-below=\" \
 				--ylabel='mount latency (yes pl)' \
 				-Dcase=bench_mount_seq \
-				-DPOWERLOSS=1\"" \
+				-DPOWERLOSS=1\" \
+			--subplot-below=\" \
+				--ylabel='mount latency (prog pl)' \
+				-Dcase=bench_mount_seq \
+				-DPOWERLOSS=2\"" \
 		--subplot-right=" \
 				--title='random' \
 				-Dcase=bench_mount_random \
 				-DPOWERLOSS=0 \
 			--subplot-below=\" \
 				-Dcase=bench_mount_random \
-				-DPOWERLOSS=1\"" \
+				-DPOWERLOSS=1\" \
+			--subplot-below=\" \
+				-Dcase=bench_mount_random \
+				-DPOWERLOSS=2\"" \
 		--subplot-right=" \
 				--title='logging' \
 				-Dcase=bench_mount_logging \
 				-DPOWERLOSS=0 \
 			--subplot-below=\" \
 				-Dcase=bench_mount_logging \
-				-DPOWERLOSS=1\"" \
+				-DPOWERLOSS=1\" \
+			--subplot-below=\" \
+				-Dcase=bench_mount_logging \
+				-DPOWERLOSS=2\"" \
 		--subplot-right=" \
 				--title='many' \
 				-Dcase=bench_mount_many \
 				-DPOWERLOSS=0 \
 			--subplot-below=\" \
 				-Dcase=bench_mount_many \
-				-DPOWERLOSS=1\"" \
+				-DPOWERLOSS=1\" \
+			--subplot-below=\" \
+				-Dcase=bench_mount_many \
+				-DPOWERLOSS=2\"" \
 		--legend \
 		$(foreach fs, $(BENCH_FILESYSTEMS),$\
 			-L'$(N_$(fs))=$(fs)') \
@@ -272,6 +285,21 @@ $1: $2
 		<(./scripts/csv.py $$^ \
 			-b$3 -DPOWERLOSS=1 -Dprobe=mountwrite+$(MOUNT_DS_P) \
 			-fmountwrite_ypl_$(subst .,$(nil),$(MOUNT_DS_P))=$\
+				'float(bench_t)/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$3 -DPOWERLOSS=2 -Dprobe=romount+$(MOUNT_DS_P) \
+			-fromount_ppl_$(subst .,$(nil),$(MOUNT_DS_P))=$\
+				'float(bench_t)/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$3 -DPOWERLOSS=2 -Dprobe=mount+$(MOUNT_DS_P) \
+			-fmount_ppl_$(subst .,$(nil),$(MOUNT_DS_P))=$\
+				'float(bench_t)/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$3 -DPOWERLOSS=2 -Dprobe=mountwrite+$(MOUNT_DS_P) \
+			-fmountwrite_ppl_$(subst .,$(nil),$(MOUNT_DS_P))=$\
 				'float(bench_t)/1.0e9' \
 			-o-) \
 		-b$3 -F$3 \

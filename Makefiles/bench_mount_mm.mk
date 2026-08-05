@@ -16,7 +16,7 @@ MOUNT_MM_TIKZDIR ?= $(TIKZDIR)/mount_mm
 MOUNT_MM_P ?= max
 
 # run with powerloss
-MOUNT_MM_POWERLOSS ?= 0,1
+MOUNT_MM_POWERLOSS ?= 0,1,2
 
 # number of static files to create
 MOUNT_MM_STATIC_COUNTS ?= 0,1,2,4,8,16,32,64,128,256,512,1024,2048,4096
@@ -167,28 +167,41 @@ $1: $2
 			--subplot-below=\" \
 				--ylabel='mount latency (yes pl)' \
 				-Dcase=bench_mount_seq \
-				-DPOWERLOSS=1\"" \
+				-DPOWERLOSS=1\" \
+			--subplot-below=\" \
+				--ylabel='mount latency (prog pl)' \
+				-Dcase=bench_mount_seq \
+				-DPOWERLOSS=2\"" \
 		--subplot-right=" \
 				--title='random' \
 				-Dcase=bench_mount_random \
 				-DPOWERLOSS=0 \
 			--subplot-below=\" \
 				-Dcase=bench_mount_random \
-				-DPOWERLOSS=1\"" \
+				-DPOWERLOSS=1\" \
+			--subplot-below=\" \
+				-Dcase=bench_mount_random \
+				-DPOWERLOSS=2\"" \
 		--subplot-right=" \
 				--title='logging' \
 				-Dcase=bench_mount_logging \
 				-DPOWERLOSS=0 \
 			--subplot-below=\" \
 				-Dcase=bench_mount_logging \
-				-DPOWERLOSS=1\"" \
+				-DPOWERLOSS=1\" \
+			--subplot-below=\" \
+				-Dcase=bench_mount_logging \
+				-DPOWERLOSS=2\"" \
 		--subplot-right=" \
 				--title='many' \
 				-Dcase=bench_mount_mmany \
 				-DPOWERLOSS=0 \
 			--subplot-below=\" \
 				-Dcase=bench_mount_mmany \
-				-DPOWERLOSS=1\"" \
+				-DPOWERLOSS=1\" \
+			--subplot-below=\" \
+				-Dcase=bench_mount_mmany \
+				-DPOWERLOSS=2\"" \
 		--legend \
 		$(foreach fs, $(BENCH_FILESYSTEMS),$\
 			-L'$(N_$(fs))=$(fs)') \
@@ -233,7 +246,11 @@ all tikz tikz-mount-mm: \
         $(foreach c, $(BENCH_CASES), \
             $(foreach fs, $(BENCH_FILESYSTEMS), \
                 $(foreach g, $(BENCH_GEOMETRIES), \
-                    $(MOUNT_MM_TIKZDIR)/tikz_mount_mm.$(c).$(fs).$(g).csv)))
+                    $(MOUNT_MM_TIKZDIR)/tikz_mount_mm.$(c).$(fs).$(g).csv))) \
+        $(foreach c, $(BENCH_CASES), \
+            $(foreach fs, $(BENCH_FILESYSTEMS), \
+                $(foreach g, $(BENCH_GEOMETRIES), \
+                    $(MOUNT_MM_TIKZDIR)/tikz_mount_mm_usage.$(c).$(fs).$(g).csv)))
 
 # core tikz rule
 #
@@ -274,6 +291,21 @@ $1: $2
 			-fmountwrite_ypl_$(subst .,$(nil),$(MOUNT_MM_P))=$\
 				'float(bench_t)/1.0e9' \
 			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$3 -DPOWERLOSS=2 -Dprobe=romount+$(MOUNT_MM_P) \
+			-fromount_ppl_$(subst .,$(nil),$(MOUNT_MM_P))=$\
+				'float(bench_t)/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$3 -DPOWERLOSS=2 -Dprobe=mount+$(MOUNT_MM_P) \
+			-fmount_ppl_$(subst .,$(nil),$(MOUNT_MM_P))=$\
+				'float(bench_t)/1.0e9' \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$3 -DPOWERLOSS=2 -Dprobe=mountwrite+$(MOUNT_MM_P) \
+			-fmountwrite_ppl_$(subst .,$(nil),$(MOUNT_MM_P))=$\
+				'float(bench_t)/1.0e9' \
+			-o-) \
 		-b$3 -F$3 \
 		-o$$@)
 endef
@@ -285,6 +317,83 @@ $(foreach c, $(BENCH_CASES), \
 			$(eval $(call TIKZ_MOUNT_MM_RULE,$\
 				$(MOUNT_MM_TIKZDIR)/tikz_mount_mm.$(c).$(fs).$(g).csv,$\
 				$(MOUNT_MM_RESULTSDIR)/bench_mount_mm.$(c).$(fs).$(g).csv,$\
+				STATIC_COUNT)))))
+
+# usage tikz rule
+#
+# $1 - target
+# $2 - source
+# $3 - fs type/version
+# $4 - disk geometry
+# $5 - x-axis
+#
+define TIKZ_MOUNT_MM_USAGE_RULE
+$1: $2
+	$$(strip ./scripts/csv.py \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=0 -Dprobe=usage \
+			-fusage_npl=bench_t \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=0 -Dprobe=mdir \
+			-fmdir_npl=bench_t \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=0 -Dprobe=btree \
+			-fbtree_npl=bench_t \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=0 -Dprobe=data \
+			-fdata_npl=bench_t \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=1 -Dprobe=usage \
+			-fusage_ypl=bench_t \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=1 -Dprobe=mdir \
+			-fmdir_ypl=bench_t \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=1 -Dprobe=btree \
+			-fbtree_ypl=bench_t \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=1 -Dprobe=data \
+			-fdata_ypl=bench_t \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=2 -Dprobe=usage \
+			-fusage_ppl=bench_t \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=2 -Dprobe=mdir \
+			-fmdir_ppl=bench_t \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=2 -Dprobe=btree \
+			-fbtree_ppl=bench_t \
+			-o-) \
+		<(./scripts/csv.py $$^ \
+			-b$5 -DPOWERLOSS=2 -Dprobe=data \
+			-fdata_ppl=bench_t \
+			-o-) \
+		-b$5 -F$5 \
+		-FBLOCK_COUNT="$$$$($($(U_$3)_BENCH_RUNNER) bench_mount \
+			-DDISK_GEOMETRY=$(N_$4) \
+			-QBLOCK_COUNT)" \
+		-o$$@)
+endef
+
+# usage tikz rules
+$(foreach c, $(BENCH_CASES), \
+	$(foreach fs, $(BENCH_FILESYSTEMS), \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(eval $(call TIKZ_MOUNT_MM_USAGE_RULE,$\
+				$(MOUNT_MM_TIKZDIR)/tikz_mount_mm_usage.$(c).$(fs).$(g).csv,$\
+				$(MOUNT_MM_RESULTSDIR)/bench_mount_mm.$(c).$(fs).$(g).csv,$\
+				$(fs),$\
+				$(g),$\
 				STATIC_COUNT)))))
 
 
