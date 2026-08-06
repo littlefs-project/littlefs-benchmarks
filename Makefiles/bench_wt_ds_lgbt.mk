@@ -1,5 +1,5 @@
-ifndef BENCH_WT_DS_LGB_MK
-BENCH_WT_DS_LGB_MK := 1
+ifndef BENCH_WT_DS_LGBT_MK
+BENCH_WT_DS_LGBT_MK := 1
 
 # prevent parallel benching because of how big disk is
 DISK_BIG = 1
@@ -8,26 +8,23 @@ DISK_BIG = 1
 include Makefiles/build.mk
 
 # overrideable results dir
-WT_DS_LGB_RESULTSDIR ?= $(RESULTSDIR)/wt_ds_lgb
+WT_DS_LGBT_RESULTSDIR ?= $(RESULTSDIR)/wt_ds_lgbt
 # overrideable plots dir
-WT_DS_LGB_PLOTSDIR ?= $(PLOTSDIR)/wt_ds_lgb
+WT_DS_LGBT_PLOTSDIR ?= $(PLOTSDIR)/wt_ds_lgbt
 # overrideable tikz dir
-WT_DS_LGB_TIKZDIR ?= $(TIKZDIR)/wt_ds_lgb
+WT_DS_LGBT_TIKZDIR ?= $(TIKZDIR)/wt_ds_lgbt
 
 
 # range of disk sizes to test
 #
 # note this needs to be >>2n, probably ~4n to be safe
-WT_DS_LGB_DISK_SIZES ?= $\
+WT_DS_LGBT_DISK_SIZES ?= $\
 		4194304,$\
 		8388608,16777216,33554432,67108864,134217728,268435456,$\
 		536870912,1073741824,2147483648,4294967296,8589934592
 
 # range of lookgbmap threshes, these only make sense for littlefs
-#
-# these are expressed as per-1024, to scale with disk and because our
-# bench runner only supports integers
-WT_DS_LGB_LOOKGBMAP_THRESHES ?= 0,64,128,256,512,768
+WT_DS_LGBT_LOOKGBMAP_THRESHES ?= 0,1,2,4,8,16,32,64
 
 
 
@@ -43,12 +40,12 @@ BENCH_CASES ?= logging # seq random logging many
 
 # this is a bit of a hack, but we want to make sure the BUILDDIR
 # directory structure is correct before we run any commands
-ifneq ($(WT_DS_LGB_RESULTSDIR),.)
+ifneq ($(WT_DS_LGBT_RESULTSDIR),.)
 $(if $(findstring n,$(MAKEFLAGS)),, \
 		$(foreach d, \
-				$(WT_DS_LGB_RESULTSDIR) \
-				$(WT_DS_LGB_PLOTSDIR) \
-				$(WT_DS_LGB_TIKZDIR), \
+				$(WT_DS_LGBT_RESULTSDIR) \
+				$(WT_DS_LGBT_PLOTSDIR) \
+				$(WT_DS_LGBT_TIKZDIR), \
             $(if $(wildcard $d),, $(shell mkdir -p $d))))
 endif
 
@@ -58,14 +55,14 @@ endif
 #======================================================================#
 
 ## Run benches
-.PHONY: all bench bench-wt-ds-lgb
-all bench: bench-wt-ds-lgb
-bench-wt-ds-lgb: \
+.PHONY: all bench bench-wt-ds-lgbt
+all bench: bench-wt-ds-lgbt
+bench-wt-ds-lgbt: \
 		$(foreach c, $(BENCH_CASES), \
 			$(foreach fs, $(BENCH_FILESYSTEMS), \
 				$(foreach g, $(BENCH_GEOMETRIES), \
-					$(WT_DS_LGB_RESULTSDIR)/$\
-						bench_wt_ds_lgb.$(c).$(fs).$(g).csv)))
+					$(WT_DS_LGBT_RESULTSDIR)/$\
+						bench_wt_ds_lgbt.$(c).$(fs).$(g).csv)))
 
 # core bench rule
 #
@@ -76,7 +73,7 @@ bench-wt-ds-lgb: \
 # $5 - disk sizes
 # $6 - lookgbmap threshes (per-1024)
 #
-define BENCH_WT_DS_LGB_RULE
+define BENCH_WT_DS_LGBT_RULE
 $1: $($(U_$3)_BENCH_RUNNER)
 	$$(strip ./scripts/bench.py -R$$< -B bench_wt_$2 \
 		$(BENCHFLAGS) $($(U_$3)_BENCHFLAGS) \
@@ -85,10 +82,10 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		$(if $(SIM_SIZE),-DSIM_SIZE=$(SIM_SIZE)) \
 		-DFS=$(N_$3) \
 		-DDISK_GEOMETRY=$(N_$4) \
-		-DDISK_SIZE=$(or $5,$(WT_DS_LGB_DISK_SIZES)) \
+		-DDISK_SIZE=$(or $5,$(WT_DS_LGBT_DISK_SIZES)) \
 		$(if $(filter $3,$\
 				$(DEFAULT_LFS3GB_FILESYSTEMS)),$\
-			-DLOOKGBMAP_PER1024=$(or $6,$(WT_DS_LGB_LOOKGBMAP_THRESHES))) \
+			-DLOOKGBMAP_THRESH=$(or $6,$(WT_DS_LGBT_LOOKGBMAP_THRESHES))) \
 		-o$$@)
 endef
 
@@ -96,8 +93,8 @@ endef
 $(foreach c, $(BENCH_CASES),$\
 	$(foreach fs, $(BENCH_FILESYSTEMS),$\
 		$(foreach g, $(BENCH_GEOMETRIES),$\
-			$(eval $(call BENCH_WT_DS_LGB_RULE,$\
-				$(WT_DS_LGB_RESULTSDIR)/bench_wt_ds_lgb.$(c).$(fs).$(g).csv,$\
+			$(eval $(call BENCH_WT_DS_LGBT_RULE,$\
+				$(WT_DS_LGBT_RESULTSDIR)/bench_wt_ds_lgbt.$(c).$(fs).$(g).csv,$\
 				$(c),$\
 				$(fs),$\
 				$(g))))))
@@ -108,18 +105,18 @@ $(foreach c, $(BENCH_CASES),$\
 #======================================================================#
 
 ## Plot benchmarks
-.PHONY: all plot plot-wt-ds-lgb
-all plot: plot-wt-ds-lgb
-plot-wt-ds-lgb: \
-		$(WT_DS_LGB_PLOTSDIR)/plots.html \
+.PHONY: all plot plot-wt-ds-lgbt
+all plot: plot-wt-ds-lgbt
+plot-wt-ds-lgbt: \
+		$(WT_DS_LGBT_PLOTSDIR)/plots.html \
 		$(foreach g, $(BENCH_GEOMETRIES), \
-			$(WT_DS_LGB_PLOTSDIR)/plot_wt_ds_lgb.$(g).svg)
+			$(WT_DS_LGBT_PLOTSDIR)/plot_wt_ds_lgbt.$(g).svg)
 
 ## Create a quick html page for easy viewing
-$(WT_DS_LGB_PLOTSDIR)/plots.html:
+$(WT_DS_LGBT_PLOTSDIR)/plots.html:
 	echo -e "$(subst $(nl),\n,$(HTML_HEADER))" >> $@
 	$(foreach g, $(BENCH_GEOMETRIES), \
-		echo -e "<p><img src="plot_wt_ds_lgb.$(g).svg"></p>" >> $@ $(nl))
+		echo -e "<p><img src="plot_wt_ds_lgbt.$(g).svg"></p>" >> $@ $(nl))
 	echo -e "$(subst $(nl),\n,$(HTML_FOOTER))" >> $@
 
 # core plot rule
@@ -132,21 +129,21 @@ $(WT_DS_LGB_PLOTSDIR)/plots.html:
 # $6 - x-skip
 # $7 - extra plotmpl.py flags
 #
-define PLOT_WT_DS_LGB_RULE
+define PLOT_WT_DS_LGBT_RULE
 $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
-			-bcase -bFS -bLOOKGBMAP_PER1024 -b$4 -Dprobe=write \
+			-bcase -bFS -bLOOKGBMAP_THRESH -b$4 -Dprobe=write \
 			-fthroughput='float(bench_n)/max(float(bench_t)/1.0e9,1.0e-9)' \
 			-o-) \
 		<(./scripts/csv.py $$^ \
-			-bcase -bFS -bLOOKGBMAP_PER1024 -b$4 -Dprobe=heap,stack \
+			-bcase -bFS -bLOOKGBMAP_THRESH -b$4 -Dprobe=heap,stack \
 			-fram=bench_t \
 			-o-) \
 		-W1500 -H350 \
 		--title=$3 \
 		-bFS \
-		-bLOOKGBMAP_PER1024 \
+		-bLOOKGBMAP_THRESH \
 		-x$4 \
 		--subplot=" \
 				--title='seq' \
@@ -180,7 +177,7 @@ $1: $2
 				-yram --y2 --yunits=B\"" \
 		--legend \
 		$(foreach fs, $(BENCH_FILESYSTEMS),$\
-			-L'$(N_$(fs))=$(fs),%(LOOKGBMAP_PER1024)s') \
+			-L'$(N_$(fs))=$(fs),%(LOOKGBMAP_THRESH)s') \
 		$(foreach fs, $(BENCH_FILESYSTEMS),$\
 			-C'$(N_$(fs))=$(C_$(fs))') \
 		$(foreach fs, $(BENCH_FILESYSTEMS),$\
@@ -198,14 +195,14 @@ endef
 
 # plot rules
 $(foreach g, $(BENCH_GEOMETRIES), \
-	$(eval $(call PLOT_WT_DS_LGB_RULE,$\
-		$(WT_DS_LGB_PLOTSDIR)/plot_wt_ds_lgb.$(g).svg,$\
+	$(eval $(call PLOT_WT_DS_LGBT_RULE,$\
+		$(WT_DS_LGBT_PLOTSDIR)/plot_wt_ds_lgbt.$(g).svg,$\
 		$(foreach c, $(BENCH_CASES),$\
 			$(foreach fs, $(BENCH_FILESYSTEMS),$\
-				$(WT_DS_LGB_RESULTSDIR)/bench_wt_ds_lgb.$(c).$(fs).$(g).csv)),$\
+				$(WT_DS_LGBT_RESULTSDIR)/bench_wt_ds_lgbt.$(c).$(fs).$(g).csv)),$\
 		"disk sizes - $(g) - simulated throughput",$\
 		DISK_SIZE,$\
-		$(WT_DS_LGB_DISK_SIZES),$\
+		$(WT_DS_LGBT_DISK_SIZES),$\
 		2,$\
 		--xlabel="disk size")))
 
@@ -215,12 +212,12 @@ $(foreach g, $(BENCH_GEOMETRIES), \
 #======================================================================#
 
 ## Generate tikz results
-.PHONY: all tikz tikz-wt-ds-lgb
-all tikz tikz-wt-ds-lgb: \
+.PHONY: all tikz tikz-wt-ds-lgbt
+all tikz tikz-wt-ds-lgbt: \
 		$(foreach c, $(BENCH_CASES), \
 			$(foreach fs, $(BENCH_FILESYSTEMS), \
 				$(foreach g, $(BENCH_GEOMETRIES), \
-					$(WT_DS_LGB_TIKZDIR)/tikz_wt_ds_lgb.$(c).$(fs).$(g).csv)))
+					$(WT_DS_LGBT_TIKZDIR)/tikz_wt_ds_lgbt.$(c).$(fs).$(g).csv)))
 
 # core tikz rule
 #
@@ -229,18 +226,18 @@ all tikz tikz-wt-ds-lgb: \
 # $3 - x-axis
 # $4 - lookgbmap threshes (per-1024)
 #
-define TIKZ_WT_DS_LGB_RULE
+define TIKZ_WT_DS_LGBT_RULE
 $1: $2
 	$$(strip ./scripts/csv.py \
 		$(foreach l, $(subst $(comma),$(space),$4), \
 			<(./scripts/csv.py $$^ \
-				-b$3 -DLOOKGBMAP_PER1024='$(l),' \
+				-b$3 -DLOOKGBMAP_THRESH='$(l),' \
 				-Dprobe=write \
 				-fthroughput_l$(l)=$\
 					'float(bench_n)/max(float(bench_t)/1.0e9,1.0e-9)' \
 				-o-) \
 			<(./scripts/csv.py $$^ \
-				-b$3 -DLOOKGBMAP_PER1024='$(l),' \
+				-b$3 -DLOOKGBMAP_THRESH='$(l),' \
 				-Dprobe=heap,stack \
 				-fram_l$(l)=bench_t \
 				-o-)) \
@@ -252,11 +249,11 @@ endef
 $(foreach c, $(BENCH_CASES), \
 	$(foreach fs, $(BENCH_FILESYSTEMS), \
 		$(foreach g, $(BENCH_GEOMETRIES), \
-			$(eval $(call TIKZ_WT_DS_LGB_RULE,$\
-				$(WT_DS_LGB_TIKZDIR)/tikz_wt_ds_lgb.$(c).$(fs).$(g).csv,$\
-				$(WT_DS_LGB_RESULTSDIR)/bench_wt_ds_lgb.$(c).$(fs).$(g).csv,$\
+			$(eval $(call TIKZ_WT_DS_LGBT_RULE,$\
+				$(WT_DS_LGBT_TIKZDIR)/tikz_wt_ds_lgbt.$(c).$(fs).$(g).csv,$\
+				$(WT_DS_LGBT_RESULTSDIR)/bench_wt_ds_lgbt.$(c).$(fs).$(g).csv,$\
 				DISK_SIZE,$\
-				$(WT_DS_LGB_LOOKGBMAP_THRESHES))))))
+				$(WT_DS_LGBT_LOOKGBMAP_THRESHES))))))
 
 
 #======================================================================#
@@ -264,25 +261,25 @@ $(foreach c, $(BENCH_CASES), \
 #======================================================================#
 
 ## Save bench results
-.PHONY: save save-results save-results-wt-ds-lgb
-save save-results: save-results-wt-ds-lgb
-save-results-wt-ds-lgb:
+.PHONY: save save-results save-results-wt-ds-lgbt
+save save-results: save-results-wt-ds-lgbt
+save-results-wt-ds-lgbt:
 	mkdir -p $(SAVEDIR)/$(RESULTSDIR)/
-	cp -ru $(WT_DS_LGB_RESULTSDIR) $(SAVEDIR)/$(RESULTSDIR)/
+	cp -ru $(WT_DS_LGBT_RESULTSDIR) $(SAVEDIR)/$(RESULTSDIR)/
 
 ## Save bench plots
-.PHONY: save save-plots save-plots-wt-ds-lgb
-save save-plots: save-plots-wt-ds-lgb
-save-plots-wt-ds-lgb:
+.PHONY: save save-plots save-plots-wt-ds-lgbt
+save save-plots: save-plots-wt-ds-lgbt
+save-plots-wt-ds-lgbt:
 	mkdir -p $(SAVEDIR)/$(PLOTSDIR)/
-	cp -ru $(WT_DS_LGB_PLOTSDIR) $(SAVEDIR)/$(PLOTSDIR)/
+	cp -ru $(WT_DS_LGBT_PLOTSDIR) $(SAVEDIR)/$(PLOTSDIR)/
 
 ## Save tikz
-.PHONY: save save-tikz save-tikz-wt-ds-lgb
-save save-tikz: save-tikz-wt-ds-lgb
-save-tikz-wt-ds-lgb:
+.PHONY: save save-tikz save-tikz-wt-ds-lgbt
+save save-tikz: save-tikz-wt-ds-lgbt
+save-tikz-wt-ds-lgbt:
 	mkdir -p $(SAVEDIR)/$(TIKZDIR)/
-	cp -ru $(WT_DS_LGB_TIKZDIR) $(SAVEDIR)/$(TIKZDIR)/
+	cp -ru $(WT_DS_LGBT_TIKZDIR) $(SAVEDIR)/$(TIKZDIR)/
 
 
 #======================================================================#
@@ -290,10 +287,10 @@ save-tikz-wt-ds-lgb:
 #======================================================================#
 
 ## Mark current results as up-to-date to prevent reruns
-.PHONY: reuse-results touch-results reuse-results-wt-ds-lgb touch-results-wt-ds-lgb
-reuse-results touch-results: reuse-results-wt-ds-lgb touch-results-wt-ds-lgb
-reuse-results-wt-ds-lgb touch-results-wt-ds-lgb:
-	find $(WT_DS_LGB_RESULTSDIR) -name '*.csv' -execdir touch '{}' ';'
+.PHONY: reuse-results touch-results reuse-results-wt-ds-lgbt touch-results-wt-ds-lgbt
+reuse-results touch-results: reuse-results-wt-ds-lgbt touch-results-wt-ds-lgbt
+reuse-results-wt-ds-lgbt touch-results-wt-ds-lgbt:
+	find $(WT_DS_LGBT_RESULTSDIR) -name '*.csv' -execdir touch '{}' ';'
 	@echo "# note: Make sure you build before plotting!"
 
 
@@ -302,24 +299,24 @@ reuse-results-wt-ds-lgb touch-results-wt-ds-lgb:
 #======================================================================#
 
 ## Clean bench results
-.PHONY: clean clean-results clean-results-wt-ds-lgb
-clean clean-results: clean-results-wt-ds-lgb
-clean-results-wt-ds-lgb:
-	rm -rf $(WT_DS_LGB_RESULTSDIR)
+.PHONY: clean clean-results clean-results-wt-ds-lgbt
+clean clean-results: clean-results-wt-ds-lgbt
+clean-results-wt-ds-lgbt:
+	rm -rf $(WT_DS_LGBT_RESULTSDIR)
 	@echo "# note: Not cleaning saved output"
 
 ## Clean bench plots
-.PHONY: clean clean-plots clean-plots-wt-ds-lgb
-clean clean-plots: clean-plots-wt-ds-lgb
-clean-plots-wt-ds-lgb:
-	rm -rf $(WT_DS_LGB_PLOTSDIR)
+.PHONY: clean clean-plots clean-plots-wt-ds-lgbt
+clean clean-plots: clean-plots-wt-ds-lgbt
+clean-plots-wt-ds-lgbt:
+	rm -rf $(WT_DS_LGBT_PLOTSDIR)
 	@echo "# note: Not cleaning saved output"
 
 ## Clean tikz
-.PHONY: clean clean-tikz clean-tikz-wt-ds-lgb
-clean clean-tikz: clean-tikz-wt-ds-lgb
-clean-tikz-wt-ds-lgb:
-	rm -rf $(WT_DS_LGB_TIKZDIR)
+.PHONY: clean clean-tikz clean-tikz-wt-ds-lgbt
+clean clean-tikz: clean-tikz-wt-ds-lgbt
+clean-tikz-wt-ds-lgbt:
+	rm -rf $(WT_DS_LGBT_TIKZDIR)
 	@echo "# note: Not cleaning saved output"
 
 
