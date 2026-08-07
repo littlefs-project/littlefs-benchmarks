@@ -121,11 +121,11 @@ $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
 			-bcase -bFS -b$4 -Dprobe=write \
-			-fthroughput='float(n)/max(float(bench_simtime)/1.0e9,1.0e-9)' \
+			-fthroughput='float(bench_n)/max(float(bench_t)/1.0e9,1.0e-9)' \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-bcase -bFS -b$4 -Dprobe=heap,stack \
-			-fram=bench_simtime \
+			-fram=bench_t \
 			-o-) \
 		-W1500 -H350 \
 		--title=$3 \
@@ -217,11 +217,11 @@ $1: $2
 	$$(strip ./scripts/csv.py \
 		<(./scripts/csv.py $$^ \
 			-b$3 -Dprobe=write \
-			-fthroughput='float(n)/max(float(bench_simtime)/1.0e9,1.0e-9)' \
+			-fthroughput='float(bench_n)/max(float(bench_t)/1.0e9,1.0e-9)' \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-b$3 -Dprobe=heap,stack \
-			-fram=bench_simtime \
+			-fram=bench_t \
 			-o-) \
 		-Si=$3 -b$3 \
 		-fthroughput -fram \
