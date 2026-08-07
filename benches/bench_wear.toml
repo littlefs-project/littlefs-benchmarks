@@ -60,6 +60,11 @@ code = '''
         free(bench_wear_erasemap);
     }
 
+    // reset after warmup
+    void bench_wear_reset(void) {
+        memset(bench_wear_erasemap, 0, BLOCK_COUNT*sizeof(bench_io_t));
+    }
+
     // hook erase
     int bench_wear_bd_erase(const struct lfs3_cfg *cfg, lfs3_block_t block) {
         bench_wear_erasemap[block] += 1;
@@ -189,6 +194,8 @@ code = '''
 
     // reset our timer
     BENCH_SIMRESET();
+    // and our wear
+    bench_wear_reset();
 
     // open a file
     #if defined(LFS3)
@@ -320,7 +327,7 @@ code = '''
     // by default this is summed, but the bench runner has flags to get
     // more interesting information:
     // - -Swear     - get summed erases (the default)
-    // - -Swear=1   - get per-block erases
+    // - -Swear=cdf - get per-block erases with percentiles
     // - -Swear=p90 - get 90th percentile erases
     // - -Swear=max - get worst case erases
     for (lfs3_block_t i = 0; i < BLOCK_COUNT; i++) {

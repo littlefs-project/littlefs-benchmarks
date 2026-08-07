@@ -68,7 +68,7 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		$(if $(SIM_SIZE),-DSIM_SIZE=$(SIM_SIZE)) \
 		-DFS=$(N_$3) \
 		-DDISK_GEOMETRY=$(N_$4) \
-		-Swear=1 \
+		-Swear=cdf \
 		-Swear=max -Swear=stddev -Swaf \
 		$(if $(filter $3,$\
 				$(DEFAULT_LFS3_FILESYSTEMS) $\
@@ -126,9 +126,9 @@ $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py \
 			<(./scripts/csv.py $$^ \
-				-bcase -bFS -bBLOCK_RECYCLES -Dprobe=wear \
-				-bblock -fblock=n \
-				-fwear=bench_simtime \
+				-bcase -bFS -bBLOCK_RECYCLES -Dprobe=wear+cdf \
+				-bblock -fblock=bench_n \
+				-fwear=bench_t \
 				-Swear \
 				-o-) \
 			-fi='enumerate(case,FS,BLOCK_RECYCLES;)' -Si \
@@ -223,15 +223,15 @@ $1: $2
 		<(./scripts/csv.py \
 			<(./scripts/csv.py $$^ \
 				-bcase -bFS -bBLOCK_RECYCLES -FBLOCK_RECYCLES \
-				-Dprobe=wear+max -fwmax=bench_simtime \
+				-Dprobe=wear+max -fwmax=bench_t \
 				-o-) \
 			<(./scripts/csv.py $$^ \
 				-bcase -bFS -bBLOCK_RECYCLES -FBLOCK_RECYCLES \
-				-Dprobe=wear+stddev -fwstddev=bench_simtime \
+				-Dprobe=wear+stddev -fwstddev=bench_t \
 				-o-) \
 			<(./scripts/csv.py $$^ \
 				-bcase -bFS -bBLOCK_RECYCLES -FBLOCK_RECYCLES \
-				-Dprobe=waf -fwaf=bench_simtime \
+				-Dprobe=waf -fwaf=bench_t \
 				-o-) \
 			-bcase -bFS -bBLOCK_RECYCLES -FBLOCK_RECYCLES \
 			-o-) \
@@ -339,8 +339,8 @@ $1: $2
 		$(foreach r, $(subst $(comma),$(space),$3), \
 			<(./scripts/csv.py \
 				<(./scripts/csv.py $$^ \
-					-bblock -Fblock=n -DBLOCK_RECYCLES='$(r),' \
-					-Dprobe=wear -fwear_r$(r)=bench_simtime \
+					-bblock -Fblock=bench_n -DBLOCK_RECYCLES='$(r),' \
+					-Dprobe=wear+cdf -fwear_r$(r)=bench_t \
 					$(if $4,-Swear_r$(r)) \
 					-o-) \
 				-i -Dblock='*' \
@@ -380,17 +380,17 @@ $1: $2
 		$(foreach r, $(subst $(comma),$(space),$3), \
 			<(./scripts/csv.py $$^ \
 				-bi=0 -DBLOCK_RECYCLES='$(r),' \
-				-Dprobe=wear+max -fwmax_r$(r)='max(bench_simtime)' \
+				-Dprobe=wear+max -fwmax_r$(r)='max(bench_t)' \
 				-o-)) \
 		$(foreach r, $(subst $(comma),$(space),$3), \
 			<(./scripts/csv.py $$^ \
 				-bi=0 -DBLOCK_RECYCLES='$(r),' \
-				-Dprobe=wear+stddev -fwstddev_r$(r)='max(bench_simtime)' \
+				-Dprobe=wear+stddev -fwstddev_r$(r)='max(bench_t)' \
 				-o-)) \
 		$(foreach r, $(subst $(comma),$(space),$3), \
 			<(./scripts/csv.py $$^ \
 				-bi=0 -DBLOCK_RECYCLES='$(r),' \
-				-Dprobe=waf -fwaf_r$(r)='max(bench_simtime)' \
+				-Dprobe=waf -fwaf_r$(r)='max(bench_t)' \
 				-o-)) \
 		-bi -Fi \
 		-o$$@)
