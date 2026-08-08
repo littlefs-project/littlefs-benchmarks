@@ -21,7 +21,7 @@ defines.SKIP_WARMUP = false
 # optionally create a bunch of static files
 defines.STATIC_COUNT = 0
 defines.STATIC_SIZE = 'BLOCK_SIZE'
-defines.STATIC_COMPACT = 0
+defines.STATIC_COMPACT = false
 
 # default to no gc, but gc is available to bench here
 defines.GC = false
