@@ -514,8 +514,8 @@ code = '''
                 scache_buffer, SCACHE_SIZE,
                 NULL) => 0;
         LFS3_DEBUG("spiffs: mounted %dx%d blocks, %dx%d pages, %d mounts",
-                BLOCK_SIZE, BLOCK_COUNT,
-                SPAGE_SIZE, BLOCK_COUNT*(BLOCK_SIZE/SPAGE_SIZE),
+                BLOCK_COUNT, BLOCK_SIZE,
+                BLOCK_COUNT*(BLOCK_SIZE/SPAGE_SIZE), SPAGE_SIZE,
                 mounts);
         #elif defined(YAFFS2)
         // yaffs2 uses some global state we need to reset
