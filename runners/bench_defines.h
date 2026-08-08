@@ -142,6 +142,15 @@
                                             / 1024                          )
     BENCH_DEFINE(LOOKGBMAP_PER1024,     256                                 )
     BENCH_DEFINE(EVICTQUEUE_COUNT,      2                                   )
+    // report estimated buffer usage
+    BENCH_DEFINE(BUF_WATERMARK,         RCACHE_SIZE
+                                            + PCACHE_SIZE
+                                            + FCACHE_SIZE
+                                            + LOOKAHEAD_SIZE
+                                            + LFS3_IFDEF_EVICT(
+                                                EVICTQUEUE_COUNT
+                                                    * sizeof(lfs3_evict_t),
+                                                0)                          )
     BENCH_DEFINE(GC_FLAGS,              LFS3_GC_GC                          )
     BENCH_DEFINE(GC_STEPS,              0                                   )
     BENCH_DEFINE(GC_LOOKAHEAD_THRESH,   -1                                  )
@@ -169,6 +178,9 @@
                                                     PROG_SIZE)),
                                             BLOCK_SIZE)                     )
     BENCH_DEFINE(LOOKAHEAD_SIZE,        16                                  )
+    // report estimated buffer usage
+    BENCH_DEFINE(BUF_WATERMARK,         3*LCACHE_SIZE
+                                            + LOOKAHEAD_SIZE                )
     BENCH_DEFINE(COMPACT_THRESH,        0                                   )
     BENCH_DEFINE(METADATA_MAX,          0                                   )
     BENCH_DEFINE(INLINE_MAX,            0                                   )
@@ -192,6 +204,19 @@
                                             + SCACHE_COUNT
                                                 * (sizeof(spiffs_cache_page)
                                                     + SPAGE_SIZE)           )
+    // report estimated buffer usage
+    BENCH_DEFINE(BUF_WATERMARK,         2*SPAGE_SIZE
+                                            + FD_SIZE
+                                            + SCACHE_SIZE
+                                            // these are necessary to map
+                                            // byte ops to pages, see
+                                            // runners/bench_spiffs.c
+                                            + ((READ_SIZE > 1)
+                                                ? READ_SIZE
+                                                : 0)
+                                            + ((PROG_SIZE > 1)
+                                                ? PROG_SIZE
+                                                : 0)                        )
     // how many bytes to try to clean during gc
     BENCH_DEFINE(GC_CLEAN_SIZE,         3*BLOCK_SIZE                        )
     // how many times to call gc
@@ -218,6 +243,9 @@
     BENCH_DEFINE(YCACHE_COUNT,          LFS3_MAX(
                                             2,
                                             (2*CACHE_SIZE)/YPAGE_SIZE)      )
+    BENCH_DEFINE(YCACHE_SIZE,           YCACHE_COUNT*YPAGE_SIZE             )
+    // report estimated buffer usage
+    BENCH_DEFINE(BUF_WATERMARK,         YCACHE_SIZE                         )
     BENCH_DEFINE(REFRESH_PERIOD,        1000                                )
     BENCH_DEFINE(SKIP_CKPOINT,          false                               )
     #endif

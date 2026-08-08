@@ -224,6 +224,7 @@ code = '''
         BENCH_STACK_RESUME();
     }
     uint32_t prng = SEED;
+    uint8_t *wbuf = malloc(CHUNK);
 
     // reset our timer
     BENCH_SIMRESET();
@@ -273,7 +274,6 @@ code = '''
         }
 
         // write to the file
-        uint8_t wbuf[CHUNK];
         for (lfs3_size_t j = 0; j < CHUNK; j++) {
             wbuf[j] = 'a' + (BENCH_PRNG(&prng) % 26);
         }
@@ -355,9 +355,11 @@ code = '''
     // report the total stack/heap usage after the benchmark
     #ifdef BENCH_STACK
     BENCH_RESULT("stack", written, BENCH_STACK_WATERMARK());
+    BENCH_RESULT("ctx", written, BENCH_STACK_CURRENT());
     #endif
     #ifdef BENCH_HEAP
     BENCH_RESULT("heap", written, BENCH_HEAP_WATERMARK());
+    BENCH_RESULT("buf", written, CHUNK + BUF_WATERMARK);
     #endif
 
     // find the total disk usage after the benchmark
@@ -389,6 +391,7 @@ code = '''
     yaffs_unmount("/") => 0;
     yaffs_remove_device(&yaffs2);
     #endif
+    free(wbuf);
 '''
 
 # random write throughput
@@ -471,6 +474,7 @@ code = '''
         BENCH_STACK_RESUME();
     }
     uint32_t prng = SEED;
+    uint8_t *wbuf = malloc(CHUNK);
 
     // reset our timer
     BENCH_SIMRESET();
@@ -520,7 +524,6 @@ code = '''
         #endif
 
         // write to the file
-        uint8_t wbuf[CHUNK];
         for (lfs3_size_t j = 0; j < CHUNK; j++) {
             wbuf[j] = 'a' + (BENCH_PRNG(&prng) % 26);
         }
@@ -602,9 +605,11 @@ code = '''
     // report the total stack/heap usage after the benchmark
     #ifdef BENCH_STACK
     BENCH_RESULT("stack", written, BENCH_STACK_WATERMARK());
+    BENCH_RESULT("ctx", written, BENCH_STACK_CURRENT());
     #endif
     #ifdef BENCH_HEAP
     BENCH_RESULT("heap", written, BENCH_HEAP_WATERMARK());
+    BENCH_RESULT("buf", written, CHUNK + BUF_WATERMARK);
     #endif
 
     // find the total disk usage after the benchmark
@@ -636,6 +641,7 @@ code = '''
     yaffs_unmount("/") => 0;
     yaffs_remove_device(&yaffs2);
     #endif
+    free(wbuf);
 '''
 
 # logging write throughput
@@ -722,6 +728,7 @@ code = '''
         BENCH_STACK_RESUME();
     }
     uint32_t prng = SEED;
+    uint8_t *wbuf = malloc(CHUNK);
 
     // reset our timer
     BENCH_SIMRESET();
@@ -814,7 +821,6 @@ code = '''
         #endif
 
         // append to log
-        uint8_t wbuf[CHUNK];
         for (lfs3_size_t j = 0; j < CHUNK; j++) {
             wbuf[j] = 'a' + (BENCH_PRNG(&prng) % 26);
         }
@@ -970,9 +976,11 @@ code = '''
     // report the total stack/heap usage after the benchmark
     #ifdef BENCH_STACK
     BENCH_RESULT("stack", written, BENCH_STACK_WATERMARK());
+    BENCH_RESULT("ctx", written, BENCH_STACK_CURRENT());
     #endif
     #ifdef BENCH_HEAP
     BENCH_RESULT("heap", written, BENCH_HEAP_WATERMARK());
+    BENCH_RESULT("buf", written, CHUNK + BUF_WATERMARK);
     #endif
 
     // find the total disk usage after the benchmark
@@ -1004,6 +1012,7 @@ code = '''
     yaffs_unmount("/") => 0;
     yaffs_remove_device(&yaffs2);
     #endif
+    free(wbuf);
 '''
 
 # many small file write throughput
@@ -1088,6 +1097,7 @@ code = '''
         BENCH_STACK_RESUME();
     }
     uint32_t prng = SEED;
+    uint8_t *wbuf = malloc(CHUNK);
 
     // reset our timer
     BENCH_SIMRESET();
@@ -1100,9 +1110,8 @@ code = '''
         BENCH_START("write");
         // choose a random filename
         lfs3_off_t pos = BENCH_PRNG(&prng) % ((SIZE+(CHUNK-1))/CHUNK);
-        char name[256];
+        char name[6+8+1];
         sprintf(name, "bench_%08x", pos);
-        uint8_t wbuf[CHUNK];
         memset(wbuf, 'a'+(BENCH_PRNG(&prng) % 26), CHUNK);
 
         // create the file
@@ -1211,9 +1220,11 @@ code = '''
     // report the total stack/heap usage after the benchmark
     #ifdef BENCH_STACK
     BENCH_RESULT("stack", written, BENCH_STACK_WATERMARK());
+    BENCH_RESULT("ctx", written, BENCH_STACK_CURRENT());
     #endif
     #ifdef BENCH_HEAP
     BENCH_RESULT("heap", written, BENCH_HEAP_WATERMARK());
+    BENCH_RESULT("buf", written, CHUNK + BUF_WATERMARK);
     #endif
 
     // find the total disk usage after the benchmark
@@ -1245,4 +1256,5 @@ code = '''
     yaffs_unmount("/") => 0;
     yaffs_remove_device(&yaffs2);
     #endif
+    free(wbuf);
 '''

@@ -98,26 +98,26 @@ marks-wt-%: \
 						$(WT_RESULTSDIR)/bench_wt.$(c).$(fs).$*.csv \
 						-bj=$(I_$(fs)) -bk=$(N_$(fs)) -bfs=$(fs) \
 						-Dprobe=write \
-						-fn \
-						-ft='float(bench_simtime)/1.0e9' \
+						-fn=bench_n \
+						-ft='float(bench_t)/1.0e9' \
 						-o-) \
 					<(./scripts/csv.py \
 						$(WT_RESULTSDIR)/bench_wt.$(c).$(fs).$*.csv \
 						-bj=$(I_$(fs)) -bk=$(N_$(fs)) -bfs=$(fs) \
 						-Dprobe=stack \
-						-fstack=bench_simtime \
+						-fstack=bench_t \
 						-o-) \
 					<(./scripts/csv.py \
 						$(WT_RESULTSDIR)/bench_wt.$(c).$(fs).$*.csv \
 						-bj=$(I_$(fs)) -bk=$(N_$(fs)) -bfs=$(fs) \
 						-Dprobe=heap \
-						-fheap=bench_simtime \
+						-fheap=bench_t \
 						-o-) \
 					<(./scripts/csv.py \
 						$(WT_RESULTSDIR)/bench_wt.$(c).$(fs).$*.csv \
 						-bj=$(I_$(fs)) -bk=$(N_$(fs)) -bfs=$(fs) \
 						-Dprobe=usage \
-						-fusage=bench_simtime \
+						-fusage=bench_t \
 						-o-)) \
 				-bcase=$(c) -Bj -Bk -bfs \
 				-o-)) \
@@ -165,11 +165,11 @@ $1: $2
 		<(./scripts/csv.py \
 			<(./scripts/csv.py $$^ \
 				-Si='enumerate()' -bcase -b$4 -Dprobe=write \
-				-fthroughput='float(n)/max(float(bench_simtime)/1.0e9,1.0e-9)' \
+				-fthroughput='float(bench_n)/max(float(bench_t)/1.0e9,1.0e-9)' \
 				-o-) \
 			<(./scripts/csv.py $$^ \
 				-Si='enumerate()' -bcase -b$4 -Dprobe=heap,stack \
-				-fram=bench_simtime \
+				-fram=bench_t \
 				-o-) \
 			-Si='enumerate()' -bcase -b$4 \
 			-o-) \
@@ -228,6 +228,158 @@ $(foreach g, $(BENCH_GEOMETRIES), \
 		$(BENCH_FILESYSTEMS),$\
 		1,$\
 		--xlabel="filesystem")))
+
+
+#======================================================================#
+# tikz rules                                                           #
+#======================================================================#
+
+## Generate tikz results
+.PHONY: all tikz tikz-wt
+all tikz tikz-wt: \
+		$(foreach c, $(BENCH_CASES), \
+			$(foreach fs, $(BENCH_FILESYSTEMS), \
+				$(foreach g, $(BENCH_GEOMETRIES), \
+					$(WT_TIKZDIR)/tikz_wt.$(c).$(fs).$(g).csv))) \
+		$(foreach c, $(BENCH_CASES), \
+			$(foreach fs, $(BENCH_FILESYSTEMS), \
+				$(foreach g, $(BENCH_GEOMETRIES), \
+					$(WT_TIKZDIR)/tikz_wt_ops.$(c).$(fs).$(g).csv))) \
+		$(foreach c, $(BENCH_CASES), \
+			$(foreach fs, $(BENCH_FILESYSTEMS), \
+				$(foreach g, $(BENCH_GEOMETRIES), \
+					$(WT_TIKZDIR)/tikz_wt_ram.$(c).$(fs).$(g).csv)))
+
+# core tikz rule
+#
+# $1 - target
+# $2 - source
+#
+define TIKZ_WT_RULE
+$1: $2
+	$$(strip ./scripts/csv.py \
+		<(./scripts/csv.py $$^ \
+			-bi=0 -Dprobe=write \
+			-fthroughput='float(bench_n)/max(float(bench_t)/1.0e9,1.0e-9)' \
+			-o-) \
+		-bi \
+		-o$$@)
+endef
+
+# tikz rules
+$(foreach c, $(BENCH_CASES), \
+	$(foreach fs, $(BENCH_FILESYSTEMS), \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(eval $(call TIKZ_WT_RULE,$\
+				$(WT_TIKZDIR)/tikz_wt.$(c).$(fs).$(g).csv,$\
+				$(WT_RESULTSDIR)/bench_wt.$(c).$(fs).$(g).csv)))))
+
+# ops tikz rule
+#
+# $1 - target
+# $2 - source
+#
+define TIKZ_WT_RULE
+$1: $2
+	$$(strip ./scripts/csv.py \
+		<(./scripts/csv.py $$^ \
+			-bi=0 -Dprobe=write \
+			-fthroughput='float(bench_n)/max(float(bench_t)/1.0e9,1.0e-9)' \
+			-o-) \
+		-bi \
+		-o$$@)
+endef
+
+# ops tikz rule
+#
+# $1 - target
+# $2 - source
+# $3 - fs type/version
+# $4 - disk geometry
+#
+define TIKZ_WT_OPS_RULE
+$1: $2
+	$$(strip ./scripts/csv.py \
+		<(./scripts/csv.py $$^ \
+			-bi=0 -Dprobe=write \
+			-fread_time="$\
+				float($$$$($($(U_$3)_BENCH_RUNNER) \
+						-DDISK_GEOMETRY=$(N_$4) \
+						-QREAD_TIMING)*bench_reads \
+					+ $$$$($($(U_$3)_BENCH_RUNNER) \
+						-DDISK_GEOMETRY=$(N_$4) \
+						-QREAD_WTIMING)*bench_wreads \
+					+ $$$$($($(U_$3)_BENCH_RUNNER) \
+						-DDISK_GEOMETRY=$(N_$4) \
+						-QREAD_UTIMING)*bench_readed) \
+					/ 1.0e9" \
+			-fprog_time="$\
+				float($$$$($($(U_$3)_BENCH_RUNNER) \
+						-DDISK_GEOMETRY=$(N_$4) \
+						-QPROG_TIMING)*bench_progs \
+					+ $$$$($($(U_$3)_BENCH_RUNNER) \
+						-DDISK_GEOMETRY=$(N_$4) \
+						-QPROG_WTIMING)*bench_wprogs \
+					+ $$$$($($(U_$3)_BENCH_RUNNER) \
+						-DDISK_GEOMETRY=$(N_$4) \
+						-QPROG_UTIMING)*bench_progged) \
+					/ 1.0e9" \
+			-ferase_time="$\
+				float($$$$($($(U_$3)_BENCH_RUNNER) \
+						-DDISK_GEOMETRY=$(N_$4) \
+						-QERASE_TIMING)*bench_erases \
+					+ $$$$($($(U_$3)_BENCH_RUNNER) \
+						-DDISK_GEOMETRY=$(N_$4) \
+						-QERASE_WTIMING)*bench_werases \
+					+ $$$$($($(U_$3)_BENCH_RUNNER) \
+						-DDISK_GEOMETRY=$(N_$4) \
+						-QERASE_UTIMING)*bench_erased) \
+					/ 1.0e9" \
+			-o-) \
+		-bi \
+		-o$$@)
+endef
+
+# ops tikz rules
+$(foreach c, $(BENCH_CASES), \
+	$(foreach fs, $(BENCH_FILESYSTEMS), \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(eval $(call TIKZ_WT_OPS_RULE,$\
+				$(WT_TIKZDIR)/tikz_wt_ops.$(c).$(fs).$(g).csv,$\
+				$(WT_RESULTSDIR)/bench_wt.$(c).$(fs).$(g).csv,$\
+				$(fs),$\
+				$(g))))))
+
+# ram tikz rule
+#
+# $1 - target
+# $2 - source
+# $3 - fs type/version
+# $4 - disk geometry
+#
+define TIKZ_WT_RAM_RULE
+$1: $2
+	$$(strip ./scripts/csv.py \
+		<(./scripts/data.py $($(U_$3)_BENCH_RUNNER) -bfunction -o- \
+			| $($(U_$3)_FILTER) \
+			| ./scripts/csv.py - -bi=0 -fdata=data_size -o-) \
+		<(./scripts/csv.py $$^ -bi=0 -Dprobe=stack -fstack=bench_t -o-) \
+		<(./scripts/csv.py $$^ -bi=0 -Dprobe=ctx   -fctx=bench_t   -o-) \
+		<(./scripts/csv.py $$^ -bi=0 -Dprobe=heap  -fheap=bench_t  -o-) \
+		<(./scripts/csv.py $$^ -bi=0 -Dprobe=buf   -fbuf=bench_t   -o-) \
+		-bi \
+		-o$$@)
+endef
+
+# ram tikz rules
+$(foreach c, $(BENCH_CASES), \
+	$(foreach fs, $(BENCH_FILESYSTEMS), \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(eval $(call TIKZ_WT_RAM_RULE,$\
+				$(WT_TIKZDIR)/tikz_wt_ram.$(c).$(fs).$(g).csv,$\
+				$(WT_RESULTSDIR)/bench_wt.$(c).$(fs).$(g).csv,$\
+				$(fs),$\
+				$(g))))))
 
 
 #======================================================================#
