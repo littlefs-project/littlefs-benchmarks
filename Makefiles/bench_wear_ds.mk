@@ -137,15 +137,15 @@ $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
 			-bcase -bFS -bBLOCK_RECYCLES -b$4 \
-			-Dprobe=wear+max -fwmax=bench_simtime \
+			-Dprobe=wear+max -fwmax=bench_t \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-bcase -bFS -bBLOCK_RECYCLES -b$4 \
-			-Dprobe=wear+stddev -fwstddev=bench_simtime \
+			-Dprobe=wear+stddev -fwstddev=bench_t \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-bcase -bFS -bBLOCK_RECYCLES -b$4 \
-			-Dprobe=waf -fwaf=bench_simtime \
+			-Dprobe=waf -fwaf=bench_t \
 			-o-) \
 		-W1500 -H350 \
 		--title=$3 \
@@ -252,15 +252,15 @@ $1: $2
 		$(foreach r, $(subst $(comma),$(space),$3), \
 			<(./scripts/csv.py $$^ \
 				-b$4 -DBLOCK_RECYCLES='$(r),' \
-				-Dprobe=wear+max -fwmax_r$(r)=bench_simtime \
+				-Dprobe=wear+max -fwmax_r$(r)=bench_t \
 				-o-) \
 			<(./scripts/csv.py $$^ \
 				-b$4 -DBLOCK_RECYCLES='$(r),' \
-				-Dprobe=wear+stddev -fwstddev_r$(r)=bench_simtime \
+				-Dprobe=wear+stddev -fwstddev_r$(r)=bench_t \
 				-o-) \
 			<(./scripts/csv.py $$^ \
 				-b$4 -DBLOCK_RECYCLES='$(r),' \
-				-Dprobe=waf -fwaf_r$(r)=bench_simtime \
+				-Dprobe=waf -fwaf_r$(r)=bench_t \
 				-o-)) \
 		-b$4 -F$4 \
 		-o$$@)

@@ -127,15 +127,15 @@ $1: $2
 	$$(strip ./scripts/plotmpl.py \
 		<(./scripts/csv.py $$^ \
 			-bcase -bFS -b$4 \
-			-Dprobe=wear+max -fwmax=bench_simtime \
+			-Dprobe=wear+max -fwmax=bench_t \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-bcase -bFS -b$4 \
-			-Dprobe=wear+stddev -fwstddev=bench_simtime \
+			-Dprobe=wear+stddev -fwstddev=bench_t \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-bcase -bFS -b$4 \
-			-Dprobe=waf -fwaf=bench_simtime \
+			-Dprobe=waf -fwaf=bench_t \
 			-o-) \
 		-W1500 -H350 \
 		--title=$3 \
@@ -239,15 +239,15 @@ $1: $2
 	$$(strip ./scripts/csv.py \
 		<(./scripts/csv.py $$^ \
 			-b$3 \
-			-Dprobe=wear+max -fwmax=bench_simtime \
+			-Dprobe=wear+max -fwmax=bench_t \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-b$3 \
-			-Dprobe=wear+stddev -fwstddev=bench_simtime \
+			-Dprobe=wear+stddev -fwstddev=bench_t \
 			-o-) \
 		<(./scripts/csv.py $$^ \
 			-b$3 \
-			-Dprobe=waf -fwaf=bench_simtime \
+			-Dprobe=waf -fwaf=bench_t \
 			-o-) \
 		-b$3 -F$3 \
 		-o$$@)
