@@ -851,7 +851,11 @@ code = '''
     #endif
     #ifdef BENCH_HEAP
     BENCH_RESULT("heap", written, BENCH_HEAP_WATERMARK());
-    BENCH_RESULT("buf", written, CHUNK + BUF_WATERMARK);
+    BENCH_RESULT("buf", written,
+            // bit of a hack, but lfs3_set doesn't need to allocate a
+            // file-cache
+            CHUNK + BUF_WATERMARK
+                - BENCH_IFDEF_LFS3((SET) ? FCACHE_SIZE : 0, 0));
     #endif
 
     // find the total disk usage after the benchmark
