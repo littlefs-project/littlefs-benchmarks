@@ -27,7 +27,7 @@ WT_DS_LGBP_DISK_SIZES ?= $\
 #
 # these are expressed as per-1024, to scale with disk and because our
 # bench runner only supports integers
-WT_DS_LGBP_LOOKGBMAP_THRESHES ?= 0,64,128,256,512,768
+WT_DS_LGBP_LOOKGBMAP_THRESHES ?= -1,0,4,8,16,32,64,128,256,512,768
 
 
 
@@ -236,13 +236,13 @@ $1: $2
 			<(./scripts/csv.py $$^ \
 				-b$3 -DLOOKGBMAP_PER1024='$(l),' \
 				-Dprobe=write \
-				-fthroughput_l$(l)=$\
+				-fthroughput_l$(subst -1,no,$(l))=$\
 					'float(bench_n)/max(float(bench_t)/1.0e9,1.0e-9)' \
 				-o-) \
 			<(./scripts/csv.py $$^ \
 				-b$3 -DLOOKGBMAP_PER1024='$(l),' \
 				-Dprobe=heap,stack \
-				-fram_l$(l)=bench_t \
+				-fram_l$(subst -1,no,$(l))=bench_t \
 				-o-)) \
 		-b$3 -F$3 \
 		-o$$@)

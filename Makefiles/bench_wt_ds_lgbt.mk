@@ -24,7 +24,7 @@ WT_DS_LGBT_DISK_SIZES ?= $\
 		536870912,1073741824,2147483648,4294967296,8589934592
 
 # range of lookgbmap threshes, these only make sense for littlefs
-WT_DS_LGBT_LOOKGBMAP_THRESHES ?= 0,1,2,4,8,16,32,64
+WT_DS_LGBT_LOOKGBMAP_THRESHES ?= -1,0,1,2,4,8,16,32,64,128,256,512,1024
 
 
 
@@ -233,13 +233,13 @@ $1: $2
 			<(./scripts/csv.py $$^ \
 				-b$3 -DLOOKGBMAP_THRESH='$(l),' \
 				-Dprobe=write \
-				-fthroughput_l$(l)=$\
+				-fthroughput_l$(subst -1,no,$(l))=$\
 					'float(bench_n)/max(float(bench_t)/1.0e9,1.0e-9)' \
 				-o-) \
 			<(./scripts/csv.py $$^ \
 				-b$3 -DLOOKGBMAP_THRESH='$(l),' \
 				-Dprobe=heap,stack \
-				-fram_l$(l)=bench_t \
+				-fram_l$(subst -1,no,$(l))=bench_t \
 				-o-)) \
 		-b$3 -F$3 \
 		-o$$@)
