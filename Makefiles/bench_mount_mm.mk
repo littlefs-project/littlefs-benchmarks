@@ -98,6 +98,8 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		-Srotates -Sgrms \
 		-Sclose -Sunmount \
 		-Susage -Smdir -Sbtree -Sdata \
+		$(foreach w, mount mkconsistent open write_ sync_,$\
+			-S$(w)='max(mountwrite)') \
 		-DPOWERLOSS=$(or $6,$(MOUNT_MM_POWERLOSS)) \
 		-DSTATIC_COUNT=$(or $7,$(MOUNT_MM_STATIC_COUNTS)) \
 		-DSTATIC_SIZE=$(or $8,$(MOUNT_MM_STATIC_SIZE)) \
@@ -259,7 +261,15 @@ all tikz tikz-mount-mm: \
         $(foreach c, $(BENCH_CASES), \
             $(foreach fs, $(BENCH_FILESYSTEMS), \
                 $(foreach g, $(BENCH_GEOMETRIES), \
-                    $(MOUNT_MM_TIKZDIR)/tikz_mount_mm_usage.$(c).$(fs).$(g).csv)))
+                    $(MOUNT_MM_TIKZDIR)/tikz_mount_mm_usage.$(c).$(fs).$(g).csv))) \
+        $(foreach c, $(BENCH_CASES), \
+            $(foreach fs, $(BENCH_FILESYSTEMS), \
+                $(foreach g, $(BENCH_GEOMETRIES), \
+                    $(MOUNT_MM_TIKZDIR)/tikz_mount_mm_ops.$(c).$(fs).$(g).csv))) \
+        $(foreach c, $(BENCH_CASES), \
+            $(foreach fs, $(BENCH_FILESYSTEMS), \
+                $(foreach g, $(BENCH_GEOMETRIES), \
+                    $(MOUNT_MM_TIKZDIR)/tikz_mount_mm_work.$(c).$(fs).$(g).csv)))
 
 # core tikz rule
 #
@@ -352,6 +362,126 @@ $(foreach c, $(BENCH_CASES), \
 				$(g),$\
 				STATIC_COUNT,$\
 				$(MOUNT_MM_STATIC_COMPACT))))))
+
+# ops tikz rule
+#
+# $1 - target
+# $2 - source
+# $3 - fs type/version
+# $4 - disk geometry
+# $5 - x-axis
+# $6 - static compact
+# $7 - x
+#
+define TIKZ_MOUNT_MM_OPS_RULE
+$1: $2
+	$$(strip ./scripts/csv.py \
+		$(foreach op, romount mount mountwrite, \
+			$(foreach c, $(subst $(comma),$(space),$6), \
+				<(./scripts/csv.py $$^ \
+					-bPOWERLOSS \
+					-D$5=$7 \
+					-DSTATIC_COMPACT='$(c),' \
+					-Dprobe='$(op)+max' \
+					-f$(op)_c$(c)_max_reads=bench_reads \
+						-f$(op)_c$(c)_max_wreads=bench_wreads \
+						-f$(op)_c$(c)_max_readed=bench_readed \
+					-f$(op)_c$(c)_max_progs=bench_progs \
+						-f$(op)_c$(c)_max_wprogs=bench_wprogs \
+						-f$(op)_c$(c)_max_progged=bench_progged \
+					-f$(op)_c$(c)_max_erases=bench_erases \
+						-f$(op)_c$(c)_max_werases=bench_werases \
+						-f$(op)_c$(c)_max_erased=bench_erased \
+					-f$(op)_c$(c)_max_readtime="$\
+						float($$$$($($(U_$3)_BENCH_RUNNER) \
+								-DDISK_GEOMETRY=$(N_$4) \
+								-QREAD_TIMING)*bench_reads \
+							+ $$$$($($(U_$3)_BENCH_RUNNER) \
+								-DDISK_GEOMETRY=$(N_$4) \
+								-QREAD_WTIMING)*bench_wreads \
+							+ $$$$($($(U_$3)_BENCH_RUNNER) \
+								-DDISK_GEOMETRY=$(N_$4) \
+								-QREAD_UTIMING)*bench_readed) \
+							/ 1.0e9" \
+					-f$(op)_c$(c)_max_progtime="$\
+						float($$$$($($(U_$3)_BENCH_RUNNER) \
+								-DDISK_GEOMETRY=$(N_$4) \
+								-QPROG_TIMING)*bench_progs \
+							+ $$$$($($(U_$3)_BENCH_RUNNER) \
+								-DDISK_GEOMETRY=$(N_$4) \
+								-QPROG_WTIMING)*bench_wprogs \
+							+ $$$$($($(U_$3)_BENCH_RUNNER) \
+								-DDISK_GEOMETRY=$(N_$4) \
+								-QPROG_UTIMING)*bench_progged) \
+							/ 1.0e9" \
+					-f$(op)_c$(c)_max_erasetime="$\
+						float($$$$($($(U_$3)_BENCH_RUNNER) \
+								-DDISK_GEOMETRY=$(N_$4) \
+								-QERASE_TIMING)*bench_erases \
+							+ $$$$($($(U_$3)_BENCH_RUNNER) \
+								-DDISK_GEOMETRY=$(N_$4) \
+								-QERASE_WTIMING)*bench_werases \
+							+ $$$$($($(U_$3)_BENCH_RUNNER) \
+								-DDISK_GEOMETRY=$(N_$4) \
+								-QERASE_UTIMING)*bench_erased) \
+							/ 1.0e9" \
+					-o-))) \
+		-bPOWERLOSS \
+		-o$$@)
+endef
+
+# ops tikz rules
+$(foreach c, $(BENCH_CASES), \
+	$(foreach fs, $(BENCH_FILESYSTEMS), \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(eval $(call TIKZ_MOUNT_MM_OPS_RULE,$\
+				$(MOUNT_MM_TIKZDIR)/tikz_mount_mm_ops.$(c).$(fs).$(g).csv,$\
+				$(MOUNT_MM_RESULTSDIR)/bench_mount_mm.$(c).$(fs).$(g).csv,$\
+				$(fs),$\
+				$(g),$\
+				STATIC_COUNT,$\
+				$(MOUNT_MM_STATIC_COMPACT),$\
+				16384)))))
+
+# work tikz rule
+#
+# $1 - target
+# $2 - source
+# $3 - fs type/version
+# $4 - disk geometry
+# $5 - x-axis
+# $6 - static compact
+# $7 - x
+#
+define TIKZ_MOUNT_MM_WORK_RULE
+$1: $2
+	$$(strip ./scripts/csv.py \
+		$(foreach w, mount mkconsistent open write_ sync_, \
+			$(foreach c, $(subst $(comma),$(space),$6), \
+				<(./scripts/csv.py $$^ \
+					-bPOWERLOSS \
+					-D$5=$7 \
+					-DSTATIC_COMPACT='$(c),' \
+					-Dprobe='$(w)+max(mountwrite)' \
+					-fmountwrite_c$(c)_max_$(subst _,$(nil),$(w))time=$\
+						'float(bench_t)/1.0e9' \
+					-o-))) \
+		-bPOWERLOSS \
+		-o$$@)
+endef
+
+# work tikz rules
+$(foreach c, $(BENCH_CASES), \
+	$(foreach fs, $(BENCH_FILESYSTEMS), \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(eval $(call TIKZ_MOUNT_MM_WORK_RULE,$\
+				$(MOUNT_MM_TIKZDIR)/tikz_mount_mm_work.$(c).$(fs).$(g).csv,$\
+				$(MOUNT_MM_RESULTSDIR)/bench_mount_mm.$(c).$(fs).$(g).csv,$\
+				$(fs),$\
+				$(g),$\
+				STATIC_COUNT,$\
+				$(MOUNT_MM_STATIC_COMPACT),$\
+				16384)))))
 
 
 #======================================================================#
