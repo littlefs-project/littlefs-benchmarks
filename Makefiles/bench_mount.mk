@@ -396,6 +396,51 @@ $1: $2
 	$$(strip ./scripts/csv.py \
 		$(foreach probe, romount mount mountwrite, \
 			<(./scripts/csv.py $$^ \
+				-bPOWERLOSS -Dprobe='$(probe)+avg' \
+				-f$(probe)_avg_reads=bench_reads \
+					-f$(probe)_avg_wreads=bench_wreads \
+					-f$(probe)_avg_readed=bench_readed \
+				-f$(probe)_avg_progs=bench_progs \
+					-f$(probe)_avg_wprogs=bench_wprogs \
+					-f$(probe)_avg_progged=bench_progged \
+				-f$(probe)_avg_erases=bench_erases \
+					-f$(probe)_avg_werases=bench_werases \
+					-f$(probe)_avg_erased=bench_erased \
+				-f$(probe)_avg_readtime="$\
+					float($$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QREAD_TIMING)*bench_reads \
+						+ $$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QREAD_WTIMING)*bench_wreads \
+						+ $$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QREAD_UTIMING)*bench_readed) \
+						/ 1.0e9" \
+				-f$(probe)_avg_progtime="$\
+					float($$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QPROG_TIMING)*bench_progs \
+						+ $$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QPROG_WTIMING)*bench_wprogs \
+						+ $$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QPROG_UTIMING)*bench_progged) \
+						/ 1.0e9" \
+				-f$(probe)_avg_erasetime="$\
+					float($$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QERASE_TIMING)*bench_erases \
+						+ $$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QERASE_WTIMING)*bench_werases \
+						+ $$$$($($(U_$3)_BENCH_RUNNER) \
+							-DDISK_GEOMETRY=$(N_$4) \
+							-QERASE_UTIMING)*bench_erased) \
+						/ 1.0e9" \
+				-o-) \
+			<(./scripts/csv.py $$^ \
 				-bPOWERLOSS -Dprobe='$(probe)+max' \
 				-f$(probe)_max_reads=bench_reads \
 					-f$(probe)_max_wreads=bench_wreads \
@@ -464,46 +509,15 @@ $(foreach c, $(BENCH_CASES), \
 define TIKZ_MOUNT_WORK_RULE
 $1: $2
 	$$(strip ./scripts/csv.py \
-		<(./scripts/csv.py $$^ \
-			-bPOWERLOSS -Dprobe='mount+avg' \
-			-fmountwrite_avg_mount_time='bench_t/1.0e9' \
-			-o-) \
-		<(./scripts/csv.py $$^ \
-			-bPOWERLOSS -Dprobe='mkconsistent+avg' \
-			-fmountwrite_avg_mkconsistent_time='bench_t/1.0e9' \
-			-o-) \
-		<(./scripts/csv.py $$^ \
-			-bPOWERLOSS -Dprobe='open+avg' \
-			-fmountwrite_avg_open_time='bench_t/1.0e9' \
-			-o-) \
-		<(./scripts/csv.py $$^ \
-			-bPOWERLOSS -Dprobe='write_+avg' \
-			-fmountwrite_avg_write_time='bench_t/1.0e9' \
-			-o-) \
-		<(./scripts/csv.py $$^ \
-			-bPOWERLOSS -Dprobe='sync_+avg' \
-			-fmountwrite_avg_sync_time='bench_t/1.0e9' \
-			-o-) \
-		<(./scripts/csv.py $$^ \
-			-bPOWERLOSS -Dprobe='mount+max(mountwrite)' \
-			-fmountwrite_max_mount_time='bench_t/1.0e9' \
-			-o-) \
-		<(./scripts/csv.py $$^ \
-			-bPOWERLOSS -Dprobe='mkconsistent+max(mountwrite)' \
-			-fmountwrite_max_mkconsistent_time='bench_t/1.0e9' \
-			-o-) \
-		<(./scripts/csv.py $$^ \
-			-bPOWERLOSS -Dprobe='open+max(mountwrite)' \
-			-fmountwrite_max_open_time='bench_t/1.0e9' \
-			-o-) \
-		<(./scripts/csv.py $$^ \
-			-bPOWERLOSS -Dprobe='write_+max(mountwrite)' \
-			-fmountwrite_max_write_time='bench_t/1.0e9' \
-			-o-) \
-		<(./scripts/csv.py $$^ \
-			-bPOWERLOSS -Dprobe='sync_+max(mountwrite)' \
-			-fmountwrite_max_sync_time='bench_t/1.0e9' \
-			-o-) \
+		$(foreach w, mount mkconsistent open write_ sync_, \
+			<(./scripts/csv.py $$^ \
+				-bPOWERLOSS -Dprobe='$(w)+avg' \
+				-fmountwrite_avg_$(subst _,$(nil),$(w))time='bench_t/1.0e9' \
+				-o-) \
+			<(./scripts/csv.py $$^ \
+				-bPOWERLOSS -Dprobe='$(w)+max(mountwrite)' \
+				-fmountwrite_max_$(subst _,$(nil),$(w))time='bench_t/1.0e9' \
+				-o-)) \
 		-bPOWERLOSS \
 		-o$$@)
 endef
