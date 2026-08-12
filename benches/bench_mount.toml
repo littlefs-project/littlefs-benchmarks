@@ -99,18 +99,25 @@ code = '''
     int64_t bench_mount_progs;
     uint32_t bench_mount_prng;
     // run timing for simulated powerloss
-    bench_sns_t bench_mount_start_time;
-    bench_sns_t bench_mount_stop_time;
-    int64_t bench_mount_start_progs;
-    int64_t bench_mount_stop_progs;
+    bench_sns_t bench_mount_starttime;
+    bench_sns_t bench_mount_stoptime;
+    int64_t bench_mount_startprogs;
+    int64_t bench_mount_stopprogs;
+
+    // optional alloc timing
+    bench_ns_t bench_mount_alloc_time;
+    bench_ns_t bench_mount_alloc_starttime;
 
     // reset for next mount
     void bench_mount_reset(void) {
         bench_mount_progs = 0;
-        bench_mount_start_time = -1;
-        bench_mount_stop_time = -1;
-        bench_mount_start_progs = -1;
-        bench_mount_stop_progs = -1;
+        bench_mount_starttime = -1;
+        bench_mount_stoptime = -1;
+        bench_mount_startprogs = -1;
+        bench_mount_stopprogs = -1;
+
+        bench_mount_alloc_time = 0;
+        bench_mount_alloc_starttime = 0;
     }
 
     // init bench state
@@ -119,15 +126,27 @@ code = '''
         bench_mount_reset();
     }
 
+    // call these if you want to measure alloc time
+    //
+    // this currently relies on patching sources
+    void __bench_mount_alloc_start(void) {
+        bench_mount_alloc_starttime = BENCH_SIMTIME();
+    }
+
+    void __bench_mount_alloc_stop(void) {
+        bench_mount_alloc_time
+                += BENCH_SIMTIME() - bench_mount_alloc_starttime;
+    }
+
     // hook read
     int bench_mount_bd_read(const struct lfs3_cfg *cfg, lfs3_block_t block,
             lfs3_off_t off, void *buffer, lfs3_size_t size) {
         // time for powerloss?
         if (POWERLOSS == 1
-                && ((bench_mount_stop_time != -1
-                        && BENCH_SIMTIME() >= bench_mount_stop_time)
-                    || (bench_mount_stop_progs != -1
-                        && bench_mount_progs > bench_mount_stop_progs))) {
+                && ((bench_mount_stoptime != -1
+                        && BENCH_SIMTIME() >= bench_mount_stoptime)
+                    || (bench_mount_stopprogs != -1
+                        && bench_mount_progs > bench_mount_stopprogs))) {
             // simulate powerloss
             longjmp(bench_mount_jmp, 1);
         }
@@ -143,10 +162,10 @@ code = '''
             lfs3_off_t off, const void *buffer, lfs3_size_t size) {
         // time for powerloss?
         if (POWERLOSS
-                && ((bench_mount_stop_time != -1
-                        && BENCH_SIMTIME() >= bench_mount_stop_time)
-                    || (bench_mount_stop_progs != -1
-                        && bench_mount_progs > bench_mount_stop_progs))) {
+                && ((bench_mount_stoptime != -1
+                        && BENCH_SIMTIME() >= bench_mount_stoptime)
+                    || (bench_mount_stopprogs != -1
+                        && bench_mount_progs > bench_mount_stopprogs))) {
             // write noise
             if (POWERLOSS_NOISE) {
                 uint8_t noise[size];
@@ -171,10 +190,10 @@ code = '''
     int bench_mount_bd_erase(const struct lfs3_cfg *cfg, lfs3_block_t block) {
         // time for powerloss?
         if (POWERLOSS == 1
-                && ((bench_mount_stop_time != -1
-                        && BENCH_SIMTIME() >= bench_mount_stop_time)
-                    || (bench_mount_stop_progs != -1
-                        && bench_mount_progs > bench_mount_stop_progs))) {
+                && ((bench_mount_stoptime != -1
+                        && BENCH_SIMTIME() >= bench_mount_stoptime)
+                    || (bench_mount_stopprogs != -1
+                        && bench_mount_progs > bench_mount_stopprogs))) {
             // simulate powerloss
             longjmp(bench_mount_jmp, 1);
         }
@@ -365,6 +384,8 @@ code = '''
     BENCH_ABORT("mount");
     BENCH_ABORT("mkconsistent");
     BENCH_ABORT("open");
+    BENCH_ABORT("alloc_");
+    BENCH_ABORT("alloc");
     BENCH_ABORT("write_");
     BENCH_ABORT("write");
     BENCH_ABORT("sync_");
@@ -387,11 +408,11 @@ code = '''
         LFS3_WARN("stuck? written=%"PRIu64", stuck=%"PRIu64", "
                     "t=%"PRId64", p=%"PRId64,
                 written, stuck,
-                (bench_mount_stop_time != -1)
-                    ? BENCH_SIMTIME()-bench_mount_start_time
+                (bench_mount_stoptime != -1)
+                    ? BENCH_SIMTIME()-bench_mount_starttime
                     : -1,
-                (bench_mount_stop_progs != -1)
-                    ? bench_mount_progs-bench_mount_start_progs
+                (bench_mount_stopprogs != -1)
+                    ? bench_mount_progs-bench_mount_startprogs
                     : -1);
         if (POWER_STUCKTHRESH && stuck >= (uint64_t)POWER_STUCKTHRESH) {
             // abort?
@@ -422,15 +443,15 @@ code = '''
                 || (POWER_WAITFORMOUNT == 2
                     && stuck < (uint64_t)POWER_STUCKTHRESH)) {
             if (POWER_MINTIME || POWER_MAXTIME) {
-                bench_mount_start_time = BENCH_SIMTIME();
-                bench_mount_stop_time = bench_mount_start_time
+                bench_mount_starttime = BENCH_SIMTIME();
+                bench_mount_stoptime = bench_mount_starttime
                         + POWER_MINTIME
                         + ((0x100010001ULL * BENCH_PRNG(&prng))
                             % (POWER_MAXTIME+1 - POWER_MINTIME));
             }
             if (POWER_MINPROGS || POWER_MAXPROGS) {
-                bench_mount_start_progs = 0;
-                bench_mount_stop_progs = bench_mount_start_progs
+                bench_mount_startprogs = 0;
+                bench_mount_stopprogs = bench_mount_startprogs
                         + POWER_MINPROGS
                         + (BENCH_PRNG(&prng)
                             % (POWER_MAXPROGS+1 - POWER_MINPROGS));
@@ -494,6 +515,7 @@ code = '''
         BENCH_START("mountwrite");
         bool mountwriting = true;
         bool mkconsistented = false;
+        bench_ns_t alloc_starttime = bench_mount_alloc_time;
         #if defined(SPIFFS)
         // spiffs only: needs_check gets set to true if we hit an error
         bool needs_check = false;
@@ -607,10 +629,10 @@ code = '''
                 // time to reboot?
                 && !(!POWERLOSS
                     && !mountwriting
-                    && ((bench_mount_stop_time != -1
-                            && BENCH_SIMTIME() >= bench_mount_stop_time)
-                        || (bench_mount_stop_progs != -1
-                            && bench_mount_progs > bench_mount_stop_progs)))) {
+                    && ((bench_mount_stoptime != -1
+                            && BENCH_SIMTIME() >= bench_mount_stoptime)
+                        || (bench_mount_stopprogs != -1
+                            && bench_mount_progs > bench_mount_stopprogs)))) {
             if (mountwriting) {
                 BENCH_START("write_");
             }
@@ -661,6 +683,14 @@ code = '''
                 BENCH_STOP("sync_", mounts);
             }
 
+            // measure alloc time if we can
+            if (mountwriting) {
+                BENCH_RESULT("alloc_", mounts,
+                        bench_mount_alloc_time - alloc_starttime);
+            }
+            BENCH_RESULT("alloc", mounts,
+                    bench_mount_alloc_time - alloc_starttime);
+
             // stop mountwrite measurements here, _don't_ include
             // log-rotate, in theory this is background work!
             if (mountwriting) {
@@ -673,15 +703,15 @@ code = '''
                         || (POWER_WAITFORMOUNT == 2
                             && stuck >= (uint64_t)POWER_STUCKTHRESH)) {
                     if (POWER_MINTIME || POWER_MAXTIME) {
-                        bench_mount_start_time = BENCH_SIMTIME();
-                        bench_mount_stop_time = bench_mount_start_time
+                        bench_mount_starttime = BENCH_SIMTIME();
+                        bench_mount_stoptime = bench_mount_starttime
                                 + POWER_MINTIME
                                 + ((0x100010001ULL * BENCH_PRNG(&prng))
                                     % (POWER_MAXTIME+1 - POWER_MINTIME));
                     }
                     if (POWER_MINPROGS || POWER_MAXPROGS) {
-                        bench_mount_start_progs = 0;
-                        bench_mount_stop_progs = bench_mount_start_progs
+                        bench_mount_startprogs = 0;
+                        bench_mount_stopprogs = bench_mount_startprogs
                                 + POWER_MINPROGS
                                 + (BENCH_PRNG(&prng)
                                     % (POWER_MAXPROGS+1 - POWER_MINPROGS));

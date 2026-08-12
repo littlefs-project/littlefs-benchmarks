@@ -51,13 +51,17 @@ code = '''
 
     // init bench state
     void bench_wear_init(void) {
+        BENCH_HEAP_PAUSE();
         bench_wear_erasemap = malloc(BLOCK_COUNT*sizeof(bench_io_t));
         memset(bench_wear_erasemap, 0, BLOCK_COUNT*sizeof(bench_io_t));
+        BENCH_HEAP_RESUME();
     }
 
     // cleanup bench state
     void bench_wear_deinit(void) {
+        BENCH_HEAP_PAUSE();
         free(bench_wear_erasemap);
+        BENCH_HEAP_RESUME();
     }
 
     // reset after warmup

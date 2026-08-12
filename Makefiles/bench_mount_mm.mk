@@ -98,7 +98,7 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		-Srotates -Sgrms \
 		-Sclose -Sunmount \
 		-Susage -Smdir -Sbtree -Sdata \
-		$(foreach w, mount mkconsistent open write_ sync_,$\
+		$(foreach w, mount mkconsistent open alloc_ write_ sync_,$\
 			-S$(w)='max(mountwrite)') \
 		-DPOWERLOSS=$(or $6,$(MOUNT_MM_POWERLOSS)) \
 		-DSTATIC_COUNT=$(or $7,$(MOUNT_MM_STATIC_COUNTS)) \
@@ -456,7 +456,7 @@ $(foreach c, $(BENCH_CASES), \
 define TIKZ_MOUNT_MM_WORK_RULE
 $1: $2
 	$$(strip ./scripts/csv.py \
-		$(foreach w, mount mkconsistent open write_ sync_, \
+		$(foreach w, mount mkconsistent open alloc_ write_ sync_, \
 			$(foreach c, $(subst $(comma),$(space),$6), \
 				<(./scripts/csv.py $$^ \
 					-bPOWERLOSS \

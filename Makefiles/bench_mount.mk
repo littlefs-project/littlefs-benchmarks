@@ -80,9 +80,9 @@ $1: $($(U_$3)_BENCH_RUNNER)
 			-Smount=$(p)) \
 		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_P))),$\
 			-Smountwrite=$(p)) \
-		$(foreach w, mount mkconsistent open write_ sync_,$\
+		$(foreach w, mount mkconsistent open alloc_ write_ sync_,$\
 			-S$(w)=avg) \
-		$(foreach w, mount mkconsistent open write_ sync_,$\
+		$(foreach w, mount mkconsistent open alloc_ write_ sync_,$\
 			-S$(w)='max(mountwrite)') \
 		-Srotates -Sgrms \
 		-Sclose -Sunmount \
@@ -509,7 +509,7 @@ $(foreach c, $(BENCH_CASES), \
 define TIKZ_MOUNT_WORK_RULE
 $1: $2
 	$$(strip ./scripts/csv.py \
-		$(foreach w, mount mkconsistent open write_ sync_, \
+		$(foreach w, mount mkconsistent open alloc_ write_ sync_, \
 			<(./scripts/csv.py $$^ \
 				-bPOWERLOSS -Dprobe='$(w)+avg' \
 				-fmountwrite_avg_$(subst _,$(nil),$(w))time='bench_t/1.0e9' \
