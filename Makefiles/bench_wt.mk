@@ -302,7 +302,16 @@ $1: $2
 	$$(strip ./scripts/csv.py \
 		<(./scripts/csv.py $$^ \
 			-bi=0 -Dprobe=write \
-			-fread_time="$\
+			-freads=bench_reads \
+				-fwreads=bench_wreads \
+				-freaded=bench_readed \
+			-fprogs=bench_progs \
+				-fwprogs=bench_wprogs \
+				-fprogged=bench_progged \
+			-ferases=bench_erases \
+				-fwerases=bench_werases \
+				-ferased=bench_erased \
+			-freadtime="$\
 				float($$$$($($(U_$3)_BENCH_RUNNER) \
 						-DDISK_GEOMETRY=$(N_$4) \
 						-QREAD_TIMING)*bench_reads \
@@ -313,7 +322,7 @@ $1: $2
 						-DDISK_GEOMETRY=$(N_$4) \
 						-QREAD_UTIMING)*bench_readed) \
 					/ 1.0e9" \
-			-fprog_time="$\
+			-fprogtime="$\
 				float($$$$($($(U_$3)_BENCH_RUNNER) \
 						-DDISK_GEOMETRY=$(N_$4) \
 						-QPROG_TIMING)*bench_progs \
@@ -324,7 +333,7 @@ $1: $2
 						-DDISK_GEOMETRY=$(N_$4) \
 						-QPROG_UTIMING)*bench_progged) \
 					/ 1.0e9" \
-			-ferase_time="$\
+			-ferasetime="$\
 				float($$$$($($(U_$3)_BENCH_RUNNER) \
 						-DDISK_GEOMETRY=$(N_$4) \
 						-QERASE_TIMING)*bench_erases \

@@ -397,7 +397,16 @@ $1: $2
 		$(foreach probe, romount mount mountwrite, \
 			<(./scripts/csv.py $$^ \
 				-bPOWERLOSS -Dprobe='$(probe)+max' \
-				-f$(probe)_max_read_time="$\
+				-f$(probe)_max_reads=bench_reads \
+					-f$(probe)_max_wreads=bench_wreads \
+					-f$(probe)_max_readed=bench_readed \
+				-f$(probe)_max_progs=bench_progs \
+					-f$(probe)_max_wprogs=bench_wprogs \
+					-f$(probe)_max_progged=bench_progged \
+				-f$(probe)_max_erases=bench_erases \
+					-f$(probe)_max_werases=bench_werases \
+					-f$(probe)_max_erased=bench_erased \
+				-f$(probe)_max_readtime="$\
 					float($$$$($($(U_$3)_BENCH_RUNNER) \
 							-DDISK_GEOMETRY=$(N_$4) \
 							-QREAD_TIMING)*bench_reads \
@@ -408,7 +417,7 @@ $1: $2
 							-DDISK_GEOMETRY=$(N_$4) \
 							-QREAD_UTIMING)*bench_readed) \
 						/ 1.0e9" \
-				-f$(probe)_max_prog_time="$\
+				-f$(probe)_max_progtime="$\
 					float($$$$($($(U_$3)_BENCH_RUNNER) \
 							-DDISK_GEOMETRY=$(N_$4) \
 							-QPROG_TIMING)*bench_progs \
@@ -419,7 +428,7 @@ $1: $2
 							-DDISK_GEOMETRY=$(N_$4) \
 							-QPROG_UTIMING)*bench_progged) \
 						/ 1.0e9" \
-				-f$(probe)_max_erase_time="$\
+				-f$(probe)_max_erasetime="$\
 					float($$$$($($(U_$3)_BENCH_RUNNER) \
 							-DDISK_GEOMETRY=$(N_$4) \
 							-QERASE_TIMING)*bench_erases \

@@ -402,7 +402,16 @@ $1: $2
 		$(foreach probe, write gc, \
 			<(./scripts/csv.py $$^ \
 				-bGC -Dprobe='$(probe)' \
-				-f$(if $(filter gc,$(probe)),gc_)read_time="$\
+				-f$(if $(filter gc,$(probe)),gc_)reads=bench_reads \
+					-f$(if $(filter gc,$(probe)),gc_)wreads=bench_wreads \
+					-f$(if $(filter gc,$(probe)),gc_)readed=bench_readed \
+				-f$(if $(filter gc,$(probe)),gc_)progs=bench_progs \
+					-f$(if $(filter gc,$(probe)),gc_)wprogs=bench_wprogs \
+					-f$(if $(filter gc,$(probe)),gc_)progged=bench_progged \
+				-f$(if $(filter gc,$(probe)),gc_)erases=bench_erases \
+					-f$(if $(filter gc,$(probe)),gc_)werases=bench_werases \
+					-f$(if $(filter gc,$(probe)),gc_)erased=bench_erased \
+				-f$(if $(filter gc,$(probe)),gc_)readtime="$\
 					float($$$$($($(U_$3)_BENCH_RUNNER) \
 							-DDISK_GEOMETRY=$(N_$4) \
 							-QREAD_TIMING)*bench_reads \
@@ -414,7 +423,7 @@ $1: $2
 							-QREAD_UTIMING)*bench_readed) \
 						/ float(bench_hits) \
 						/ 1.0e9" \
-				-f$(if $(filter gc,$(probe)),gc_)prog_time="$\
+				-f$(if $(filter gc,$(probe)),gc_)progtime="$\
 					float($$$$($($(U_$3)_BENCH_RUNNER) \
 							-DDISK_GEOMETRY=$(N_$4) \
 							-QPROG_TIMING)*bench_progs \
@@ -426,7 +435,7 @@ $1: $2
 							-QPROG_UTIMING)*bench_progged) \
 						/ float(bench_hits) \
 						/ 1.0e9" \
-				-f$(if $(filter gc,$(probe)),gc_)erase_time="$\
+				-f$(if $(filter gc,$(probe)),gc_)erasetime="$\
 					float($$$$($($(U_$3)_BENCH_RUNNER) \
 							-DDISK_GEOMETRY=$(N_$4) \
 							-QERASE_TIMING)*bench_erases \
