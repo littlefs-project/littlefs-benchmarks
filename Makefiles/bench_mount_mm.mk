@@ -78,10 +78,17 @@ bench-mount-mm: \
 # $8 - static size
 # $9 - static compact
 #
+# the --isolate is because we're leaking memory every pl
+#
+# ok, still leaking too much memory yaffs2, so limit to half cores
+#
 define BENCH_MOUNT_MM_RULE
 $1: $($(U_$3)_BENCH_RUNNER)
 	$$(strip ./scripts/bench.py -R$$< -B bench_mount_$2 \
 		$(BENCHFLAGS) $($(U_$3)_BENCHFLAGS) \
+		$(if $(filter $3,$(DEFAULT_YAFFS2_FILESYSTEMS)), $\
+			--isolate \
+			-j$$$$(($$$$(nproc)/2))) \
 		$(if $(SKIP_WARMUP),-DSKIP_WARMUP=$(SKIP_WARMUP)) \
 		$(if $(SIM_MOUNTS),-DSIM_MOUNTS=$(SIM_MOUNTS)) \
 		$(if $(SIM_ROTATES),-DSIM_ROTATES=$(SIM_ROTATES)) \
@@ -103,8 +110,7 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		-DPOWERLOSS=$(or $6,$(MOUNT_MM_POWERLOSS)) \
 		-DSTATIC_COUNT=$(or $7,$(MOUNT_MM_STATIC_COUNTS)) \
 		-DSTATIC_SIZE=$(or $8,$(MOUNT_MM_STATIC_SIZE)) \
-		$(if $(filter $3,$\
-				$(DEFAULT_LFS3_FILESYSTEMS)),$\
+		$(if $(filter $3,$(DEFAULT_LFS3_FILESYSTEMS)),$\
 			-DSTATIC_COMPACT=$(or $9,$(MOUNT_MM_STATIC_COMPACT))) \
 		-o$$@)
 endef

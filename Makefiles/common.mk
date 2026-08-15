@@ -126,12 +126,17 @@ ifdef DISK_PATH
 BENCHFLAGS += -d$(DISK_PATH)
 DISK_BIG = 1
 endif
+# how many cores?
+ifdef BENCH_CORES
+BENCHFLAGS += -j$(BENCH_CORES)
+else
 # just always run benches in parallel by default, this makefile uses
 # too much RAM to easily parallelize at the rule level
 ifndef DISK_BIG
 BENCHFLAGS += -j
 # # forward -j flag
 # BENCHFLAGS += $(filter -j%,$(MAKEFLAGS))
+endif
 endif
 ifdef PERFGEN
 BENCHFLAGS += -p$(BENCH_LFS3_PERF)

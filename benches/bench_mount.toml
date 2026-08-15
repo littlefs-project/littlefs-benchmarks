@@ -63,7 +63,7 @@ defines.POWERLOSS_CHECKROTATE = 1
 # how long before powerloss/shutdown, we choose a uniform number of
 # nanoseconds between these
 defines.POWER_MINTIME = 0
-defines.POWER_MAXTIME = '10ULL*1000ULL*1000ULL*1000ULL' # 10 seconds
+defines.POWER_MAXTIME = '2ULL*60ULL*1000ULL*1000ULL*1000ULL' # 2 minutes
 # alternatively, how long as defined by progs
 defines.POWER_MINPROGS = 0
 defines.POWER_MAXPROGS = 0
@@ -81,6 +81,8 @@ if = [
     'BENCH_IFDEF_SPIFFS(DISK_SIZE < 0x100000000ULL, true)',
     # SPIFFS_check just takes way too long on big disks
     'BENCH_IFDEF_SPIFFS(!POWERLOSS || DISK_SIZE <= 128*1024*1024, true)',
+    # SPIFFS_check just takes way too long with many files
+    'BENCH_IFDEF_SPIFFS(!POWERLOSS || STATIC_COUNT <= 256, true)',
 ]
 
 hooks.init = 'bench_mount_init'
