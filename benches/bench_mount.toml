@@ -82,13 +82,6 @@ defines.POWER_WAITFORMOUNT = 2
 defines.POWER_STUCKTHRESH = 10
 defines.POWER_STUCKASSERT = true
 
-# hack to measure alloc time, requires passing address range after
-# compilation
-defines.SYM_ALLOC_ADDR = 0
-defines.SYM_ALLOC_SIZE = 0
-defines.SYM_ALLOC2_ADDR = 0
-defines.SYM_ALLOC2_SIZE = 0
-
 if = [
     # spiffs is limited to 32-bit disks
     'BENCH_IFDEF_SPIFFS(DISK_SIZE < 0x100000000ULL, true)',
@@ -99,16 +92,12 @@ if = [
 ]
 
 hooks.init = 'bench_mount_init'
-hooks.deinit = 'bench_mount_deinit'
 hooks.read = 'bench_mount_bd_read'
 hooks.prog = 'bench_mount_bd_prog'
 hooks.erase = 'bench_mount_bd_erase'
 code = '''
     // include common bench helpers
     #include "benches/bench_helpers.h"
-
-    // backtrace for alloc measurements
-    #include <execinfo.h>
 
     // use longjmp to emulate powerlosses
     #include <setjmp.h>
@@ -124,10 +113,8 @@ code = '''
     int64_t bench_mount_stopprogs;
 
     // optional alloc timing
-    bench_ns_t bench_mount_alloc_simtime;
-    bench_sns_t bench_mount_alloc_starttime;
-    void **bench_mount_backtrace_buffer;
-    #define BENCH_MOUNT_BACKTRACE_SIZE 1024
+    bench_ns_t bench_mount_alloc_time;
+    bench_ns_t bench_mount_alloc_starttime;
 
     // reset for next mount
     void bench_mount_reset(void) {
@@ -137,62 +124,26 @@ code = '''
         bench_mount_startprogs = -1;
         bench_mount_stopprogs = -1;
 
-        bench_mount_alloc_simtime = 0;
-        bench_mount_alloc_starttime = -1;
+        bench_mount_alloc_time = 0;
+        bench_mount_alloc_starttime = 0;
     }
 
     // init bench state
     void bench_mount_init(void) {
         bench_mount_prng = 42;
-        if (SYM_ALLOC_ADDR || SYM_ALLOC2_ADDR) {
-            BENCH_HEAP_PAUSE();
-            bench_mount_backtrace_buffer = malloc(
-                    BENCH_MOUNT_BACKTRACE_SIZE*sizeof(void*));
-            BENCH_HEAP_RESUME();
-        }
-
         bench_mount_reset();
     }
 
-    void bench_mount_deinit(void) {
-        if (SYM_ALLOC_ADDR || SYM_ALLOC2_ADDR) {
-            BENCH_HEAP_PAUSE();
-            free(bench_mount_backtrace_buffer);
-            BENCH_HEAP_RESUME();
-        }
+    // call these if you want to measure alloc time
+    //
+    // this currently relies on patching sources
+    void __bench_mount_alloc_start(void) {
+        bench_mount_alloc_starttime = BENCH_SIMTIME();
     }
 
-    void bench_mount_bd_enter(void) {
-        if (SYM_ALLOC_ADDR || SYM_ALLOC2_ADDR) {
-            size_t found = backtrace(
-                    bench_mount_backtrace_buffer,
-                    BENCH_MOUNT_BACKTRACE_SIZE);
-            for (size_t i = 0; i < found; i++) {
-                if ((SYM_ALLOC_ADDR
-                            && ((uintptr_t)bench_mount_backtrace_buffer[i]
-                                    >= (uintptr_t)SYM_ALLOC_ADDR
-                                && (uintptr_t)bench_mount_backtrace_buffer[i]
-                                    < (uintptr_t)SYM_ALLOC_ADDR
-                                        + (uintptr_t)SYM_ALLOC_SIZE))
-                        || (SYM_ALLOC2_ADDR
-                            && ((uintptr_t)bench_mount_backtrace_buffer[i]
-                                    >= (uintptr_t)SYM_ALLOC2_ADDR
-                                && (uintptr_t)bench_mount_backtrace_buffer[i]
-                                    < (uintptr_t)SYM_ALLOC2_ADDR
-                                        + (uintptr_t)SYM_ALLOC2_SIZE))) {
-                    bench_mount_alloc_starttime = BENCH_SIMTIME();
-                    break;
-                }
-            }
-        }
-    }
-
-    void bench_mount_bd_exit(void) {
-        if (bench_mount_alloc_starttime != -1) {
-            bench_mount_alloc_simtime
-                    += BENCH_SIMTIME() - bench_mount_alloc_starttime;
-        }
-        bench_mount_alloc_simtime = -1;
+    void __bench_mount_alloc_stop(void) {
+        bench_mount_alloc_time
+                += BENCH_SIMTIME() - bench_mount_alloc_starttime;
     }
 
     // hook read
@@ -209,11 +160,7 @@ code = '''
             longjmp(bench_mount_jmp, 1);
         }
 
-        // update alloc time if we're in alloc
-        bench_mount_bd_enter();
-        int err = BENCH_BD_READNOHOOKS(cfg, block, off, buffer, size);
-        bench_mount_bd_exit();
-        return err;
+        return BENCH_BD_READNOHOOKS(cfg, block, off, buffer, size);
     }
 
     // hook prog
@@ -242,10 +189,7 @@ code = '''
             longjmp(bench_mount_jmp, 1);
         }
 
-        // update alloc time if we're in alloc
-        bench_mount_bd_enter();
         int err = BENCH_BD_PROGNOHOOKS(cfg, block, off, buffer, size);
-        bench_mount_bd_exit();
         // increment progs
         bench_mount_progs += 1;
         return err;
@@ -264,11 +208,7 @@ code = '''
             longjmp(bench_mount_jmp, 1);
         }
 
-        // update alloc time if we're in alloc
-        bench_mount_bd_enter();
-        int err = BENCH_BD_ERASENOHOOKS(cfg, block);
-        bench_mount_bd_exit();
-        return err;
+        return BENCH_BD_ERASENOHOOKS(cfg, block);
     }
 '''
 
@@ -585,7 +525,7 @@ code = '''
         BENCH_START("mountwrite");
         bool mountwriting = true;
         bool mkconsistented = false;
-        bench_ns_t alloc_starttime = bench_mount_alloc_simtime;
+        bench_ns_t alloc_starttime = bench_mount_alloc_time;
         #if defined(SPIFFS)
         // spiffs only: needs_check gets set to true if we hit an error
         bool needs_check = false;
@@ -756,10 +696,10 @@ code = '''
             // measure alloc time if we can
             if (mountwriting) {
                 BENCH_RESULT("alloc_", mounts,
-                        bench_mount_alloc_simtime - alloc_starttime);
+                        bench_mount_alloc_time - alloc_starttime);
             }
             BENCH_RESULT("alloc", mounts,
-                    bench_mount_alloc_simtime - alloc_starttime);
+                    bench_mount_alloc_time - alloc_starttime);
 
             // stop mountwrite measurements here, _don't_ include
             // log-rotate, in theory this is background work!
