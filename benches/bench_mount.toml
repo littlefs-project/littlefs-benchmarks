@@ -113,7 +113,7 @@ code = '''
     int64_t bench_mount_stopprogs;
 
     // optional alloc timing
-    bench_ns_t bench_mount_alloc_time;
+    bench_ns_t bench_mount_alloc_simtime;
     bench_ns_t bench_mount_alloc_starttime;
 
     // reset for next mount
@@ -124,7 +124,7 @@ code = '''
         bench_mount_startprogs = -1;
         bench_mount_stopprogs = -1;
 
-        bench_mount_alloc_time = 0;
+        bench_mount_alloc_simtime = 0;
         bench_mount_alloc_starttime = 0;
     }
 
@@ -142,7 +142,7 @@ code = '''
     }
 
     void __bench_mount_alloc_stop(void) {
-        bench_mount_alloc_time
+        bench_mount_alloc_simtime
                 += BENCH_SIMTIME() - bench_mount_alloc_starttime;
     }
 
@@ -525,7 +525,7 @@ code = '''
         BENCH_START("mountwrite");
         bool mountwriting = true;
         bool mkconsistented = false;
-        bench_ns_t alloc_starttime = bench_mount_alloc_time;
+        bench_ns_t alloc_starttime = bench_mount_alloc_simtime;
         #if defined(SPIFFS)
         // spiffs only: needs_check gets set to true if we hit an error
         bool needs_check = false;
@@ -696,10 +696,10 @@ code = '''
             // measure alloc time if we can
             if (mountwriting) {
                 BENCH_RESULT("alloc_", mounts,
-                        bench_mount_alloc_time - alloc_starttime);
+                        bench_mount_alloc_simtime - alloc_starttime);
             }
             BENCH_RESULT("alloc", mounts,
-                    bench_mount_alloc_time - alloc_starttime);
+                    bench_mount_alloc_simtime - alloc_starttime);
 
             // stop mountwrite measurements here, _don't_ include
             // log-rotate, in theory this is background work!
