@@ -29,11 +29,17 @@ defines.STATIC_COMPACT = false
 # also bench read-only mount?
 defines.ROMOUNT = true
 
+# run with gc? this repops gbmap in littlefs3 and writes ckpts in yaffs2
+defines.GC = 'POWERLOSS >= 3'
+
 # run with simulated powerloss? defaults to a nice shutdown
 # 0 => nice shutdown
 # 1 => oh no, unexpected shutdown
 # 2 => oh nooo, unexpected shutdown during only progs
+# 3 => oh, unexpected shutdown, but with gc
+# 4 => oh, unexpected shutdown during only progs, but with gc
 defines.POWERLOSS = false
+defines.POWERLOSS_PROGONLY = 'POWERLOSS == 2 || POWERLOSS == 4'
 
 # emulate failed progs by adding noise?
 defines.POWERLOSS_NOISE = false
@@ -144,7 +150,8 @@ code = '''
     int bench_mount_bd_read(const struct lfs3_cfg *cfg, lfs3_block_t block,
             lfs3_off_t off, void *buffer, lfs3_size_t size) {
         // time for powerloss?
-        if (POWERLOSS == 1
+        if (POWERLOSS
+                && !POWERLOSS_PROGONLY
                 && ((bench_mount_stoptime != -1
                         && BENCH_SIMTIME() >= bench_mount_stoptime)
                     || (bench_mount_stopprogs != -1
@@ -191,7 +198,8 @@ code = '''
     // hook erase
     int bench_mount_bd_erase(const struct lfs3_cfg *cfg, lfs3_block_t block) {
         // time for powerloss?
-        if (POWERLOSS == 1
+        if (POWERLOSS
+                && !POWERLOSS_PROGONLY
                 && ((bench_mount_stoptime != -1
                         && BENCH_SIMTIME() >= bench_mount_stoptime)
                     || (bench_mount_stopprogs != -1
@@ -811,6 +819,29 @@ code = '''
 
             written += CHUNK;
             BENCH_STOP("write", written);
+
+            // run gc
+            if (GC) {
+                BENCH_START("gc");
+                #if defined(LFS3)
+                lfs3_gc_t gc;
+                lfs3_gc_open(&lfs3, &gc, GC_FLAGS) => 0;
+                lfs3_sblock_t steps = lfs3_gc_write(&lfs3, &gc, -1);
+                assert(steps >= 0);
+                lfs3_gc_close(&lfs3, &gc) => 0;
+                #elif defined(LFS2)
+                int err = lfs2_fs_gc(&lfs2);
+                assert(!err || err == LFS3_ERR_IO);
+                #elif defined(SPIFFS)
+                for (lfs3_block_t i = 0; i < GC_RETRY_COUNT; i++) {
+                    int err = SPIFFS_gc(&spiffs, GC_CLEAN_SIZE);
+                    assert(!err || err == LFS3_ERR_IO);
+                }
+                #elif defined(YAFFS2)
+                yaffs_do_background_gc("/", 0);
+                #endif
+                BENCH_STOP("gc", written);
+            }
         }
         // if we didn't need mkconsistent, report 0 so percentile
         // measurements make sense
