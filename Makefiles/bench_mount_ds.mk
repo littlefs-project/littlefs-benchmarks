@@ -75,10 +75,13 @@ bench-mount-ds: \
 # $6 - powerloss
 # $7 - disk sizes
 #
+# the --isolate is because we're leaking memory every pl
+#
 define BENCH_MOUNT_DS_RULE
 $1: $($(U_$3)_BENCH_RUNNER)
 	$$(strip ./scripts/bench.py -R$$< -B bench_mount_$2 \
 		$(BENCHFLAGS) $($(U_$3)_BENCHFLAGS) \
+		--isolate \
 		$(if $(SKIP_WARMUP),-DSKIP_WARMUP=$(SKIP_WARMUP)) \
 		$(if $(SIM_MOUNTS),-DSIM_MOUNTS=$(SIM_MOUNTS)) \
 		$(if $(SIM_ROTATES),-DSIM_ROTATES=$(SIM_ROTATES)) \

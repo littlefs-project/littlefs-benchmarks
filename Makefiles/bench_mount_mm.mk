@@ -86,8 +86,10 @@ define BENCH_MOUNT_MM_RULE
 $1: $($(U_$3)_BENCH_RUNNER)
 	$$(strip ./scripts/bench.py -R$$< -B bench_mount_$2 \
 		$(BENCHFLAGS) $($(U_$3)_BENCHFLAGS) \
-		$(if $(filter $3,$(DEFAULT_YAFFS2_FILESYSTEMS)), $\
-			--isolate \
+		--isolate \
+		$(if $(and $\
+				$(filter $3,$(DEFAULT_YAFFS2_FILESYSTEMS)), $\
+				$(if $(BENCH_CORES),,1)), $\
 			-j$$$$(($$$$(nproc)/2))) \
 		$(if $(SKIP_WARMUP),-DSKIP_WARMUP=$(SKIP_WARMUP)) \
 		$(if $(SIM_MOUNTS),-DSIM_MOUNTS=$(SIM_MOUNTS)) \
