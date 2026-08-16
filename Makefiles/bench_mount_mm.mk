@@ -114,6 +114,19 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		-DSTATIC_SIZE=$(or $8,$(MOUNT_MM_STATIC_SIZE)) \
 		$(if $(filter $3,$(DEFAULT_LFS3_FILESYSTEMS)),$\
 			-DSTATIC_COMPACT=$(or $9,$(MOUNT_MM_STATIC_COMPACT))) \
+		$(if $(filter $3,$(DEFAULT_LFS3_FILESYSTEMS)),$\
+			$$$$($(OBJDUMP) -t $$< \
+				| awk '\
+					/lfs3_alloc_(\.|$$$$)/ {$\
+						printf "-DSYM_ALLOC_ADDR=0x%x $\
+							-DSYM_ALLOC_SIZE=0x%x\n",$\
+						("0x" $$$$1)+0,$\
+						("0x" $$$$5)+0} $\
+					/lfs3_alloc_ckpoint$$$$/ {$\
+						printf "-DSYM_ALLOC2_ADDR=0x%x $\
+							-DSYM_ALLOC2_SIZE=0x%x\n",$\
+						("0x" $$$$1)+0,$\
+						("0x" $$$$5)+0}')) \
 		-o$$@)
 endef
 
