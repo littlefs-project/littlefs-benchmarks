@@ -85,10 +85,11 @@ $1: $($(U_$3)_BENCH_RUNNER)
 			-Smount=$(p)) \
 		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_P))),$\
 			-Smountwrite=$(p)) \
-		$(foreach w, mount mkconsistent open alloc_ write_ sync_,$\
-			-S$(w)=avg) \
-		$(foreach w, mount mkconsistent open alloc_ write_ sync_,$\
-			-S$(w)='max(mountwrite)') \
+		$(foreach p, $(subst $(comma),$(space),$(or $5,$(MOUNT_P))),$\
+			$(foreach w, mount mkconsistent open alloc_ write_ sync_,$\
+				$(if $(filter avg,$(p)),$\
+					$(if $(filter mount,$(w)),,-S$(w)=$(p)),$\
+					-S$(w)='$(p)(mountwrite)'))) \
 		-Srotates -Sgrms \
 		-Sclose -Sunmount \
 		-DPOWERLOSS=$(or $6,$(MOUNT_POWERLOSS)) \
@@ -358,24 +359,16 @@ all tikz tikz-mount: \
 #
 # $1 - target
 # $2 - source
-# $3 - percentiles
 #
 define TIKZ_MOUNT_RULE
 $1: $2
 	$$(strip ./scripts/csv.py \
-		$(foreach p, $(subst $(comma),$(space),$3), \
-			<(./scripts/csv.py $$^ \
-				-bPOWERLOSS -Dprobe='romount+$(p)' \
-				-fromount_$(subst .,$(nil),$(p))='bench_t/1.0e9' \
-				-o-) \
-			<(./scripts/csv.py $$^ \
-				-bPOWERLOSS -Dprobe='mount+$(p)' \
-				-fmount_$(subst .,$(nil),$(p))='bench_t/1.0e9' \
-				-o-) \
-			<(./scripts/csv.py $$^ \
-				-bPOWERLOSS -Dprobe='mountwrite+$(p)' \
-				-fmountwrite_$(subst .,$(nil),$(p))='bench_t/1.0e9' \
-				-o-)) \
+		$(foreach op, romount mount mountwrite, \
+			$(foreach p, $(subst $(comma),$(space),$(MOUNT_P)), \
+				<(./scripts/csv.py $$^ \
+					-bPOWERLOSS -Dprobe='$(op)+$(p)' \
+					-f$(op)_$(subst .,$(nil),$(p))='bench_t/1.0e9' \
+					-o-))) \
 		-bPOWERLOSS \
 		-o$$@)
 endef
@@ -386,8 +379,7 @@ $(foreach c, $(BENCH_CASES), \
 		$(foreach g, $(BENCH_GEOMETRIES), \
 			$(eval $(call TIKZ_MOUNT_RULE,$\
 				$(MOUNT_TIKZDIR)/tikz_mount.$(c).$(fs).$(g).csv,$\
-				$(MOUNT_RESULTSDIR)/bench_mount.$(c).$(fs).$(g).csv,$\
-				$(MOUNT_P))))))
+				$(MOUNT_RESULTSDIR)/bench_mount.$(c).$(fs).$(g).csv)))))
 
 # ops tikz rule
 #
@@ -399,97 +391,53 @@ $(foreach c, $(BENCH_CASES), \
 define TIKZ_MOUNT_OPS_RULE
 $1: $2
 	$$(strip ./scripts/csv.py \
-		$(foreach probe, romount mount mountwrite, \
-			<(./scripts/csv.py $$^ \
-				-bPOWERLOSS -Dprobe='$(probe)+avg' \
-				-f$(probe)_avg_reads=bench_reads \
-					-f$(probe)_avg_wreads=bench_wreads \
-					-f$(probe)_avg_readed=bench_readed \
-				-f$(probe)_avg_progs=bench_progs \
-					-f$(probe)_avg_wprogs=bench_wprogs \
-					-f$(probe)_avg_progged=bench_progged \
-				-f$(probe)_avg_erases=bench_erases \
-					-f$(probe)_avg_werases=bench_werases \
-					-f$(probe)_avg_erased=bench_erased \
-				-f$(probe)_avg_readtime="$\
-					float($$$$($($(U_$3)_BENCH_RUNNER) \
-							-DDISK_GEOMETRY=$(N_$4) \
-							-QREAD_TIMING)*bench_reads \
-						+ $$$$($($(U_$3)_BENCH_RUNNER) \
-							-DDISK_GEOMETRY=$(N_$4) \
-							-QREAD_WTIMING)*bench_wreads \
-						+ $$$$($($(U_$3)_BENCH_RUNNER) \
-							-DDISK_GEOMETRY=$(N_$4) \
-							-QREAD_UTIMING)*bench_readed) \
-						/ 1.0e9" \
-				-f$(probe)_avg_progtime="$\
-					float($$$$($($(U_$3)_BENCH_RUNNER) \
-							-DDISK_GEOMETRY=$(N_$4) \
-							-QPROG_TIMING)*bench_progs \
-						+ $$$$($($(U_$3)_BENCH_RUNNER) \
-							-DDISK_GEOMETRY=$(N_$4) \
-							-QPROG_WTIMING)*bench_wprogs \
-						+ $$$$($($(U_$3)_BENCH_RUNNER) \
-							-DDISK_GEOMETRY=$(N_$4) \
-							-QPROG_UTIMING)*bench_progged) \
-						/ 1.0e9" \
-				-f$(probe)_avg_erasetime="$\
-					float($$$$($($(U_$3)_BENCH_RUNNER) \
-							-DDISK_GEOMETRY=$(N_$4) \
-							-QERASE_TIMING)*bench_erases \
-						+ $$$$($($(U_$3)_BENCH_RUNNER) \
-							-DDISK_GEOMETRY=$(N_$4) \
-							-QERASE_WTIMING)*bench_werases \
-						+ $$$$($($(U_$3)_BENCH_RUNNER) \
-							-DDISK_GEOMETRY=$(N_$4) \
-							-QERASE_UTIMING)*bench_erased) \
-						/ 1.0e9" \
-				-o-) \
-			<(./scripts/csv.py $$^ \
-				-bPOWERLOSS -Dprobe='$(probe)+max' \
-				-f$(probe)_max_reads=bench_reads \
-					-f$(probe)_max_wreads=bench_wreads \
-					-f$(probe)_max_readed=bench_readed \
-				-f$(probe)_max_progs=bench_progs \
-					-f$(probe)_max_wprogs=bench_wprogs \
-					-f$(probe)_max_progged=bench_progged \
-				-f$(probe)_max_erases=bench_erases \
-					-f$(probe)_max_werases=bench_werases \
-					-f$(probe)_max_erased=bench_erased \
-				-f$(probe)_max_readtime="$\
-					float($$$$($($(U_$3)_BENCH_RUNNER) \
-							-DDISK_GEOMETRY=$(N_$4) \
-							-QREAD_TIMING)*bench_reads \
-						+ $$$$($($(U_$3)_BENCH_RUNNER) \
-							-DDISK_GEOMETRY=$(N_$4) \
-							-QREAD_WTIMING)*bench_wreads \
-						+ $$$$($($(U_$3)_BENCH_RUNNER) \
-							-DDISK_GEOMETRY=$(N_$4) \
-							-QREAD_UTIMING)*bench_readed) \
-						/ 1.0e9" \
-				-f$(probe)_max_progtime="$\
-					float($$$$($($(U_$3)_BENCH_RUNNER) \
-							-DDISK_GEOMETRY=$(N_$4) \
-							-QPROG_TIMING)*bench_progs \
-						+ $$$$($($(U_$3)_BENCH_RUNNER) \
-							-DDISK_GEOMETRY=$(N_$4) \
-							-QPROG_WTIMING)*bench_wprogs \
-						+ $$$$($($(U_$3)_BENCH_RUNNER) \
-							-DDISK_GEOMETRY=$(N_$4) \
-							-QPROG_UTIMING)*bench_progged) \
-						/ 1.0e9" \
-				-f$(probe)_max_erasetime="$\
-					float($$$$($($(U_$3)_BENCH_RUNNER) \
-							-DDISK_GEOMETRY=$(N_$4) \
-							-QERASE_TIMING)*bench_erases \
-						+ $$$$($($(U_$3)_BENCH_RUNNER) \
-							-DDISK_GEOMETRY=$(N_$4) \
-							-QERASE_WTIMING)*bench_werases \
-						+ $$$$($($(U_$3)_BENCH_RUNNER) \
-							-DDISK_GEOMETRY=$(N_$4) \
-							-QERASE_UTIMING)*bench_erased) \
-						/ 1.0e9" \
-				-o-)) \
+		$(foreach op, romount mount mountwrite, \
+			$(foreach p, $(subst $(comma),$(space),$(MOUNT_P)), \
+				<(./scripts/csv.py $$^ \
+					-bPOWERLOSS -Dprobe='$(op)+$(p)' \
+					-f$(op)_$(subst .,$(nil),$(p))_reads=bench_reads \
+					-f$(op)_$(subst .,$(nil),$(p))_wreads=bench_wreads \
+					-f$(op)_$(subst .,$(nil),$(p))_readed=bench_readed \
+					-f$(op)_$(subst .,$(nil),$(p))_progs=bench_progs \
+					-f$(op)_$(subst .,$(nil),$(p))_wprogs=bench_wprogs \
+					-f$(op)_$(subst .,$(nil),$(p))_progged=bench_progged \
+					-f$(op)_$(subst .,$(nil),$(p))_erases=bench_erases \
+					-f$(op)_$(subst .,$(nil),$(p))_werases=bench_werases \
+					-f$(op)_$(subst .,$(nil),$(p))_erased=bench_erased \
+					-f$(op)_$(subst .,$(nil),$(p))_readtime="$\
+						float($$$$($($(U_$3)_BENCH_RUNNER) \
+								-DDISK_GEOMETRY=$(N_$4) \
+								-QREAD_TIMING)*bench_reads \
+							+ $$$$($($(U_$3)_BENCH_RUNNER) \
+								-DDISK_GEOMETRY=$(N_$4) \
+								-QREAD_WTIMING)*bench_wreads \
+							+ $$$$($($(U_$3)_BENCH_RUNNER) \
+								-DDISK_GEOMETRY=$(N_$4) \
+								-QREAD_UTIMING)*bench_readed) \
+							/ 1.0e9" \
+					-f$(op)_$(subst .,$(nil),$(p))_progtime="$\
+						float($$$$($($(U_$3)_BENCH_RUNNER) \
+								-DDISK_GEOMETRY=$(N_$4) \
+								-QPROG_TIMING)*bench_progs \
+							+ $$$$($($(U_$3)_BENCH_RUNNER) \
+								-DDISK_GEOMETRY=$(N_$4) \
+								-QPROG_WTIMING)*bench_wprogs \
+							+ $$$$($($(U_$3)_BENCH_RUNNER) \
+								-DDISK_GEOMETRY=$(N_$4) \
+								-QPROG_UTIMING)*bench_progged) \
+							/ 1.0e9" \
+					-f$(op)_$(subst .,$(nil),$(p))_erasetime="$\
+						float($$$$($($(U_$3)_BENCH_RUNNER) \
+								-DDISK_GEOMETRY=$(N_$4) \
+								-QERASE_TIMING)*bench_erases \
+							+ $$$$($($(U_$3)_BENCH_RUNNER) \
+								-DDISK_GEOMETRY=$(N_$4) \
+								-QERASE_WTIMING)*bench_werases \
+							+ $$$$($($(U_$3)_BENCH_RUNNER) \
+								-DDISK_GEOMETRY=$(N_$4) \
+								-QERASE_UTIMING)*bench_erased) \
+							/ 1.0e9" \
+					-o-))) \
 		-bPOWERLOSS \
 		-o$$@)
 endef
@@ -515,14 +463,17 @@ define TIKZ_MOUNT_WORK_RULE
 $1: $2
 	$$(strip ./scripts/csv.py \
 		$(foreach w, mount mkconsistent open alloc_ write_ sync_, \
-			<(./scripts/csv.py $$^ \
-				-bPOWERLOSS -Dprobe='$(w)+avg' \
-				-fmountwrite_avg_$(subst _,$(nil),$(w))time='bench_t/1.0e9' \
-				-o-) \
-			<(./scripts/csv.py $$^ \
-				-bPOWERLOSS -Dprobe='$(w)+max(mountwrite)' \
-				-fmountwrite_max_$(subst _,$(nil),$(w))time='bench_t/1.0e9' \
-				-o-)) \
+			$(foreach p, $(subst $(comma),$(space),$(MOUNT_P)), \
+				<(./scripts/csv.py $$^ \
+					-bPOWERLOSS \
+					-Dprobe='$(w)+$(if $(filter avg,$(p)),$\
+						avg,$\
+						$(p)(mountwrite))' \
+					-fmountwrite$\
+							_$(subst .,$(nil),$(p))$\
+							_$(subst _,$(nil),$(w))time=$\
+						'float(bench_t)/1.0e9' \
+					-o-))) \
 		-bPOWERLOSS \
 		-o$$@)
 endef
