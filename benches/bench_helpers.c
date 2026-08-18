@@ -120,6 +120,7 @@ int bench_helpers_warmup(const struct lfs3_cfg *cfg, void *fs) {
 int bench_helpers_populate(const struct lfs3_cfg *cfg, void *fs,
         lfs3_off_t static_count, lfs3_off_t static_size,
         bool static_compact) {
+    (void)static_compact;
     char nbuf[256];
     uint8_t *wbuf = malloc(static_size);
     memset(wbuf, 's', static_size);
