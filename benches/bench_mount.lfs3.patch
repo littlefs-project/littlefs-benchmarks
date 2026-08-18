@@ -1,0 +1,79 @@
+diff --git a/lfs3.c b/lfs3.c
+index 3e054bb3..94d786b2 100644
+--- a/lfs3.c
++++ b/lfs3.c
+@@ -12882,6 +12882,8 @@ static int lfs3_alloc_lookgbmap(lfs3_t *lfs3);
+ // blocks are allocated at most once, and never reallocated, between
+ // checkpoints
+ #ifndef LFS3_RDONLY
++extern void __bench_mount_alloc_start(void);
++extern void __bench_mount_alloc_stop(void);
+ static inline int lfs3_alloc_ckpoint(lfs3_t *lfs3) {
+     // checkpoint the lookahead buffer
+     lfs3_alloc_ckpoint_(lfs3);
+@@ -12895,10 +12897,13 @@ static inline int lfs3_alloc_ckpoint(lfs3_t *lfs3) {
+                     lfs3->cfg->lookgbmap_thresh+1,
+                     lfs3->block_count)) {
+         // traverse and repopulate the gbmap
++        __bench_mount_alloc_start();
+         int err = lfs3_alloc_lookgbmap(lfs3);
+         if (err) {
++            __bench_mount_alloc_stop();
+             return err;
+         }
++        __bench_mount_alloc_stop();
+ 
+         // checkpoint the allocator again
+         lfs3_alloc_ckpoint_(lfs3);
+@@ -13343,8 +13348,11 @@ static lfs3_sblock_t lfs3_alloc__(lfs3_t *lfs3, uint32_t flags,
+ 
+ // alloc and optionally erase a block
+ #ifndef LFS3_RDONLY
++extern void __bench_mount_alloc_start(void);
++extern void __bench_mount_alloc_stop(void);
+ static lfs3_sblock_t lfs3_alloc_(lfs3_t *lfs3, uint32_t flags,
+         lfs3_ecksum_t *ecksum_) {
++    __bench_mount_alloc_start();
+     // we need ecksum to be non-null here, hey this is an internal
+     // API anyways
+     #ifdef LFS3_PREERASE
+@@ -13355,6 +13363,7 @@ static lfs3_sblock_t lfs3_alloc_(lfs3_t *lfs3, uint32_t flags,
+         lfs3_sblock_t block = lfs3_alloc__(lfs3, flags,
+                 ecksum_);
+         if (block < 0) {
++            __bench_mount_alloc_stop();
+             return block;
+         }
+ 
+@@ -13377,6 +13386,7 @@ static lfs3_sblock_t lfs3_alloc_(lfs3_t *lfs3, uint32_t flags,
+                 // check ecksum
+                 int err = lfs3_ecksum_ck(lfs3, ecksum_, block, 0);
+                 if (err && err != LFS3_ERR_CORRUPT) {
++                    __bench_mount_alloc_stop();
+                     return err;
+                 }
+ 
+@@ -13389,6 +13399,7 @@ static lfs3_sblock_t lfs3_alloc_(lfs3_t *lfs3, uint32_t flags,
+                             lfs3->lookahead.known,
+                             lfs3->block_count);
+                     #endif
++                    __bench_mount_alloc_stop();
+                     return block;
+                 }
+ 
+@@ -13404,6 +13415,7 @@ static lfs3_sblock_t lfs3_alloc_(lfs3_t *lfs3, uint32_t flags,
+                 if (err == LFS3_ERR_CORRUPT) {
+                     continue;
+                 }
++                __bench_mount_alloc_stop();
+                 return err;
+             }
+         }
+@@ -13415,6 +13427,7 @@ static lfs3_sblock_t lfs3_alloc_(lfs3_t *lfs3, uint32_t flags,
+                 lfs3->lookahead.known,
+                 lfs3->block_count);
+         #endif
++        __bench_mount_alloc_stop();
+         return block;
+     }
+ }
