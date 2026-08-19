@@ -60,14 +60,11 @@ defines.POWERLOSS_NOISE = false
 # 3 => at least force a log-rotate, this avoids corrupt logs getting
 #      stuck without losing data
 defines.POWERLOSS_CHECK = 2
-# how many times to try checking before giving up on this bench run
-defines.POWERLOSS_CHECKABORTTHRESH = 10
-defines.POWERLOSS_CHECKABORTASSERT = false
 # 0 => try to keep writing to log after an error
 # 1 => immediately rotate log after an error
 # 2 => just remove log after an error
 # 3 => rename log to *.trash, note this risks space issues
-defines.POWERLOSS_CHECKROTATE = 1
+defines.POWERLOSS_CHECKROTATE = 2
 
 # how long before powerloss/shutdown, we choose a uniform number of
 # nanoseconds between these
@@ -84,6 +81,11 @@ defines.POWER_WAITFORMOUNT = 2
 # increase POWER_MAXTIME or POWER_MAXPROGS
 defines.POWER_STUCKTHRESH = 10
 defines.POWER_STUCKASSERT = true
+# abort if we do not make progress at all for this amount of time
+defines.POWER_ABORTMAXTIME = '''
+        60ULL*60ULL*1000ULL*1000ULL*1000ULL''' # 1 hour
+defines.POWER_ABORTMAXPROGS = 0
+defines.POWER_ABORTASSERT = false
 
 if = [
     # spiffs is limited to 32-bit disks
@@ -112,8 +114,10 @@ code = '''
     // run timing for simulated powerloss
     bench_sns_t bench_mount_starttime;
     bench_sns_t bench_mount_stoptime;
+    bench_sns_t bench_mount_aborttime;
     int64_t bench_mount_startprogs;
     int64_t bench_mount_stopprogs;
+    int64_t bench_mount_abortprogs;
 
     // optional alloc timing
     bench_ns_t bench_mount_alloc_simtime;
@@ -124,8 +128,10 @@ code = '''
         bench_mount_progs = 0;
         bench_mount_starttime = -1;
         bench_mount_stoptime = -1;
+        bench_mount_aborttime = -1;
         bench_mount_startprogs = -1;
         bench_mount_stopprogs = -1;
+        bench_mount_abortprogs = -1;
 
         bench_mount_alloc_simtime = 0;
         bench_mount_alloc_starttime = 0;
@@ -149,9 +155,32 @@ code = '''
                 += BENCH_SIMTIME() - bench_mount_alloc_starttime;
     }
 
+    void bench_mount_bd_maybeabort(void) {
+        // time to abort? :(
+        if ((bench_mount_aborttime != -1
+                    && BENCH_SIMTIME() >= bench_mount_aborttime)
+                || (bench_mount_abortprogs != -1
+                    && bench_mount_progs > bench_mount_abortprogs)) {
+            LFS3_ERROR("abort. t=%"PRId64", p=%"PRId64", aborting... :(",
+                    (bench_mount_aborttime != -1)
+                        ? BENCH_SIMTIME()-bench_mount_starttime
+                        : -1,
+                    (bench_mount_abortprogs != -1)
+                        ? bench_mount_progs-bench_mount_startprogs
+                        : -1);
+            if (POWER_ABORTASSERT) {
+                assert(false);
+            }
+            longjmp(bench_mount_jmp, 2);
+        }
+    }
+
     // hook read
     int bench_mount_bd_read(const struct lfs3_cfg *cfg, lfs3_block_t block,
             lfs3_off_t off, void *buffer, lfs3_size_t size) {
+        // time to abort?
+        bench_mount_bd_maybeabort();
+
         // time for powerloss?
         if (POWERLOSS
                 && !POWERLOSS_PROGONLY
@@ -172,6 +201,9 @@ code = '''
     // interesting under powerloss
     int bench_mount_bd_prog(const struct lfs3_cfg *cfg, lfs3_block_t block,
             lfs3_off_t off, const void *buffer, lfs3_size_t size) {
+        // time to abort?
+        bench_mount_bd_maybeabort();
+
         // time for powerloss?
         if (POWERLOSS
                 && ((bench_mount_stoptime != -1
@@ -200,6 +232,9 @@ code = '''
 
     // hook erase
     int bench_mount_bd_erase(const struct lfs3_cfg *cfg, lfs3_block_t block) {
+        // time to abort?
+        bench_mount_bd_maybeabort();
+
         // time for powerloss?
         if (POWERLOSS
                 && !POWERLOSS_PROGONLY
@@ -390,7 +425,10 @@ code = '''
     volatile uint64_t stuck_before = -1;
     volatile uint64_t stuck_after = 0;
     ///////////// this is where we end up after powerloss /////////////
-    setjmp(bench_mount_jmp);
+    int abort = setjmp(bench_mount_jmp);
+    if (abort == 2) {
+        return;
+    }
     /////////////                                         /////////////
     BENCH_ABORT("romount");
     BENCH_ABORT("mountwrite");
@@ -451,24 +489,33 @@ code = '''
             || (SIM_TIME && BENCH_SIMTIME() < SIM_TIME)) {
         // reset progs
         bench_mount_reset();
+        bench_mount_starttime = BENCH_SIMTIME();
+        bench_mount_startprogs = 0;
         // how long to run this loop?
         if (POWER_WAITFORMOUNT == 0
                 || (POWER_WAITFORMOUNT == 2
                     && stuck < (uint64_t)POWER_STUCKTHRESH)) {
             if (POWER_MINTIME || POWER_MAXTIME) {
-                bench_mount_starttime = BENCH_SIMTIME();
                 bench_mount_stoptime = bench_mount_starttime
                         + POWER_MINTIME
                         + ((0x100010001ULL * BENCH_PRNG(&prng))
                             % (POWER_MAXTIME+1 - POWER_MINTIME));
             }
             if (POWER_MINPROGS || POWER_MAXPROGS) {
-                bench_mount_startprogs = 0;
                 bench_mount_stopprogs = bench_mount_startprogs
                         + POWER_MINPROGS
                         + (BENCH_PRNG(&prng)
                             % (POWER_MAXPROGS+1 - POWER_MINPROGS));
             }
+        }
+        // how long before aborting?
+        if (POWER_ABORTMAXTIME) {
+            bench_mount_aborttime = bench_mount_starttime
+                    + POWER_ABORTMAXTIME;
+        }
+        if (POWER_ABORTMAXPROGS) {
+            bench_mount_abortprogs = bench_mount_startprogs
+                    + POWER_ABORTMAXPROGS;
         }
 
         // increment mounts
@@ -532,7 +579,6 @@ code = '''
         #if defined(SPIFFS)
         // spiffs only: needs_check gets set to true if we hit an error
         bool needs_check = false;
-        uint64_t checks = 0;
     remount_and_check:;
         #endif
         BENCH_START("mount");
@@ -587,39 +633,65 @@ code = '''
         //
         // note this takes literally forever, see above
         if (POWERLOSS && (POWERLOSS_CHECK == 1 || needs_check)) {
-            checks += 1;
-            if (POWERLOSS_CHECKABORTTHRESH
-                    && checks >= (uint64_t)POWERLOSS_CHECKABORTTHRESH) {
-                LFS3_ERROR("spiffs: check failed (%"PRIu64"/%"PRIu64"), "
-                        "aborting...");
-                if (POWERLOSS_CHECKABORTASSERT) {
-                    assert(checks < POWERLOSS_CHECKABORTTHRESH);
-                }
-                return;
-            }
             BENCH_START("mkconsistent");
-            LFS3_WARN("spiffs: checking (%"PRIu64"/%"PRIu64")...",
-                    checks, POWERLOSS_CHECKABORTTHRESH);
             SPIFFS_check(&spiffs) => 0;
             // immediately rotate log after an error?
             if (needs_check && POWERLOSS_CHECKROTATE == 1) {
                 int err = SPIFFS_remove(&spiffs, "bench_log.1");
-                assert(!err || err == SPIFFS_ERR_NOT_FOUND);
+                if (err && err != SPIFFS_ERR_NOT_FOUND) {
+                    LFS3_ERROR("spiffs: nested SPIFFS_check error (%d), "
+                                "aborting... :(",
+                            err);
+                    if (POWER_ABORTASSERT) {
+                        assert(false);
+                    }
+                    return;
+                }
                 err = SPIFFS_rename(&spiffs, "bench_log", "bench_log.1");
-                assert(!err || err == SPIFFS_ERR_NOT_FOUND);
+                if (err && err != SPIFFS_ERR_NOT_FOUND) {
+                    LFS3_ERROR("spiffs: nested SPIFFS_check error (%d), "
+                                "aborting... :(",
+                            err);
+                    if (POWER_ABORTASSERT) {
+                        assert(false);
+                    }
+                    return;
+                }
             // remove log after an error?
             } else if (needs_check && POWERLOSS_CHECKROTATE == 2) {
                 int err = SPIFFS_remove(&spiffs, "bench_log");
-                assert(!err || err == SPIFFS_ERR_NOT_FOUND);
+                if (err && err != SPIFFS_ERR_NOT_FOUND) {
+                    LFS3_ERROR("spiffs: nested SPIFFS_check error (%d), "
+                                "aborting... :(",
+                            err);
+                    if (POWER_ABORTASSERT) {
+                        assert(false);
+                    }
+                    return;
+                }
             // move log to trash after an error?
             } else if (needs_check && POWERLOSS_CHECKROTATE == 3) {
                 int err = SPIFFS_remove(&spiffs, "bench_log.trash");
-                assert(!err || err == SPIFFS_ERR_NOT_FOUND);
+                if (err && err != SPIFFS_ERR_NOT_FOUND) {
+                    LFS3_ERROR("spiffs: nested SPIFFS_check error (%d), "
+                                "aborting... :(",
+                            err);
+                    if (POWER_ABORTASSERT) {
+                        assert(false);
+                    }
+                    return;
+                }
                 err = SPIFFS_rename(&spiffs, "bench_log", "bench_log.trash");
-                assert(!err || err == SPIFFS_ERR_NOT_FOUND);
+                if (err && err != SPIFFS_ERR_NOT_FOUND) {
+                    LFS3_ERROR("spiffs: nested SPIFFS_check error (%d), "
+                                "aborting... :(",
+                            err);
+                    if (POWER_ABORTASSERT) {
+                        assert(false);
+                    }
+                    return;
+                }
             }
-            // don't reset checks on success, we may still be stuck in a
-            // check loop
             needs_check = false;
             mkconsistented = true;
             BENCH_STOP("mkconsistent", mounts);
@@ -728,19 +800,22 @@ code = '''
                 BENCH_STOP("mountwrite", mounts);
                 mountwriting = false;
 
+                // cancel abort
+                bench_mount_starttime = BENCH_SIMTIME();
+                bench_mount_startprogs = 0;
+                bench_mount_aborttime = -1;
+                bench_mount_abortprogs = -1;
                 // how long to run this loop?
                 if (POWER_WAITFORMOUNT == 1
                         || (POWER_WAITFORMOUNT == 2
                             && stuck >= (uint64_t)POWER_STUCKTHRESH)) {
                     if (POWER_MINTIME || POWER_MAXTIME) {
-                        bench_mount_starttime = BENCH_SIMTIME();
                         bench_mount_stoptime = bench_mount_starttime
                                 + POWER_MINTIME
                                 + ((0x100010001ULL * BENCH_PRNG(&prng))
                                     % (POWER_MAXTIME+1 - POWER_MINTIME));
                     }
                     if (POWER_MINPROGS || POWER_MAXPROGS) {
-                        bench_mount_startprogs = 0;
                         bench_mount_stopprogs = bench_mount_startprogs
                                 + POWER_MINPROGS
                                 + (BENCH_PRNG(&prng)
