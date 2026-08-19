@@ -4,6 +4,12 @@ CODEMAPS_MK := 1
 # this extends the build makefile
 include Makefiles/build.mk
 
+# overrideable codemaps dir
+CODEMAPSDIR ?= $(PLOTSDIR)/codemaps
+
+# default codemaps filesystems to size filesystems
+CODEMAP_FILESYSTEMS ?= $(DEFAULT_SIZE_FILESYSTEMS)
+
 
 # give some of the bigger subsystems explicit colors, to help with
 # comparisons and to avoid similarly colored neighbors
@@ -25,6 +31,16 @@ CODEMAP_COLORS += -C'lfs*_fs=$(C_BROWN)'
 CODEMAP_COLORS += -C'lfs*_bd=$(C_GRAY)'
 
 
+# this is a bit of a hack, but we want to make sure the BUILDDIR
+# directory structure is correct before we run any commands
+ifneq ($(CODEMAPSDIR),.)
+$(if $(findstring n,$(MAKEFLAGS)),, \
+		$(foreach d, \
+				$(CODEMAPSDIR), \
+            $(if $(wildcard $d),, $(shell mkdir -p $d))))
+endif
+
+
 #======================================================================#
 # codemap rules                                                        #
 #======================================================================#
@@ -35,20 +51,20 @@ all: codemap codemaps
 codemap codemaps: \
 		$(CODEMAPSDIR)/codemaps.html \
 		$(CODEMAPSDIR)/codemaps_tiny.html \
-		$(foreach fs, $(SIZE_FILESYSTEMS), \
+		$(foreach fs, $(CODEMAP_FILESYSTEMS), \
 			$(CODEMAPSDIR)/codemap_$(fs).svg \
 			$(CODEMAPSDIR)/codemap_$(fs)_tiny.svg)
 
 ## Create a quick html page for easy viewing
 $(CODEMAPSDIR)/codemaps.html:
 	echo -e "$(subst $(nl),\n,$(HTML_HEADER))" >> $@
-	$(foreach fs, $(SIZE_FILESYSTEMS), \
+	$(foreach fs, $(CODEMAP_FILESYSTEMS), \
 		echo -e "<p><img src="codemap_$(fs).svg"></p>" >> $@ $(nl))
 	echo -e "$(subst $(nl),\n,$(HTML_FOOTER))" >> $@
 
 $(CODEMAPSDIR)/codemaps_tiny.html:
 	echo -e "$(subst $(nl),\n,$(HTML_HEADER))" >> $@
-	$(foreach fs, $(SIZE_FILESYSTEMS), \
+	$(foreach fs, $(CODEMAP_FILESYSTEMS), \
 		echo -e "<p><img src="codemap_$(fs)_tiny.svg"></p>" >> $@ $(nl))
 	echo -e "$(subst $(nl),\n,$(HTML_FOOTER))" >> $@
 
@@ -89,14 +105,14 @@ $1: $2
 endef
 
 # codemap rules
-$(foreach fs, $(SIZE_FILESYSTEMS),$\
+$(foreach fs, $(CODEMAP_FILESYSTEMS),$\
 	$(eval $(call CODEMAP_RULE,$\
 			$(CODEMAPSDIR)/codemap_$(fs).svg,$\
 			$($(U_$(fs))_OBJ) $($(U_$(fs))_CI),$\
 			$(fs))))
 
 # tiny codemap rules
-$(foreach fs, $(SIZE_FILESYSTEMS),$\
+$(foreach fs, $(CODEMAP_FILESYSTEMS),$\
 	$(eval $(call CODEMAP_TINY_RULE,$\
 			$(CODEMAPSDIR)/codemap_$(fs)_tiny.svg,$\
 			$($(U_$(fs))_OBJ) $($(U_$(fs))_CI),$\
@@ -111,8 +127,8 @@ $(foreach fs, $(SIZE_FILESYSTEMS),$\
 .PHONY: save save-codemaps
 save: save-codemaps
 save-codemaps:
-	mkdir -p $(SAVEDIR)/
-	cp -ru $(CODEMAPSDIR) $(SAVEDIR)/
+	mkdir -p $(SAVEDIR)/$(PLOTSDIR)/
+	cp -ru $(CODEMAPSDIR) $(SAVEDIR)/$(PLOTSDIR)/
 
 
 #======================================================================#

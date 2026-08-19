@@ -15,8 +15,6 @@ else
     BUILDDIR ?= build
   endif
 endif
-# overrideable codemaps dir, defaults to ./codemaps
-CODEMAPSDIR ?= codemaps
 # overrideable results dir, default to ./results
 RESULTSDIR ?= results
 # overrideable plots dir, defaults ./plots
@@ -238,7 +236,6 @@ ifneq ($(BUILDDIR),.)
 $(if $(findstring n,$(MAKEFLAGS)),, \
 		$(foreach d, \
 				$(BUILDDIR) \
-				$(CODEMAPSDIR) \
 				$(RESULTSDIR) \
 				$(PLOTSDIR) \
 				$(TIKZDIR), \
