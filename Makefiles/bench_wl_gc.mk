@@ -353,7 +353,11 @@ all tikz tikz-wl-gc: \
         $(foreach c, $(BENCH_CASES), \
             $(foreach fs, $(BENCH_FILESYSTEMS), \
                 $(foreach g, $(BENCH_GEOMETRIES), \
-                    $(WL_GC_TIKZDIR)/tikz_wl_gc_cdf.$(c).$(fs).$(g).csv)))
+                    $(WL_GC_TIKZDIR)/tikz_wl_gc_cdf.$(c).$(fs).$(g).csv))) \
+        $(foreach c, $(BENCH_CASES), \
+            $(foreach fs, $(BENCH_FILESYSTEMS), \
+                $(foreach g, $(BENCH_GEOMETRIES), \
+                    $(WL_GC_TIKZDIR)/tikz_wl_gc_hits.$(c).$(fs).$(g).csv))) \
 
 # core tikz rule
 #
@@ -496,6 +500,27 @@ $(foreach c, $(BENCH_CASES), \
 		$(foreach g, $(BENCH_GEOMETRIES), \
 			$(eval $(call TIKZ_WL_GC_CDF_RULE,$\
 				$(WL_GC_TIKZDIR)/tikz_wl_gc_cdf.$(c).$(fs).$(g).csv,$\
+				$(WL_GC_RESULTSDIR)/bench_wl_gc.$(c).$(fs).$(g).csv)))))
+
+# hits tikz rule
+#
+# $1 - target
+# $2 - source
+#
+define TIKZ_WL_GC_HITS_RULE
+$1: $2
+	$$(strip ./scripts/csv.py $$^ \
+		-bGC -Dprobe=write \
+		-fhits=bench_hits \
+		-o$$@)
+endef
+
+# hits tikz rules
+$(foreach c, $(BENCH_CASES), \
+	$(foreach fs, $(BENCH_FILESYSTEMS), \
+		$(foreach g, $(BENCH_GEOMETRIES), \
+			$(eval $(call TIKZ_WL_GC_HITS_RULE,$\
+				$(WL_GC_TIKZDIR)/tikz_wl_gc_hits.$(c).$(fs).$(g).csv,$\
 				$(WL_GC_RESULTSDIR)/bench_wl_gc.$(c).$(fs).$(g).csv)))))
 
 
