@@ -258,6 +258,7 @@ PHONY: ;
 comma := ,
 nil :=
 space := $(nil) $(nil)
+tab := $(nil)	$(nil)
 define nl
 
 
