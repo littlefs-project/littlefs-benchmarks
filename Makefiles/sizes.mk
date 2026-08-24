@@ -199,6 +199,16 @@ $1: $($(U_$2)_OBJ) $($(U_$2)_CI)
 				-bfunction -o-) \
 			<(./scripts/stack.py $($(U_$2)_CI) \
 				-bfunction -o-) \
+			<(./scripts/stack.py $($(U_$2)_CI) \
+				-bfunction -Dfunction=$$$$( \
+					./scripts/stack.py $($(U_$2)_CI) \
+						-s | awk 'NR==2 {print $$$$1}') \
+				--no-header --no-total \
+				| awk '$\
+					BEGIN {OFS=","; $\
+						print "function","stack_dframe","stack_dlimit"} $\
+					NR>1 {OFS=" "; $$$$1=""; $$$$0=$$$$0} $\
+					{OFS=","; print $$$$1,$$$$2,$$$$3}') \
 			<(./scripts/ctx.py $($(U_$2)_OBJ) \
 				-bfunction -o-) \
 			-bi=$(I_$2) -bfs=$2 -bfunction -o-) \
@@ -207,6 +217,8 @@ $1: $($(U_$2)_OBJ) $($(U_$2)_CI)
 		-fdata=data_size \
 		-fstack='max(stack_limit)' \
 		-fframe='stack_frame' \
+		-fdstack='max(stack_dlimit)' \
+		-fdframe='stack_dframe' \
 		-fctx='max(ctx_size)' \
 		-o$$@)
 endef
@@ -232,6 +244,17 @@ $1: $($(U_$2)_OBJ) $($(U_$2)_CI)
 					-bfunction -o-) \
 				<(./scripts/stack.py $($(U_$2)_CI) \
 					-bfunction -o-) \
+				<(./scripts/stack.py $($(U_$2)_CI) \
+					-bfunction -r \
+					-Dfunction=$$$$( \
+						./scripts/stack.py $($(U_$2)_CI) \
+							-s | awk 'NR==2 {print $$$$1}') \
+					--no-header --no-total \
+					| awk '$\
+						BEGIN {OFS=","; $\
+							print "function","stack_zframe","stack_zlimit"} $\
+						NR>1 {OFS=" "; $$$$1=""; $$$$0=$$$$0} $\
+						{OFS=","; print $$$$1,$$$$2,$$$$3}') \
 				<(./scripts/ctx.py $($(U_$2)_OBJ) \
 					-bfunction -o-) \
 				-bi=$(I_$2) -bfs=$2 -bfunction -o- \
@@ -243,6 +266,8 @@ $1: $($(U_$2)_OBJ) $($(U_$2)_CI)
 		-fdata=data_size \
 		-fstack='max(stack_limit)' \
 		-fframe='stack_frame' \
+		-fzstack='max(stack_zlimit)' \
+		-fzframe='stack_zframe' \
 		-fctx='max(ctx_size)' \
 		-o$$@)
 endef
