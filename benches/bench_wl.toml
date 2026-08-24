@@ -39,6 +39,11 @@ defines.GC_TIME = 0
 # should we force ongoing gc work to abort?
 defines.GC_INTERRUPT = false
 
+# an optional slice of time to inspect
+defines.LITMUS_START = 0 # '1ULL*1000ULL*1000ULL*1000ULL' # 1 second
+defines.LITMUS_STOP  = 'LITMUS_START + LITMUS_SIZE'
+defines.LITMUS_SIZE  = 0 # '1ULL*1000ULL*1000ULL*1000ULL' # 1 second
+
 # spiffs is limited to 32-bit disks
 if = 'BENCH_IFDEF_SPIFFS(DISK_SIZE < 0x100000000ULL, true)'
 
@@ -303,6 +308,12 @@ code = '''
             BENCH_STOP("gc", written);
         }
 
+        bool litmus = (LITMUS_STOP
+                && BENCH_SIMTIME() >= LITMUS_START
+                && BENCH_SIMTIME() < LITMUS_STOP);
+        if (litmus) {
+            BENCH_START("lwrite");
+        }
         BENCH_START("write");
         // arguably we should just rewind and continue writing to the
         // front of the file when we hit the end, but this overly
@@ -341,6 +352,9 @@ code = '''
         size += CHUNK;
         written += CHUNK;
         BENCH_STOP("write", written);
+        if (litmus) {
+            BENCH_STOP("lwrite", BENCH_SIMTIME());
+        }
     }
     #if defined(LFS3)
     lfs3_file_close(&lfs3, &file) => 0;
@@ -554,6 +568,12 @@ code = '''
             BENCH_STOP("gc", written);
         }
 
+        bool litmus = (LITMUS_STOP
+                && BENCH_SIMTIME() >= LITMUS_START
+                && BENCH_SIMTIME() < LITMUS_STOP);
+        if (litmus) {
+            BENCH_START("lwrite");
+        }
         BENCH_START("write");
         // seek to a random location
         lfs3_off_t pos = BENCH_PRNG(&prng) % SIZE;
@@ -591,6 +611,9 @@ code = '''
         size = lfs3_max(size, pos + CHUNK);
         written += CHUNK;
         BENCH_STOP("write", written);
+        if (litmus) {
+            BENCH_STOP("lwrite", BENCH_SIMTIME());
+        }
     }
     #if defined(LFS3)
     lfs3_file_close(&lfs3, &file) => 0;
@@ -870,6 +893,12 @@ code = '''
             BENCH_STOP("gc", written);
         }
 
+        bool litmus = (LITMUS_STOP
+                && BENCH_SIMTIME() >= LITMUS_START
+                && BENCH_SIMTIME() < LITMUS_STOP);
+        if (litmus) {
+            BENCH_START("lwrite");
+        }
         BENCH_START("write");
         // fruncate/rotate logs if needed
         //
@@ -962,6 +991,9 @@ code = '''
 
         written += CHUNK;
         BENCH_STOP("write", written);
+        if (litmus) {
+            BENCH_STOP("lwrite", BENCH_SIMTIME());
+        }
     }
     #if defined(LFS3)
     lfs3_file_close(&lfs3, &file) => 0;
@@ -1158,6 +1190,12 @@ code = '''
             BENCH_STOP("gc", written);
         }
 
+        bool litmus = (LITMUS_STOP
+                && BENCH_SIMTIME() >= LITMUS_START
+                && BENCH_SIMTIME() < LITMUS_STOP);
+        if (litmus) {
+            BENCH_START("lwrite");
+        }
         BENCH_START("write");
         // choose a random filename
         lfs3_off_t pos = BENCH_PRNG(&prng) % ((SIZE+(CHUNK-1))/CHUNK);
@@ -1215,6 +1253,9 @@ code = '''
 
         written += CHUNK;
         BENCH_STOP("write", written);
+        if (litmus) {
+            BENCH_STOP("lwrite", BENCH_SIMTIME());
+        }
     }
 
     // report the total stack/heap usage after the benchmark

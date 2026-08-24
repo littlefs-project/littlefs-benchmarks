@@ -78,6 +78,7 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		$(foreach p, $(subst $(comma),$(space),$(or $5,$(WL_GC_P))),$\
 			-Sgc=$(p)) \
 		-Swrite=cdf1000 -Sgc=cdf1000 \
+		-DLITMUS_START=60000000000 -DLITMUS_SIZE=60000000000 -Slwrite=1+delta \
 		-DGC=$(or $6,$(WL_GC_GC)) \
 		-o$$@)
 endef
@@ -354,6 +355,12 @@ all tikz tikz-wl-gc: \
             $(foreach fs, $(BENCH_FILESYSTEMS), \
                 $(foreach g, $(BENCH_GEOMETRIES), \
                     $(WL_GC_TIKZDIR)/tikz_wl_gc_cdf.$(c).$(fs).$(g).csv))) \
+		$(foreach gc, ngc ygc, \
+			$(foreach c, $(BENCH_CASES), \
+				$(foreach fs, $(BENCH_FILESYSTEMS), \
+					$(foreach g, $(BENCH_GEOMETRIES), \
+						$(WL_GC_TIKZDIR)/tikz_wl_gc_litmus_$(gc)$\
+							.$(c).$(fs).$(g).csv)))) \
         $(foreach c, $(BENCH_CASES), \
             $(foreach fs, $(BENCH_FILESYSTEMS), \
                 $(foreach g, $(BENCH_GEOMETRIES), \
@@ -501,6 +508,33 @@ $(foreach c, $(BENCH_CASES), \
 			$(eval $(call TIKZ_WL_GC_CDF_RULE,$\
 				$(WL_GC_TIKZDIR)/tikz_wl_gc_cdf.$(c).$(fs).$(g).csv,$\
 				$(WL_GC_RESULTSDIR)/bench_wl_gc.$(c).$(fs).$(g).csv)))))
+
+# litmus tikz rule
+#
+# $1 - target
+# $2 - source
+# $3 - ngc/ygc
+#
+define TIKZ_WL_GC_LITMUS_RULE
+$1: $2
+	$$(strip ./scripts/csv.py $$^ \
+		-DGC=$(if $(filter ygc,$3),1,0) \
+		-Dprobe='lwrite+delta' \
+		-bt -ft='(float(bench_n)-float(bench_t))/1.0e9' \
+		-flatency='float(bench_t)/1.0e9' \
+		-o$$@)
+endef
+
+# litmus tikz rules
+$(foreach gc, ngc ygc, \
+	$(foreach c, $(BENCH_CASES), \
+		$(foreach fs, $(BENCH_FILESYSTEMS), \
+			$(foreach g, $(BENCH_GEOMETRIES), \
+				$(eval $(call TIKZ_WL_GC_LITMUS_RULE,$\
+					$(WL_GC_TIKZDIR)/tikz_wl_gc_litmus_$(gc)$\
+						.$(c).$(fs).$(g).csv,$\
+					$(WL_GC_RESULTSDIR)/bench_wl_gc.$(c).$(fs).$(g).csv,$\
+					$(gc)))))))
 
 # hits tikz rule
 #
