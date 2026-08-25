@@ -13,7 +13,9 @@ WT_R_TIKZDIR ?= $(TIKZDIR)/wt_r
 
 
 # range of block recycles to bench
-WT_R_BLOCK_RECYCLES ?= 0,1,2,4,8,16,32,64,128,256,512,1024
+# avoid power-of-two? aliasing issues?
+#WT_R_BLOCK_RECYCLES ?= 0,1,2,4,8,16,32,64,128,256,512,1024
+WT_R_BLOCK_RECYCLES ?= 0,1,2,5,7,10,25,50,75,100,250,500,750,1000
 
 
 # we don't need to bench all the filesystems

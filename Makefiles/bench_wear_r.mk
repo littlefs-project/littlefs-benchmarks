@@ -13,7 +13,9 @@ WEAR_R_TIKZDIR ?= $(TIKZDIR)/wear_r
 
 
 # range of block recycles to bench
-WEAR_R_BLOCK_RECYCLES ?= 0,1,2,4,8,16,32,64,128,256,512,1024
+# avoid power-of-two? aliasing issues?
+#WEAR_R_BLOCK_RECYCLES ?= 0,1,2,4,8,16,32,64,128,256,512,1024
+WEAR_R_BLOCK_RECYCLES ?= 0,1,2,5,7,10,25,50,75,100,250,500,750,1000
 
 
 # we don't need to bench all the filesystems
