@@ -22,7 +22,7 @@ WEAR_R_BLOCK_RECYCLES ?= 0,1,2,5,7,10,25,50,75,100,250,500,750,1000
 BENCH_FILESYSTEMS ?= lfs3 # $(DEFAULT_LFS3_FILESYSTEMS)
 
 # and we're interested in some of the more atypical disk geometries
-BENCH_GEOMETRIES ?= nor nand emmc # $(DEFAULT_BENCH_GEOMETRIES)
+BENCH_GEOMETRIES ?= nor nand nandftl # $(DEFAULT_BENCH_GEOMETRIES)
 
 # list of interesting bench cases
 BENCH_CASES ?= logging # seq random logging many

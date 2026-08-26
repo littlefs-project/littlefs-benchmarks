@@ -35,7 +35,7 @@ WT_DS_LGBP_LOOKGBMAP_THRESHES ?= -1,0,4,8,16,32,64,128,256,512,768
 BENCH_FILESYSTEMS ?= lfs3 lfs3gbp # $(DEFAULT_BENCH_FILESYSTEMS)
 
 # and we're interested in some of the more atypical disk geometries
-BENCH_GEOMETRIES ?= nor nand emmc # $(DEFAULT_BENCH_GEOMETRIES)
+BENCH_GEOMETRIES ?= nor nand nandftl # $(DEFAULT_BENCH_GEOMETRIES)
 
 # list of interesting bench cases
 BENCH_CASES ?= logging # seq random logging many

@@ -220,14 +220,16 @@ endef
 
 # list of disk geometries to bench on
 DEFAULT_BENCH_GEOMETRIES = nor nand
-U_nor  = NOR
-U_nand = NAND
-U_emmc = EMMC
-U_fram = FRAM
-N_nor  = 0
-N_nand = 1
-N_emmc = 2
-N_fram = 3
+U_nor		= NOR
+U_nand		= NAND
+U_nandftl	= NANDFTL
+U_emmc		= EMMC
+U_fram		= FRAM
+N_nor		= 0
+N_nand		= 1
+N_nandftl	= 2
+N_emmc		= 3
+N_fram		= 4
 
 
 # this is a bit of a hack, but we want to make sure the BUILDDIR
