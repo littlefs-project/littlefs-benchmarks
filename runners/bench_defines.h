@@ -138,8 +138,10 @@
     // NOTE this was expanded to match littlefs2
     BENCH_DEFINE(FCACHE_SIZE,           CACHE_SIZE                          )
     BENCH_DEFINE(LOOKAHEAD_SIZE,        16                                  )
-    BENCH_DEFINE(LOOKGBMAP_THRESH,      (BLOCK_COUNT * LOOKGBMAP_PER1024)
-                                            / 1024                          )
+    BENCH_DEFINE(LOOKGBMAP_THRESH,      (LOOKGBMAP_PER1024 != -1)
+                                            ? (BLOCK_COUNT * LOOKGBMAP_PER1024)
+                                                / 1024
+                                            : -1                            )
     BENCH_DEFINE(LOOKGBMAP_PER1024,     256                                 )
     BENCH_DEFINE(EVICTQUEUE_COUNT,      2                                   )
     // report estimated buffer usage
