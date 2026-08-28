@@ -61,9 +61,9 @@ bench-wt-r: \
 # $4 - disk geometry
 # $5 - block recycles
 #
-# note emmc + r=0 simply does not work (it _technically_ does! but every
-# write results in an mroot extension, which is very bad, very slow, and
-# will eventually consume all blocks)
+# note nandftl + r=0 simply does not work (it _technically_ does! but
+# every write results in an mroot extension, which is very bad, very
+# slow, and will eventually consume all blocks)
 #
 define BENCH_WT_R_RULE
 $1: $($(U_$3)_BENCH_RUNNER)
@@ -74,7 +74,7 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		$(if $(SIM_SIZE),-DSIM_SIZE=$(SIM_SIZE)) \
 		-DFS=$(N_$3) \
 		-DDISK_GEOMETRY=$(N_$4) \
-		-DBLOCK_RECYCLES=$(if $(filter $4,emmc),$\
+		-DBLOCK_RECYCLES=$(if $(filter $4,nandftl emmc),$\
 			$(subst $(space),$(comma),$\
 				$(filter-out 0,$\
 					$(subst $(comma),$(space),$\
