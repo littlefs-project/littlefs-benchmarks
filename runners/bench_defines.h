@@ -144,7 +144,7 @@
                                             ? (BLOCK_COUNT * LOOKGBMAP_PER1024)
                                                 / 1024
                                             : -1                            )
-    BENCH_DEFINE(LOOKGBMAP_PER1024,     256                                 )
+    BENCH_DEFINE(LOOKGBMAP_PER1024,     128                                 )
     BENCH_DEFINE(EVICTQUEUE_COUNT,      2                                   )
     // report estimated buffer usage
     BENCH_DEFINE(BUF_WATERMARK,         RCACHE_SIZE
