@@ -134,10 +134,10 @@
     // littlefs3 specific defines
     #if defined(LFS3)
     BENCH_DEFINE(BLOCK_RECYCLES,        100                                 )
-    // NOTE this was expanded to match littlefs2
-    BENCH_DEFINE(RCACHE_SIZE,           LFS3_MAX(256, READ_SIZE)            )
-    BENCH_DEFINE(PCACHE_SIZE,           LFS3_MAX(256, PROG_SIZE)            )
-    // NOTE this was expanded to match littlefs2
+    // NOTE this was expanded to ~match other filesystems
+    BENCH_DEFINE(RCACHE_SIZE,           LFS3_MAX(CACHE_SIZE, READ_SIZE)     )
+    BENCH_DEFINE(PCACHE_SIZE,           LFS3_MAX(CACHE_SIZE, PROG_SIZE)     )
+    // NOTE this was expanded to ~match other filesystems
     BENCH_DEFINE(FCACHE_SIZE,           CACHE_SIZE                          )
     BENCH_DEFINE(LOOKAHEAD_SIZE,        16                                  )
     BENCH_DEFINE(LOOKGBMAP_THRESH,      (LOOKGBMAP_PER1024 != -1)
