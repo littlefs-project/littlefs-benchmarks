@@ -131,7 +131,12 @@ save-build:
 .PHONY: touch touch-benches
 touch: touch-benches
 touch-benches:
-	touch $(BENCHES)
+	touch -c $(BENCHES)
+
+## Touch runners, triggering a rebench, but don't rebuild
+.PHONY: touch-runners
+touch-runners:
+	touch -c $(BUILDDIR)/bench_runner.*
 
 
 #======================================================================#
