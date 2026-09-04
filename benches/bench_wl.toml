@@ -253,6 +253,11 @@ code = '''
     #endif
     lfs3_off_t size = 0;
     uint64_t written = 0;
+    #ifdef LFS3
+    uint64_t lookaheads = 0;
+    uint64_t preerases = 0;
+    uint64_t compactmetas = 0;
+    #endif
     // ok, one of these needs to be non-zero
     LFS3_ASSERT(SIM_TIME > 0 || SIM_SIZE > 0);
     while ((SIM_SIZE && written < (uint64_t)SIM_SIZE)
@@ -262,6 +267,8 @@ code = '''
             BENCH_START("gc");
             bench_ns_t gc_start = BENCH_SIMTIME();
             #if defined(LFS3)
+            struct lfs3_fsinfo fsinfo;
+            lfs3_fs_stat(&lfs3, &fsinfo) => 0;
             lfs3_gc_t gc;
             lfs3_gc_open(&lfs3, &gc, GC_FLAGS) => 0;
             bench_wl_gc_start();
@@ -275,6 +282,11 @@ code = '''
             }
             bench_wl_gc_stop();
             lfs3_gc_close(&lfs3, &gc) => 0;
+            lookaheads += (fsinfo.flags & LFS3_I_LOOKAHEAD) ? 1 : 0;
+            preerases += LFS3_IFDEF_PREERASE(
+                    (fsinfo.flags & LFS3_I_PREERASE) ? 1 : 0,
+                    0);
+            compactmetas  += (fsinfo.flags & LFS3_I_COMPACTMETA) ? 1 : 0;
             #elif defined(LFS2)
             bench_wl_gc_start();
             if (!GC_TIME
@@ -364,6 +376,13 @@ code = '''
     SPIFFS_close(&spiffs, fd) => 0;
     #elif defined(YAFFS2)
     yaffs_close(fd) => 0;
+    #endif
+
+    // report some info about gc, just in case it helps debugging
+    #ifdef LFS3
+    BENCH_RESULT("lookaheads", written, lookaheads);
+    BENCH_RESULT("preerases", written, preerases);
+    BENCH_RESULT("compactmetas", written, compactmetas);
     #endif
 
     // report the total stack/heap usage after the benchmark
@@ -513,6 +532,11 @@ code = '''
     #endif
     lfs3_off_t size = 0;
     uint64_t written = 0;
+    #ifdef LFS3
+    uint64_t lookaheads = 0;
+    uint64_t preerases = 0;
+    uint64_t compactmetas = 0;
+    #endif
     // ok, one of these needs to be non-zero
     LFS3_ASSERT(SIM_TIME > 0 || SIM_SIZE > 0);
     while ((SIM_SIZE && written < (uint64_t)SIM_SIZE)
@@ -522,6 +546,8 @@ code = '''
             BENCH_START("gc");
             bench_ns_t gc_start = BENCH_SIMTIME();
             #if defined(LFS3)
+            struct lfs3_fsinfo fsinfo;
+            lfs3_fs_stat(&lfs3, &fsinfo) => 0;
             lfs3_gc_t gc;
             lfs3_gc_open(&lfs3, &gc, GC_FLAGS) => 0;
             bench_wl_gc_start();
@@ -535,6 +561,11 @@ code = '''
             }
             bench_wl_gc_stop();
             lfs3_gc_close(&lfs3, &gc) => 0;
+            lookaheads += (fsinfo.flags & LFS3_I_LOOKAHEAD) ? 1 : 0;
+            preerases += LFS3_IFDEF_PREERASE(
+                    (fsinfo.flags & LFS3_I_PREERASE) ? 1 : 0,
+                    0);
+            compactmetas  += (fsinfo.flags & LFS3_I_COMPACTMETA) ? 1 : 0;
             #elif defined(LFS2)
             bench_wl_gc_start();
             if (!GC_TIME
@@ -623,6 +654,13 @@ code = '''
     SPIFFS_close(&spiffs, fd) => 0;
     #elif defined(YAFFS2)
     yaffs_close(fd) => 0;
+    #endif
+
+    // report some info about gc, just in case it helps debugging
+    #ifdef LFS3
+    BENCH_RESULT("lookaheads", written, lookaheads);
+    BENCH_RESULT("preerases", written, preerases);
+    BENCH_RESULT("compactmetas", written, compactmetas);
     #endif
 
     // report the total stack/heap usage after the benchmark
@@ -778,6 +816,12 @@ code = '''
     assert(fd >= 0);
     #endif
     uint64_t written = 0;
+    uint64_t rotates = 0;
+    #ifdef LFS3
+    uint64_t lookaheads = 0;
+    uint64_t preerases = 0;
+    uint64_t compactmetas = 0;
+    #endif
     // ok, one of these needs to be non-zero
     LFS3_ASSERT(SIM_TIME > 0 || SIM_SIZE > 0);
     while ((SIM_SIZE && written < (uint64_t)SIM_SIZE)
@@ -808,6 +852,7 @@ code = '''
                                 | LFS3_O_CREAT
                                 | LFS3_O_EXCL
                                 | LFS3_O_APPEND) => 0;
+                    rotates += 1;
                 }
             }
             #elif defined(LFS2)
@@ -823,6 +868,7 @@ code = '''
                             | LFS2_O_CREAT
                             | LFS2_O_EXCL
                             | LFS2_O_APPEND) => 0;
+                rotates += 1;
             }
             #elif defined(SPIFFS)
             spiffs_stat stat;
@@ -841,6 +887,7 @@ code = '''
                             | SPIFFS_EXCL
                             | SPIFFS_APPEND, 0777);
                 assert(fd >= 0);
+                rotates += 1;
             }
             #elif defined(YAFFS2)
             struct yaffs_stat stat;
@@ -853,11 +900,14 @@ code = '''
                 fd = yaffs_open("bench_log",
                         O_WRONLY | O_CREAT | O_EXCL | O_APPEND, 0777);
                 assert(fd >= 0);
+                rotates += 1;
             }
             #endif
 
             // run normal gc
             #if defined(LFS3)
+            struct lfs3_fsinfo fsinfo;
+            lfs3_fs_stat(&lfs3, &fsinfo) => 0;
             lfs3_gc_t gc;
             lfs3_gc_open(&lfs3, &gc, GC_FLAGS) => 0;
             bench_wl_gc_start();
@@ -871,6 +921,11 @@ code = '''
             }
             bench_wl_gc_stop();
             lfs3_gc_close(&lfs3, &gc) => 0;
+            lookaheads += (fsinfo.flags & LFS3_I_LOOKAHEAD) ? 1 : 0;
+            preerases += LFS3_IFDEF_PREERASE(
+                    (fsinfo.flags & LFS3_I_PREERASE) ? 1 : 0,
+                    0);
+            compactmetas  += (fsinfo.flags & LFS3_I_COMPACTMETA) ? 1 : 0;
             #elif defined(LFS2)
             bench_wl_gc_start();
             if (!GC_TIME
@@ -1024,6 +1079,14 @@ code = '''
     yaffs_close(fd) => 0;
     #endif
 
+    // report some info about gc, just in case it helps debugging
+    BENCH_RESULT("rotates", written, rotates);
+    #ifdef LFS3
+    BENCH_RESULT("lookaheads", written, lookaheads);
+    BENCH_RESULT("preerases", written, preerases);
+    BENCH_RESULT("compactmetas", written, compactmetas);
+    #endif
+
     // report the total stack/heap usage after the benchmark
     #ifdef BENCH_STACK
     BENCH_RESULT("stack", written, BENCH_STACK_WATERMARK());
@@ -1157,6 +1220,11 @@ code = '''
     BENCH_SIMRESET();
 
     uint64_t written = 0;
+    #ifdef LFS3
+    uint64_t lookaheads = 0;
+    uint64_t preerases = 0;
+    uint64_t compactmetas = 0;
+    #endif
     // ok, one of these needs to be non-zero
     LFS3_ASSERT(SIM_TIME > 0 || SIM_SIZE > 0);
     while ((SIM_SIZE && written < (uint64_t)SIM_SIZE)
@@ -1166,6 +1234,8 @@ code = '''
             BENCH_START("gc");
             bench_ns_t gc_start = BENCH_SIMTIME();
             #if defined(LFS3)
+            struct lfs3_fsinfo fsinfo;
+            lfs3_fs_stat(&lfs3, &fsinfo) => 0;
             lfs3_gc_t gc;
             lfs3_gc_open(&lfs3, &gc, GC_FLAGS) => 0;
             bench_wl_gc_start();
@@ -1179,6 +1249,11 @@ code = '''
             }
             bench_wl_gc_stop();
             lfs3_gc_close(&lfs3, &gc) => 0;
+            lookaheads += (fsinfo.flags & LFS3_I_LOOKAHEAD) ? 1 : 0;
+            preerases += LFS3_IFDEF_PREERASE(
+                    (fsinfo.flags & LFS3_I_PREERASE) ? 1 : 0,
+                    0);
+            compactmetas  += (fsinfo.flags & LFS3_I_COMPACTMETA) ? 1 : 0;
             #elif defined(LFS2)
             bench_wl_gc_start();
             if (!GC_TIME
@@ -1279,6 +1354,13 @@ code = '''
             BENCH_STOP("lwrite", BENCH_SIMTIME());
         }
     }
+
+    // report some info about gc, just in case it helps debugging
+    #ifdef LFS3
+    BENCH_RESULT("lookaheads", written, lookaheads);
+    BENCH_RESULT("preerases", written, preerases);
+    BENCH_RESULT("compactmetas", written, compactmetas);
+    #endif
 
     // report the total stack/heap usage after the benchmark
     #ifdef BENCH_STACK

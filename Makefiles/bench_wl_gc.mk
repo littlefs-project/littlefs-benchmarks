@@ -78,7 +78,8 @@ $1: $($(U_$3)_BENCH_RUNNER)
 		$(foreach p, $(subst $(comma),$(space),$(or $5,$(WL_GC_P))),$\
 			-Sgc=$(p)) \
 		-Swrite=cdf1000 -Sgc=cdf1000 \
-		-DLITMUS_START=60000000000 -DLITMUS_SIZE=60000000000 -Slwrite=1+delta \
+		-Srotates -Slookaheads -Spreerases -Scompactmetas \
+		-DLITMUS_START=0 -DLITMUS_SIZE=120000000000 -Slwrite=1+delta \
 		-DGC=$(or $6,$(WL_GC_GC)) \
 		-o$$@)
 endef

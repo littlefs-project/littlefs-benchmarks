@@ -421,7 +421,9 @@ code = '''
             || SIM_SIZE > 0);
     volatile uint64_t mounts = 0;
     volatile uint64_t written = 0;
+    #ifdef LFS3
     volatile uint64_t grms = 0;
+    #endif
     volatile uint64_t rotates = 0;
     volatile bool in_rotation = false;
     volatile uint64_t stuck = 0;
