@@ -362,6 +362,18 @@ all tikz tikz-wl-gc: \
 					$(foreach g, $(BENCH_GEOMETRIES), \
 						$(WL_GC_TIKZDIR)/tikz_wl_gc_litmus_$(gc)$\
 							.$(c).$(fs).$(g).csv)))) \
+		$(foreach gc, ngc ygc, \
+			$(foreach c, $(BENCH_CASES), \
+				$(foreach fs, $(BENCH_FILESYSTEMS), \
+					$(foreach g, $(BENCH_GEOMETRIES), \
+						$(WL_GC_TIKZDIR)/tikz_wl_gc_litmus_$(gc)_t10$\
+							.$(c).$(fs).$(g).csv)))) \
+		$(foreach gc, ngc ygc, \
+			$(foreach c, $(BENCH_CASES), \
+				$(foreach fs, $(BENCH_FILESYSTEMS), \
+					$(foreach g, $(BENCH_GEOMETRIES), \
+						$(WL_GC_TIKZDIR)/tikz_wl_gc_litmus_$(gc)_t60$\
+							.$(c).$(fs).$(g).csv)))) \
         $(foreach c, $(BENCH_CASES), \
             $(foreach fs, $(BENCH_FILESYSTEMS), \
                 $(foreach g, $(BENCH_GEOMETRIES), \
@@ -533,6 +545,78 @@ $(foreach gc, ngc ygc, \
 			$(foreach g, $(BENCH_GEOMETRIES), \
 				$(eval $(call TIKZ_WL_GC_LITMUS_RULE,$\
 					$(WL_GC_TIKZDIR)/tikz_wl_gc_litmus_$(gc)$\
+						.$(c).$(fs).$(g).csv,$\
+					$(WL_GC_RESULTSDIR)/bench_wl_gc.$(c).$(fs).$(g).csv,$\
+					$(gc)))))))
+
+# smaller t=10 litmus tikz rule
+#
+# hacky, but much faster to filter here than in tikz
+#
+# $1 - target
+# $2 - source
+# $3 - ngc/ygc
+#
+define TIKZ_WL_GC_LITMUS_T10_RULE
+$1: $2
+	$$(strip ./scripts/csv.py \
+		<(./scripts/csv.py \
+			<(./scripts/csv.py $$^ \
+				-DGC=$(if $(filter ygc,$3),1,0) \
+				-Dprobe='lwrite+delta' \
+				-bt -ft='(float(bench_n)-float(bench_t))/1.0e9' \
+				-flatency='float(bench_t)/1.0e9' \
+				-o-) \
+			-bt -ft -flatency -fyes='t >= 9.0 && t <= 21.0' \
+			-o-) \
+		-bt -ft -flatency \
+		-Dyes=1 \
+		-o$$@)
+endef
+
+# t=10 litmus tikz rules
+$(foreach gc, ngc ygc, \
+	$(foreach c, $(BENCH_CASES), \
+		$(foreach fs, $(BENCH_FILESYSTEMS), \
+			$(foreach g, $(BENCH_GEOMETRIES), \
+				$(eval $(call TIKZ_WL_GC_LITMUS_T10_RULE,$\
+					$(WL_GC_TIKZDIR)/tikz_wl_gc_litmus_$(gc)_t10$\
+						.$(c).$(fs).$(g).csv,$\
+					$(WL_GC_RESULTSDIR)/bench_wl_gc.$(c).$(fs).$(g).csv,$\
+					$(gc)))))))
+
+# smaller t=60 litmus tikz rule
+#
+# hacky, but much faster to filter here than in tikz
+#
+# $1 - target
+# $2 - source
+# $3 - ngc/ygc
+#
+define TIKZ_WL_GC_LITMUS_T60_RULE
+$1: $2
+	$$(strip ./scripts/csv.py \
+		<(./scripts/csv.py \
+			<(./scripts/csv.py $$^ \
+				-DGC=$(if $(filter ygc,$3),1,0) \
+				-Dprobe='lwrite+delta' \
+				-bt -ft='(float(bench_n)-float(bench_t))/1.0e9' \
+				-flatency='float(bench_t)/1.0e9' \
+				-o-) \
+			-bt -ft -flatency -fyes='t >= 59.0 && t <= 71.0' \
+			-o-) \
+		-bt -ft -flatency \
+		-Dyes=1 \
+		-o$$@)
+endef
+
+# t=60 litmus tikz rules
+$(foreach gc, ngc ygc, \
+	$(foreach c, $(BENCH_CASES), \
+		$(foreach fs, $(BENCH_FILESYSTEMS), \
+			$(foreach g, $(BENCH_GEOMETRIES), \
+				$(eval $(call TIKZ_WL_GC_LITMUS_T60_RULE,$\
+					$(WL_GC_TIKZDIR)/tikz_wl_gc_litmus_$(gc)_t60$\
 						.$(c).$(fs).$(g).csv,$\
 					$(WL_GC_RESULTSDIR)/bench_wl_gc.$(c).$(fs).$(g).csv,$\
 					$(gc)))))))
